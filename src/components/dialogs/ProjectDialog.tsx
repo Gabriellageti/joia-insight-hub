@@ -68,11 +68,12 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
 
   const handleClientChange = (clientId: string) => {
     const client = clients.find(c => c.id === clientId);
-    setFormData({ 
-      ...formData, 
-      clientId, 
-      clientName: client?.name || "" 
-    });
+    const clientDisplayName = client ? client.nomeFantasia || client.razaoSocial : "";
+    setFormData((prev) => ({
+      ...prev,
+      clientId,
+      clientName: clientDisplayName
+    }));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -122,7 +123,7 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
                 </SelectTrigger>
                 <SelectContent>
                   {clients.filter(c => c.status === "ativo").map((client) => (
-                    <SelectItem key={client.id} value={client.id}>{client.name}</SelectItem>
+                    <SelectItem key={client.id} value={client.id}>{client.nomeFantasia || client.razaoSocial}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

@@ -1,21 +1,57 @@
 // Types for JoIA Ops
 
+export interface ClientContactInfo {
+  nome: string;
+  whatsapp?: string;
+  email?: string;
+}
+
+export interface ClientAddress {
+  cep?: string;
+  logradouro?: string;
+  numero?: string;
+  complemento?: string;
+  bairro?: string;
+  cidade?: string;
+  uf?: string;
+}
+
+export interface ClientRelationshipPreferences {
+  diaReuniao?: string;
+  frequencia?: "semanal" | "quinzenal" | "mensal";
+}
+
 export interface Client {
   id: string;
-  name: string;
-  tradeName?: string;
+
+  // Estrutura atual (padrão)
+  razaoSocial: string;
+  nomeFantasia?: string;
   cnpj?: string;
-  segment: string;
-  city: string;
-  address?: string;
+  segmentoTags: string[];
   status: "ativo" | "inativo";
+  contatoPrincipal: ClientContactInfo;
+  endereco: ClientAddress;
+  observacoesInternas?: string;
+  preferenciasRelacionamento: ClientRelationshipPreferences;
+
   projects: number;
   nps: number;
   risk: "low" | "medium" | "high";
   lastContact: string;
+  createdAt: string;
+
+  // Campos legados (compatibilidade)
+  segment?: string;
+  city?: string;
+  address?: ClientAddress | string;
+  primaryContactName?: string;
+  primaryContactEmail?: string;
+  primaryContactPhone?: string;
   preferredMeetingDay?: string;
   followUpFrequency?: "semanal" | "quinzenal" | "mensal";
-  createdAt: string;
+  whatsapp?: string;
+  email?: string;
 }
 
 export interface ClientContact {
@@ -150,7 +186,15 @@ export interface Indicator {
 export interface Document {
   id: string;
   name: string;
-  category: "contrato" | "proposta" | "diagnóstico" | "indicadores" | "evidências" | "reuniões" | "processos" | "treinamento";
+  category:
+    | "contrato"
+    | "proposta"
+    | "diagnóstico"
+    | "indicadores"
+    | "evidências"
+    | "reuniões"
+    | "processos"
+    | "treinamento";
   projectId?: string;
   projectName?: string;
   clientId?: string;
