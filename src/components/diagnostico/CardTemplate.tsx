@@ -18,9 +18,17 @@ interface CardTemplateProps {
   onEdit: (template: DiagnosticTemplate) => void;
   onDuplicate: (template: DiagnosticTemplate) => void;
   onDelete: (template: DiagnosticTemplate) => void;
+  primaryActionLabel?: string;
 }
 
-export function CardTemplate({ template, onApply, onEdit, onDuplicate, onDelete }: CardTemplateProps) {
+export function CardTemplate({
+  template,
+  onApply,
+  onEdit,
+  onDuplicate,
+  onDelete,
+  primaryActionLabel,
+}: CardTemplateProps) {
   return (
     <Card className="h-full hover:shadow-md transition-shadow">
       <CardHeader className="pb-4">
@@ -86,7 +94,7 @@ export function CardTemplate({ template, onApply, onEdit, onDuplicate, onDelete 
           <Button variant="outline" onClick={() => onEdit(template)}>
             Editar
           </Button>
-          <Button onClick={() => onApply(template)}>Aplicar</Button>
+          <Button onClick={() => onApply(template)}>{primaryActionLabel || "Aplicar"}</Button>
         </div>
       </CardFooter>
     </Card>

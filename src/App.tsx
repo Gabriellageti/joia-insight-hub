@@ -24,6 +24,10 @@ import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import ClienteDetalhes from "./pages/ClienteDetalhes";
 import DiagnosticoDetalhe from "./pages/DiagnosticoDetalhe";
+import TemplatesList from "./pages/templates/TemplatesList";
+import TemplateCreate from "./pages/templates/TemplateCreate";
+import TemplateEdit from "./pages/templates/TemplateEdit";
+import TemplatePreview from "./pages/templates/TemplatePreview";
 
 const queryClient = new QueryClient();
 
@@ -49,6 +53,10 @@ const App = () => (
                         <Route path="/projetos" element={<Projetos />} />
                         <Route path="/diagnostico" element={<Diagnostico />} />
                         <Route path="/diagnosticos/:id" element={<DiagnosticoDetalhe />} />
+                        <Route path="/templates" element={<TemplatesList />} />
+                        <Route path="/templates/novo" element={<TemplateCreate />} />
+                        <Route path="/templates/:id/editar" element={<TemplateEdit />} />
+                        <Route path="/templates/:id/preview" element={<TemplatePreview />} />
                         <Route path="/plano-acao" element={<PlanoAcao />} />
                         <Route path="/indicadores" element={<Indicadores />} />
                         <Route path="/reunioes" element={<Reunioes />} />
