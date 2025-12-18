@@ -18,6 +18,11 @@ import {
   ProjectDeliverable,
   ProjectAuditLogEntry,
   Opportunity,
+  AuditMetadata,
+  TemplateQuestion,
+  TemplateSection,
+  TemplateOpportunityRule,
+  QuestionCriticality,
 } from "@/types";
 import {
   buildProgressAuditMessage,
@@ -288,19 +293,109 @@ const normalizeProject = (project: LegacyProject): Project => {
   };
 };
 
-const normalizeTemplate = (template: DiagnosticTemplate): DiagnosticTemplate => {
-  const questionCountFromSections = template.sections?.reduce((count, section) => count + (section.questions?.length || 0), 0) || 0;
+const normalizeAudit = (audit?: AuditMetadata): AuditMetadata | undefined => {
+  if (!audit) {
+    return { createdAt: getDate(), updatedAt: getDate() };
+  }
+
+  const createdAt = audit.createdAt || getDate();
+  const updatedAt = audit.updatedAt || createdAt;
+
+  return {
+    createdAt,
+    updatedAt,
+    createdBy: audit.createdBy,
+    updatedBy: audit.updatedBy || audit.createdBy,
+  };
+};
+
+const normalizeOpportunityRule = (rule?: Partial<TemplateOpportunityRule>): TemplateOpportunityRule | undefined => {
+  if (!rule) return undefined;
+
+  const estimatedValue = safeNumber(rule.estimatedValue);
+
+  return {
+    id: rule.id || generateId(),
+    name: rule.name || "Regra de oportunidade",
+    description: rule.description || "",
+    type: rule.type || "Outro",
+    estimatedValue: typeof estimatedValue === "number" ? estimatedValue : null,
+    confidence: rule.confidence || "media",
+    evidenceType: rule.evidenceType || "a_coletar",
+    enabled: rule.enabled ?? true,
+    autoGenerate: rule.autoGenerate ?? true,
+    audit: normalizeAudit(rule.audit),
+  };
+};
+
+const normalizeTemplateQuestion = (question: Partial<TemplateQuestion>, index: number): TemplateQuestion => {
+  const weight =
+    typeof question.weight === "number"
+      ? question.weight
+      : typeof question.critical === "boolean"
+        ? question.critical
+          ? 2
+          : 1
+        : 1;
+  const legacyCriticality = (question as Partial<{ criticidade: QuestionCriticality }>).criticidade;
+  const criticality: QuestionCriticality = question.criticality || (question.critical ? "alta" : legacyCriticality || "media");
+
+  return {
+    id: question.id || generateId(),
+    title: question.title || question.text || "Pergunta",
+    description: question.description || "",
+    type: question.type || "yes_no",
+    weight,
+    criticality,
+    required: question.required ?? true,
+    helperText: question.helperText || "",
+    placeholder: question.placeholder || "",
+    order: typeof question.order === "number" ? question.order : index + 1,
+    minValue: typeof question.minValue === "number" ? question.minValue : null,
+    maxValue: typeof question.maxValue === "number" ? question.maxValue : null,
+    options: question.options || [],
+    regraOportunidade: normalizeOpportunityRule(question.regraOportunidade),
+    audit: normalizeAudit(question.audit),
+    text: question.text,
+    critical: question.critical,
+  };
+};
+
+const normalizeTemplateSection = (section: Partial<TemplateSection>, index: number): TemplateSection => {
+  const questions = (section.questions || []).map((question, questionIndex) =>
+    normalizeTemplateQuestion(question, questionIndex)
+  );
+
+  return {
+    id: section.id || generateId(),
+    title: section.title || (section as Partial<{ name: string }>).name || "Seção",
+    description: section.description || "",
+    order: typeof section.order === "number" ? section.order : index + 1,
+    weight: typeof section.weight === "number" ? section.weight : 1,
+    questions,
+    audit: normalizeAudit(section.audit),
+  };
+};
+
+const normalizeTemplate = (template: Partial<DiagnosticTemplate>): DiagnosticTemplate => {
+  const sections = (template.sections || []).map((section, sectionIndex) => normalizeTemplateSection(section, sectionIndex));
+  const questionCountFromSections = sections.reduce((count, section) => count + (section.questions?.length || 0), 0);
 
   return {
     id: template.id || generateId(),
     name: template.name || "Template",
+    description: template.description || "",
     tags: template.tags || [],
-    sections: template.sections || [],
-    questionCount: typeof template.questionCount === "number" ? template.questionCount : questionCountFromSections,
-    sectionsCount: template.sectionsCount ?? template.sections?.length ?? 0,
-    estimatedTimeMinutes: typeof template.estimatedTimeMinutes === "number" ? template.estimatedTimeMinutes : null,
+    status: template.status || "published",
     version: template.version || "v1.0",
-    updatedAt: template.updatedAt || getDate(),
+    revision: typeof template.revision === "number" ? template.revision : 1,
+    sections,
+    questionCount: typeof template.questionCount === "number" ? template.questionCount : questionCountFromSections,
+    sectionsCount: template.sectionsCount ?? sections.length,
+    estimatedTimeMinutes: typeof template.estimatedTimeMinutes === "number" ? template.estimatedTimeMinutes : null,
+    updatedAt: template.updatedAt || template.createdAt || getDate(),
+    createdAt: template.createdAt || getDate(),
+    audit: normalizeAudit(template.audit),
   };
 };
 
