@@ -43,7 +43,7 @@ export default function TemplatesList() {
     }
   };
 
-  const handlePreview = (template: DiagnosticTemplate) => navigate(`/templates/${template.id}/preview`);
+  const handlePreview = (template: DiagnosticTemplate) => navigate(`/templates-diagnostico/${template.id}/preview`);
   const handleEdit = (template: DiagnosticTemplate) => navigate(`/templates/${template.id}/editar`);
   const goToCreate = () => navigate("/templates/novo");
 

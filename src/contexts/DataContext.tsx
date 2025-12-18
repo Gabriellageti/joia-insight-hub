@@ -390,6 +390,7 @@ const normalizeTemplateQuestion = (question: Partial<TemplateQuestion>, index: n
     description: question.description || "",
     type: question.type || "yes_no",
     weight,
+    includeInScore: question.includeInScore ?? true,
     criticality,
     required: question.required ?? true,
     helperText: question.helperText || "",

@@ -49,7 +49,7 @@ export default function TemplateEdit() {
     toast.success(actionMessage);
 
     if (action === "preview" || action === "publish") {
-      navigate(`/templates/${id}/preview`);
+      navigate(`/templates-diagnostico/${id}/preview`);
     }
   };
 
