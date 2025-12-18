@@ -42,13 +42,19 @@ export default function Projetos() {
             <CardHeader className="pb-2">
               <div className="flex items-start justify-between">
                 <div><h3 className="font-semibold">{project.name}</h3><p className="text-sm text-muted-foreground">{project.clientName}</p></div>
-                <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${statusColors[project.status]}`} />
-                  <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent><DropdownMenuItem onClick={() => { setEditingProject(project); setDialogOpen(true); }}><Edit className="h-4 w-4 mr-2" />Editar</DropdownMenuItem><DropdownMenuItem onClick={() => setDeleteId(project.id)} className="text-destructive"><Trash2 className="h-4 w-4 mr-2" />Excluir</DropdownMenuItem></DropdownMenuContent></DropdownMenu>
-                </div>
+                <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent><DropdownMenuItem onClick={() => { setEditingProject(project); setDialogOpen(true); }}><Edit className="h-4 w-4 mr-2" />Editar</DropdownMenuItem><DropdownMenuItem onClick={() => setDeleteId(project.id)} className="text-destructive"><Trash2 className="h-4 w-4 mr-2" />Excluir</DropdownMenuItem></DropdownMenuContent></DropdownMenu>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-sm">
+                  <div className={`w-2 h-2 rounded-full ${statusColors[project.status]}`} />
+                  <span className="text-foreground">{project.statusReason || "Status automático"}</span>
+                </div>
+                <Badge variant="outline" className="text-xs">
+                  {project.statusSource === "manual" ? "Status manual" : "Status automático"}
+                </Badge>
+              </div>
               <Badge className={phaseColors[project.phase] || "bg-muted"} variant="outline">{project.phase}</Badge>
               <TooltipProvider>
                 <Tooltip>

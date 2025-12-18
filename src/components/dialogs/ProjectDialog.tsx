@@ -5,10 +5,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import { useData } from "@/contexts/DataContext";
 import { Project } from "@/types";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
+import { useAuth } from "@/contexts/AuthContext";
+
+const statusColors: Record<Project["status"], string> = {
+  green: "bg-green-500",
+  yellow: "bg-yellow-500",
+  red: "bg-red-500",
+};
 
 interface ProjectDialogProps {
   open: boolean;
@@ -18,6 +26,7 @@ interface ProjectDialogProps {
 
 export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProps) {
   const { addProject, updateProject, clients } = useData();
+  const { user } = useAuth();
   const [formData, setFormData] = useState({
     name: "",
     clientId: "",
@@ -28,7 +37,11 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
     progressOverrideEnabled: false,
     manualProgress: null as number | null,
     progressJustification: "",
-    status: "green" as "green" | "yellow" | "red",
+    statusOverrideEnabled: false,
+    statusOverrideValue: null as Project["status"] | null,
+    statusOverrideJustification: "",
+    statusOverrideExpiresAt: "",
+    statusOverrideAuthor: "",
     responsible: "",
     startDate: "",
     endDate: "",
@@ -47,7 +60,11 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
         progressOverrideEnabled: project.progressOverrideEnabled || false,
         manualProgress: project.manualProgress ?? null,
         progressJustification: project.progressJustification || "",
-        status: project.status,
+        statusOverrideEnabled: project.statusOverrideEnabled || false,
+        statusOverrideValue: project.statusOverrideValue ?? project.status ?? null,
+        statusOverrideJustification: project.statusOverrideJustification || "",
+        statusOverrideExpiresAt: project.statusOverrideExpiresAt || "",
+        statusOverrideAuthor: project.statusOverrideAuthor || "",
         responsible: project.responsible,
         startDate: project.startDate,
         endDate: project.endDate,
@@ -64,14 +81,18 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
         progressOverrideEnabled: false,
         manualProgress: null,
         progressJustification: "",
-        status: "green",
+        statusOverrideEnabled: false,
+        statusOverrideValue: null,
+        statusOverrideJustification: "",
+        statusOverrideExpiresAt: "",
+        statusOverrideAuthor: user?.user_metadata?.full_name || user?.email || "",
         responsible: "",
         startDate: "",
         endDate: "",
         moneyHypothesis: "",
       });
     }
-  }, [project, open]);
+  }, [project, open, user]);
 
   const handleClientChange = (clientId: string) => {
     const client = clients.find(c => c.id === clientId);
@@ -109,23 +130,57 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
       }
     }
 
+    if (formData.statusOverrideEnabled) {
+      if (!formData.statusOverrideValue) {
+        toast.error("Selecione o status manual");
+        return;
+      }
+      if (!formData.statusOverrideJustification.trim()) {
+        toast.error("Justifique o motivo do status manual");
+        return;
+      }
+    }
+
+    const statusOverrideAuthor =
+      formData.statusOverrideAuthor || user?.user_metadata?.full_name || user?.email || "Administrador";
+
+    const payload = {
+      ...formData,
+      manualProgress: formData.progressOverrideEnabled ? Number(formData.manualProgress) : null,
+      progressJustification: formData.progressOverrideEnabled ? formData.progressJustification.trim() : "",
+      statusOverrideEnabled: formData.statusOverrideEnabled,
+      statusOverrideValue: formData.statusOverrideEnabled ? formData.statusOverrideValue : null,
+      statusOverrideJustification: formData.statusOverrideEnabled ? formData.statusOverrideJustification.trim() : "",
+      statusOverrideExpiresAt:
+        formData.statusOverrideEnabled && formData.statusOverrideExpiresAt
+          ? formData.statusOverrideExpiresAt
+          : undefined,
+      statusOverrideAuthor: formData.statusOverrideEnabled ? statusOverrideAuthor : "",
+    };
+
     if (project) {
-      updateProject(project.id, {
-        ...formData,
-        manualProgress: formData.progressOverrideEnabled ? Number(formData.manualProgress) : null,
-        progressJustification: formData.progressOverrideEnabled ? formData.progressJustification.trim() : "",
-      });
+      updateProject(project.id, payload);
       toast.success("Projeto atualizado com sucesso");
     } else {
-      addProject({
-        ...formData,
-        manualProgress: formData.progressOverrideEnabled ? Number(formData.manualProgress) : null,
-        progressJustification: formData.progressOverrideEnabled ? formData.progressJustification.trim() : "",
-      });
+      addProject(payload);
       toast.success("Projeto criado com sucesso");
     }
     onOpenChange(false);
   };
+
+  const userRole = (user?.user_metadata as Record<string, string | undefined> | undefined)?.role;
+  const canForceStatus = !userRole || ["admin_joia", "gestor_projetos"].includes(userRole);
+  const statusSummary = project
+    ? {
+        color: statusColors[project.status],
+        description: project.statusReason || "Status calculado automaticamente",
+        source: project.statusSource || "calculated",
+      }
+    : {
+        color: statusColors.green,
+        description: "Status será calculado automaticamente após salvar",
+        source: "calculated",
+      };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -193,19 +248,6 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="status">Status</Label>
-              <Select value={formData.status} onValueChange={(value: "green" | "yellow" | "red") => setFormData({ ...formData, status: value })}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="green">Verde</SelectItem>
-                  <SelectItem value="yellow">Amarelo</SelectItem>
-                  <SelectItem value="red">Vermelho</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
               <Label htmlFor="responsible">Responsável</Label>
               <Input
                 id="responsible"
@@ -231,6 +273,98 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
                 onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
                 placeholder="dd/mm/aaaa"
               />
+            </div>
+            <div className="col-span-2 space-y-4 rounded-lg border border-border p-4">
+              <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-sm font-medium text-foreground">Saúde do projeto</p>
+                  <p className="text-xs text-muted-foreground">
+                    Calculada automaticamente a partir de tarefas, evidências, reuniões, finanças e KPIs.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <span className={`h-2 w-2 rounded-full ${statusSummary.color}`} />
+                  <span className="text-foreground">{statusSummary.description}</span>
+                  <Badge variant="outline" className="text-xs">
+                    {statusSummary.source === "manual" ? "Manual" : "Automático"}
+                  </Badge>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="flex items-center gap-3">
+                  <Switch
+                    id="statusOverride"
+                    checked={formData.statusOverrideEnabled}
+                    disabled={!canForceStatus}
+                    onCheckedChange={(checked) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        statusOverrideEnabled: checked,
+                        statusOverrideValue: checked
+                          ? prev.statusOverrideValue || project?.status || "green"
+                          : null,
+                        statusOverrideJustification: checked ? prev.statusOverrideJustification : "",
+                        statusOverrideExpiresAt: checked ? prev.statusOverrideExpiresAt : "",
+                        statusOverrideAuthor:
+                          checked
+                            ? prev.statusOverrideAuthor || user?.user_metadata?.full_name || user?.email || ""
+                            : "",
+                      }))
+                    }
+                  />
+                  <div>
+                    <Label htmlFor="statusOverride" className="text-sm font-medium">
+                      Forçar status
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Disponível para Admin/Gestor. Adicione justificativa e prazo de expiração opcional.
+                    </p>
+                  </div>
+                </div>
+                {formData.statusOverrideEnabled && (
+                  <div className="space-y-2">
+                    <Label htmlFor="statusOverrideValue">Seleção manual</Label>
+                    <Select
+                      value={formData.statusOverrideValue || undefined}
+                      onValueChange={(value: Project["status"]) =>
+                        setFormData((prev) => ({ ...prev, statusOverrideValue: value }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Escolha o status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="green">Verde</SelectItem>
+                        <SelectItem value="yellow">Amarelo</SelectItem>
+                        <SelectItem value="red">Vermelho</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                {formData.statusOverrideEnabled && (
+                  <div className="space-y-2">
+                    <Label htmlFor="statusOverrideJustification">Justificativa do status</Label>
+                    <Textarea
+                      id="statusOverrideJustification"
+                      value={formData.statusOverrideJustification}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, statusOverrideJustification: e.target.value }))}
+                      placeholder="Explique por que o status foi ajustado manualmente"
+                      rows={3}
+                    />
+                  </div>
+                )}
+                {formData.statusOverrideEnabled && (
+                  <div className="space-y-2">
+                    <Label htmlFor="statusOverrideExpiresAt">Expiração do override (opcional)</Label>
+                    <Input
+                      id="statusOverrideExpiresAt"
+                      type="date"
+                      value={formData.statusOverrideExpiresAt}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, statusOverrideExpiresAt: e.target.value }))}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
             <div className="col-span-2 space-y-4 rounded-lg border border-border p-4">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">

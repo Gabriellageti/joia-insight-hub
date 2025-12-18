@@ -82,6 +82,13 @@ export interface Project {
   manualProgress: number | null;
   progressJustification?: string;
   status: "green" | "yellow" | "red";
+  statusReason?: string;
+  statusSource?: "calculated" | "manual";
+  statusOverrideEnabled?: boolean;
+  statusOverrideValue?: "green" | "yellow" | "red" | null;
+  statusOverrideJustification?: string;
+  statusOverrideExpiresAt?: string;
+  statusOverrideAuthor?: string;
   responsible: string;
   startDate: string;
   endDate: string;
@@ -202,6 +209,7 @@ export interface Indicator {
   projectId?: string;
   projectName?: string;
   responsible: string;
+  isPrimary?: boolean;
   values: { date: string; value: number }[];
   createdAt: string;
 }
