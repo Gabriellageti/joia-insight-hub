@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useData } from "@/contexts/DataContext";
 import { Client } from "@/types";
 import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
 
 interface ClientDialogProps {
   open: boolean;
@@ -16,6 +17,7 @@ interface ClientDialogProps {
 
 export function ClientDialog({ open, onOpenChange, client }: ClientDialogProps) {
   const { addClient, updateClient } = useData();
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     name: "",
     tradeName: "",
@@ -78,8 +80,11 @@ export function ClientDialog({ open, onOpenChange, client }: ClientDialogProps) 
       updateClient(client.id, clientData);
       toast.success("Cliente atualizado com sucesso");
     } else {
-      addClient(clientData);
-      toast.success("Cliente criado com sucesso");
+      const createdClient = addClient(clientData);
+      toast.success("Cliente criado. Próximo passo: criar um projeto.");
+      onOpenChange(false);
+      navigate(`/clientes/${createdClient.id}`);
+      return;
     }
     onOpenChange(false);
   };

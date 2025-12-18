@@ -6,10 +6,23 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useData } from "@/contexts/DataContext";
 import { LeadDialog } from "@/components/dialogs/LeadDialog";
-import { Lead } from "@/types";
+import { ContentItem, Lead } from "@/types";
 
-const statusConfig = { new: { label: "Novo", color: "bg-blue-100 text-blue-700" }, contacted: { label: "Contatado", color: "bg-purple-100 text-purple-700" }, meeting: { label: "Reunião", color: "bg-yellow-100 text-yellow-700" }, proposal: { label: "Proposta", color: "bg-orange-100 text-orange-700" }, won: { label: "Ganho", color: "bg-green-100 text-green-700" }, lost: { label: "Perdido", color: "bg-red-100 text-red-700" } };
-const contentStatusConfig = { idea: { label: "Ideia", color: "bg-gray-100 text-gray-700" }, draft: { label: "Rascunho", color: "bg-yellow-100 text-yellow-700" }, review: { label: "Revisão", color: "bg-purple-100 text-purple-700" }, published: { label: "Publicado", color: "bg-green-100 text-green-700" } };
+const statusConfig: Record<Lead["status"], { label: string; color: string }> = {
+  new: { label: "Novo", color: "bg-blue-100 text-blue-700" },
+  contacted: { label: "Contatado", color: "bg-purple-100 text-purple-700" },
+  meeting: { label: "Reunião", color: "bg-yellow-100 text-yellow-700" },
+  proposal: { label: "Proposta", color: "bg-orange-100 text-orange-700" },
+  won: { label: "Ganho", color: "bg-green-100 text-green-700" },
+  lost: { label: "Perdido", color: "bg-red-100 text-red-700" },
+};
+
+const contentStatusConfig: Record<ContentItem["status"], { label: string; color: string }> = {
+  idea: { label: "Ideia", color: "bg-gray-100 text-gray-700" },
+  draft: { label: "Rascunho", color: "bg-yellow-100 text-yellow-700" },
+  review: { label: "Revisão", color: "bg-purple-100 text-purple-700" },
+  published: { label: "Publicado", color: "bg-green-100 text-green-700" },
+};
 const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0 }).format(value);
 
 export default function Marketing() {
@@ -48,7 +61,27 @@ export default function Marketing() {
         </TabsContent>
         <TabsContent value="proposals" className="mt-4"><Card><CardContent className="p-6 text-center text-muted-foreground">Biblioteca de propostas em desenvolvimento...</CardContent></Card></TabsContent>
         <TabsContent value="content" className="mt-4">
-          <Card><CardHeader><CardTitle>Calendário Editorial</CardTitle></CardHeader><CardContent><div className="space-y-3">{contentItems.map((item) => (<div key={item.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50"><div><h4 className="font-medium text-sm">{item.title}</h4><Badge variant="outline" className="mt-1 text-xs">{item.type}</Badge></div><Badge className={(contentStatusConfig as any)[item.status]?.color || "bg-muted"} variant="outline">{(contentStatusConfig as any)[item.status]?.label || item.status}</Badge></div>))}</div></CardContent></Card>
+          <Card>
+            <CardHeader><CardTitle>Calendário Editorial</CardTitle></CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {contentItems.map((item) => {
+                  const status = contentStatusConfig[item.status];
+                  return (
+                    <div key={item.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                      <div>
+                        <h4 className="font-medium text-sm">{item.title}</h4>
+                        <Badge variant="outline" className="mt-1 text-xs">{item.type}</Badge>
+                      </div>
+                      <Badge className={status?.color || "bg-muted"} variant="outline">
+                        {status?.label || item.status}
+                      </Badge>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
       <LeadDialog open={dialogOpen} onOpenChange={setDialogOpen} lead={editingLead} />
