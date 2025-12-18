@@ -4,7 +4,9 @@
       {client.nomeFantasia || client.razaoSocial}
     </Link>
     <span className="text-sm text-muted-foreground">{client.razaoSocial}</span>
-    {client.cnpj && <span className="text-xs text-muted-foreground">CNPJ: {client.cnpj}</span>}
+    {client.cnpj && (
+      <span className="text-xs text-muted-foreground">CNPJ: {client.cnpj}</span>
+    )}
   </div>
 </TableCell>
 
@@ -24,7 +26,9 @@
 
 <TableCell>
   <div className="flex flex-col gap-0.5">
-    <span>{[client.endereco?.cidade, client.endereco?.uf].filter(Boolean).join(" - ") || "-"}</span>
+    <span>
+      {[client.endereco?.cidade, client.endereco?.uf].filter(Boolean).join(" - ") || "-"}
+    </span>
     {client.endereco?.logradouro && (
       <span className="text-xs text-muted-foreground">
         {[client.endereco.logradouro, client.endereco.numero].filter(Boolean).join(", ")}
@@ -55,3 +59,4 @@
     )}
   </div>
 </TableCell>
+
