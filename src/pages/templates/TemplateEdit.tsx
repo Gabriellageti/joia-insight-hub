@@ -1,11 +1,11 @@
 import { useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { TemplateForm } from "./TemplateForm";
 import { TemplatePageHeader } from "./TemplatePageHeader";
 import { useData } from "@/contexts/DataContext";
 import { toast } from "sonner";
 import { formatDatePtBR } from "@/lib/dates";
+import { TemplateBuilder, TemplateBuilderAction } from "@/components/diagnostico/template-builder";
 
 export default function TemplateEdit() {
   const navigate = useNavigate();
@@ -28,22 +28,29 @@ export default function TemplateEdit() {
     );
   }
 
-  const handleSubmit = (payload: Parameters<typeof updateTemplate>[1]) => {
-    updateTemplate(id!, { ...payload, updatedAt: formatDatePtBR(new Date()) });
-    toast.success("Template atualizado");
-    navigate(`/templates/${id}/preview`);
-  };
+  const handleSubmit = (payload: Parameters<typeof updateTemplate>[1], action: TemplateBuilderAction) => {
+    if (action === "duplicate") {
+      const duplicated = addTemplate({
+        ...payload,
+        id: undefined,
+        name: `${payload.name} (cópia)`,
+        updatedAt: formatDatePtBR(new Date()),
+        revision: (template.revision || 1) + 1,
+      });
+      toast.success(`Template "${duplicated.name}" duplicado`);
+      navigate(`/templates/${duplicated.id}/editar`);
+      return;
+    }
 
-  const handleDuplicate = () => {
-    const duplicated = addTemplate({
-      ...template,
-      id: undefined,
-      name: `${template.name} (cópia)`,
-      updatedAt: formatDatePtBR(new Date()),
-      revision: (template.revision || 1) + 1,
-    });
-    toast.success(`Template "${duplicated.name}" duplicado`);
-    navigate(`/templates/${duplicated.id}/editar`);
+    const updatedTemplate = { ...payload, updatedAt: formatDatePtBR(new Date()) };
+    updateTemplate(id!, updatedTemplate);
+    const actionMessage =
+      action === "publish" ? "Template publicado" : action === "preview" ? "Preview atualizado" : "Rascunho salvo";
+    toast.success(actionMessage);
+
+    if (action === "preview" || action === "publish") {
+      navigate(`/templates/${id}/preview`);
+    }
   };
 
   return (
@@ -57,15 +64,11 @@ export default function TemplateEdit() {
             <Button variant="outline" onClick={() => navigate(-1)}>
               Voltar
             </Button>
-            <Button variant="secondary" onClick={() => navigate(`/templates/${id}/preview`)}>
-              Preview completo
-            </Button>
-            <Button onClick={handleDuplicate}>Duplicar</Button>
           </div>
         }
       />
 
-      <TemplateForm initialTemplate={template} onSubmit={handleSubmit} submitLabel="Salvar alterações" />
+      <TemplateBuilder initialTemplate={template} onSubmit={handleSubmit} />
     </div>
   );
 }
