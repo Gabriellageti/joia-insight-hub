@@ -1,13 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { 
   Client, Project, Task, Meeting, Indicator, Document, 
-  Playbook, Employee, Lead, Contract, Expense, ContentItem, Diagnostic 
+  Playbook, Employee, Lead, Contract, Expense, ContentItem, Diagnostic, ClientContact 
 } from '@/types';
 
 interface DataContextType {
   // Clients
   clients: Client[];
-  addClient: (client: Omit<Client, 'id' | 'createdAt'>) => void;
+  addClient: (client: Omit<Client, 'id' | 'createdAt'>) => Client;
   updateClient: (id: string, client: Partial<Client>) => void;
   deleteClient: (id: string) => void;
   
@@ -82,6 +82,12 @@ interface DataContextType {
   addExpense: (expense: Omit<Expense, 'id' | 'createdAt'>) => void;
   updateExpense: (id: string, expense: Partial<Expense>) => void;
   deleteExpense: (id: string) => void;
+
+  // Client contacts
+  clientContacts: ClientContact[];
+  addClientContact: (contact: Omit<ClientContact, 'id'>) => ClientContact;
+  updateClientContact: (id: string, contact: Partial<ClientContact>) => void;
+  deleteClientContact: (id: string) => void;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -142,6 +148,12 @@ const initialIndicators: Indicator[] = [
   { id: "2", name: "Giro de Estoque", category: "Estoque", unit: "quantidade", frequency: "mensal", source: "manual", target: 6, responsible: "Carlos Santos", values: [{ date: "01/11/2024", value: 4.2 }, { date: "01/12/2024", value: 4.8 }], createdAt: "15/11/2024" },
 ];
 
+const initialClientContacts: ClientContact[] = [
+  { id: "1", clientId: "1", name: "Fernanda Ramos", role: "Diretora", area: "Diretoria", email: "fernanda@abc.com", phone: "(11) 98765-4321", hasPortalAccess: true },
+  { id: "2", clientId: "2", name: "Ricardo Melo", role: "Gerente de Operações", area: "Administrativo", email: "ricardo@xyz.com", phone: "(19) 98888-1234", hasPortalAccess: false },
+  { id: "3", clientId: "3", name: "Patrícia Souza", role: "Coordenadora Financeira", area: "Financeiro", email: "patricia@123.com", phone: "(21) 99999-0000", hasPortalAccess: true },
+];
+
 const initialContentItems: ContentItem[] = [
   { id: "1", title: "Como reduzir custos de compras em 30 dias", type: "Artigo", status: "published", tags: ["compras", "redução de custos"], createdAt: "01/11/2024" },
   { id: "2", title: "Case: Empresa ABC economiza R$ 200k", type: "Case", status: "review", tags: ["case", "resultados"], createdAt: "10/12/2024" },
@@ -187,10 +199,15 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [contentItems, setContentItems] = useLocalStorage<ContentItem[]>('joia_content', initialContentItems);
   const [contracts, setContracts] = useLocalStorage<Contract[]>('joia_contracts', []);
   const [expenses, setExpenses] = useLocalStorage<Expense[]>('joia_expenses', []);
+  const [clientContacts, setClientContacts] = useLocalStorage<ClientContact[]>('joia_client_contacts', initialClientContacts);
 
   const value: DataContextType = {
     clients,
-    addClient: (client) => setClients(prev => [...prev, { ...client, id: generateId(), createdAt: getDate() }]),
+    addClient: (client) => {
+      const newClient = { ...client, id: generateId(), createdAt: getDate() };
+      setClients(prev => [...prev, newClient]);
+      return newClient;
+    },
     updateClient: (id, client) => setClients(prev => prev.map(c => c.id === id ? { ...c, ...client } : c)),
     deleteClient: (id) => setClients(prev => prev.filter(c => c.id !== id)),
 
@@ -253,6 +270,15 @@ export function DataProvider({ children }: { children: ReactNode }) {
     addExpense: (expense) => setExpenses(prev => [...prev, { ...expense, id: generateId(), createdAt: getDate() }]),
     updateExpense: (id, expense) => setExpenses(prev => prev.map(e => e.id === id ? { ...e, ...expense } : e)),
     deleteExpense: (id) => setExpenses(prev => prev.filter(e => e.id !== id)),
+
+    clientContacts,
+    addClientContact: (contact) => {
+      const newContact = { ...contact, id: generateId() };
+      setClientContacts(prev => [...prev, newContact]);
+      return newContact;
+    },
+    updateClientContact: (id, contact) => setClientContacts(prev => prev.map(c => c.id === id ? { ...c, ...contact } : c)),
+    deleteClientContact: (id) => setClientContacts(prev => prev.filter(c => c.id !== id)),
   };
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;

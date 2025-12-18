@@ -10,6 +10,7 @@ import { ClientDialog } from "@/components/dialogs/ClientDialog";
 import { Client } from "@/types";
 import { toast } from "sonner";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Link } from "react-router-dom";
 
 const riskColors = { low: "bg-green-500/10 text-green-700", medium: "bg-yellow-500/10 text-yellow-700", high: "bg-red-500/10 text-red-700" };
 const riskLabels = { low: "Baixo", medium: "Médio", high: "Alto" };
@@ -45,7 +46,11 @@ export default function Clientes() {
             <TableBody>
               {filteredClients.map((client) => (
                 <TableRow key={client.id}>
-                  <TableCell className="font-medium">{client.name}</TableCell>
+                  <TableCell className="font-medium">
+                    <Link to={`/clientes/${client.id}`} className="hover:underline">
+                      {client.name}
+                    </Link>
+                  </TableCell>
                   <TableCell>{client.segment}</TableCell>
                   <TableCell>{client.city}</TableCell>
                   <TableCell><Badge variant={client.status === "ativo" ? "default" : "secondary"}>{client.status === "ativo" ? "Ativo" : "Inativo"}</Badge></TableCell>

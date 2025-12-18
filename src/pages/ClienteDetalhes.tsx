@@ -1,0 +1,193 @@
+import { useMemo } from "react";
+import { Link, useParams } from "react-router-dom";
+import { useData } from "@/contexts/DataContext";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { ArrowLeft, Building2, MapPin, PhoneCall, Shield } from "lucide-react";
+
+const riskColors = { low: "bg-green-500/10 text-green-700", medium: "bg-yellow-500/10 text-yellow-700", high: "bg-red-500/10 text-red-700" };
+const riskLabels = { low: "Baixo", medium: "Médio", high: "Alto" };
+
+export default function ClienteDetalhes() {
+  const { id } = useParams<{ id: string }>();
+  const { clients, projects, clientContacts } = useData();
+
+  const client = useMemo(() => clients.find((c) => c.id === id), [clients, id]);
+  const clientProjects = useMemo(() => projects.filter((project) => project.clientId === id), [projects, id]);
+  const contacts = useMemo(() => clientContacts.filter((contact) => contact.clientId === id), [clientContacts, id]);
+
+  if (!client) {
+    return (
+      <div className="space-y-4">
+        <Alert>
+          <AlertTitle>Cliente não encontrado</AlertTitle>
+          <AlertDescription>Não foi possível localizar os dados deste cliente. Retorne para a lista para tentar novamente.</AlertDescription>
+        </Alert>
+        <Button asChild variant="outline" className="gap-2">
+          <Link to="/clientes">
+            <ArrowLeft className="h-4 w-4" />
+            Voltar para Clientes
+          </Link>
+        </Button>
+      </div>
+    );
+  }
+
+  const responsaveis = clientProjects.map((project) => project.responsible).filter(Boolean);
+
+  const checklistItems = [
+    {
+      id: "projects",
+      title: "Criar primeiro projeto",
+      description: clientProjects.length > 0 ? `${clientProjects.length} projeto(s) em andamento` : "Nenhum projeto cadastrado para este cliente",
+      completed: clientProjects.length > 0,
+    },
+    {
+      id: "contacts",
+      title: "Adicionar mais contatos",
+      description: contacts.length > 0 ? `${contacts.length} contato(s) cadastrados` : "Nenhum contato registrado",
+      completed: contacts.length > 1,
+    },
+    {
+      id: "address",
+      title: "Confirmar endereço",
+      description: client.address ? client.address : "Endereço ainda não informado",
+      completed: Boolean(client.address && client.address.trim().length > 0),
+    },
+    {
+      id: "owners",
+      title: "Definir responsáveis",
+      description: responsaveis.length > 0 ? `Responsável(is): ${responsaveis.join(", ")}` : "Defina responsáveis nos projetos deste cliente",
+      completed: responsaveis.length > 0,
+    },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Button asChild variant="ghost" className="h-auto px-2 text-muted-foreground hover:text-foreground">
+            <Link to="/clientes" className="flex items-center gap-2">
+              <ArrowLeft className="h-4 w-4" />
+              Voltar
+            </Link>
+          </Button>
+          <div>
+            <p className="text-sm text-muted-foreground">Cliente</p>
+            <h1 className="text-2xl font-semibold text-foreground">{client.name}</h1>
+          </div>
+        </div>
+        <Badge variant={client.status === "ativo" ? "default" : "secondary"}>
+          {client.status === "ativo" ? "Ativo" : "Inativo"}
+        </Badge>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <Card className="xl:col-span-2">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>Informações gerais</CardTitle>
+              <p className="text-sm text-muted-foreground">Dados principais do cliente</p>
+            </div>
+            <Badge className={riskColors[client.risk]} variant="outline">
+              Risco {riskLabels[client.risk]}
+            </Badge>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex items-start gap-3 rounded-lg border border-border p-3">
+              <Building2 className="h-4 w-4 text-muted-foreground mt-1" />
+              <div>
+                <p className="text-sm text-muted-foreground">Segmento</p>
+                <p className="font-medium">{client.segment || "Não informado"}</p>
+                {client.tradeName && <p className="text-sm text-muted-foreground">{client.tradeName}</p>}
+              </div>
+            </div>
+            <div className="flex items-start gap-3 rounded-lg border border-border p-3">
+              <Shield className="h-4 w-4 text-muted-foreground mt-1" />
+              <div>
+                <p className="text-sm text-muted-foreground">NPS</p>
+                <p className="font-medium">{client.nps || 0}</p>
+                <p className="text-sm text-muted-foreground">Último contato: {client.lastContact}</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3 rounded-lg border border-border p-3">
+              <MapPin className="h-4 w-4 text-muted-foreground mt-1" />
+              <div>
+                <p className="text-sm text-muted-foreground">Localização</p>
+                <p className="font-medium">{client.city || "Cidade não informada"}</p>
+                <p className="text-sm text-muted-foreground">{client.address || "Endereço não informado"}</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3 rounded-lg border border-border p-3">
+              <PhoneCall className="h-4 w-4 text-muted-foreground mt-1" />
+              <div>
+                <p className="text-sm text-muted-foreground">Contatos</p>
+                <p className="font-medium">{contacts.length} contato(s)</p>
+                <p className="text-sm text-muted-foreground">
+                  {client.followUpFrequency ? `Follow-up ${client.followUpFrequency}` : "Frequência de acompanhamento não definida"}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Próximos passos</CardTitle>
+            <p className="text-sm text-muted-foreground">Checklist dinâmico com base nos dados deste cliente.</p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {checklistItems.map((item) => (
+              <div key={item.id}>
+                <div className="flex items-start gap-3">
+                  <Checkbox checked={item.completed} aria-label={item.title} disabled className="mt-1" />
+                  <div>
+                    <p className="font-medium leading-none">{item.title}</p>
+                    <p className="text-sm text-muted-foreground mt-1">{item.description}</p>
+                  </div>
+                </div>
+                {item.id !== checklistItems[checklistItems.length - 1].id && <Separator className="my-3" />}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle>Projetos relacionados</CardTitle>
+            <p className="text-sm text-muted-foreground">Visão rápida dos projetos deste cliente.</p>
+          </div>
+          <Button asChild variant="outline">
+            <Link to="/projetos">Ver todos</Link>
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {clientProjects.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nenhum projeto cadastrado para este cliente.</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {clientProjects.map((project) => (
+                <div key={project.id} className="rounded-lg border border-border p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="font-medium">{project.name}</p>
+                    <Badge variant="outline">{project.phase}</Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground">{project.responsible}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {project.startDate} → {project.endDate}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
