@@ -66,6 +66,10 @@ CREATE TABLE public.projects (
   status TEXT DEFAULT 'Em andamento',
   responsible TEXT,
   progress INTEGER DEFAULT 0,
+  progress_override_enabled BOOLEAN DEFAULT false,
+  manual_progress INTEGER,
+  progress_justification TEXT,
+  progress_source TEXT DEFAULT 'calculated',
   start_date DATE,
   end_date DATE,
   money_hypothesis DECIMAL(15,2) DEFAULT 0,
@@ -73,6 +77,27 @@ CREATE TABLE public.projects (
   updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
 );
 ALTER TABLE public.projects ENABLE ROW LEVEL SECURITY;
+
+-- Project deliverables table (Entregáveis)
+CREATE TABLE public.project_deliverables (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id UUID REFERENCES public.projects(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  status TEXT DEFAULT 'pending',
+  due_date DATE,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
+);
+ALTER TABLE public.project_deliverables ENABLE ROW LEVEL SECURITY;
+
+-- Project audit logs (auditoria de progresso)
+CREATE TABLE public.project_audit_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id UUID REFERENCES public.projects(id) ON DELETE CASCADE,
+  message TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
+);
+ALTER TABLE public.project_audit_logs ENABLE ROW LEVEL SECURITY;
 
 -- Tasks table (Plano de Ação)
 CREATE TABLE public.tasks (

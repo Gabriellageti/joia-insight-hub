@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useData } from "@/contexts/DataContext";
 import { ProjectDialog } from "@/components/dialogs/ProjectDialog";
 import { Project } from "@/types";
@@ -49,7 +50,22 @@ export default function Projetos() {
             </CardHeader>
             <CardContent className="space-y-4">
               <Badge className={phaseColors[project.phase] || "bg-muted"} variant="outline">{project.phase}</Badge>
-              <div className="space-y-1"><div className="flex justify-between text-sm"><span className="text-muted-foreground">Progresso</span><span className="font-medium">{project.progress}%</span></div><Progress value={project.progress} className="h-2" /></div>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="space-y-1 cursor-help">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Progresso</span>
+                        <span className="font-medium">{Math.round(project.progress)}%</span>
+                      </div>
+                      <Progress value={project.progress} className="h-2" />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Calculado por tarefas, entregáveis e fases</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
               <div className="flex items-center justify-between text-sm"><span className="text-muted-foreground">Responsável</span><span>{project.responsible}</span></div>
               <div className="flex items-center justify-between text-xs text-muted-foreground"><span>{project.startDate}</span><span>→</span><span>{project.endDate}</span></div>
             </CardContent>
