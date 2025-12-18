@@ -10,9 +10,12 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ArrowLeft, Building2, MapPin, PhoneCall, Shield } from "lucide-react";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { isPastDate } from "@/lib/dates";
 
 const riskColors = { low: "bg-green-500/10 text-green-700", medium: "bg-yellow-500/10 text-yellow-700", high: "bg-red-500/10 text-red-700" };
 const riskLabels = { low: "Baixo", medium: "Médio", high: "Alto" };
+const getInitials = (value?: string) => value?.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase() || "--";
 
 export default function ClienteDetalhes() {
   const { id } = useParams<{ id: string }>();
@@ -39,7 +42,9 @@ export default function ClienteDetalhes() {
     );
   }
 
-  const responsaveis = clientProjects.map((project) => project.responsible).filter(Boolean);
+  const responsaveis = clientProjects
+    .map((project) => project.responsible || project.responsibleNameLegacy)
+    .filter(Boolean);
 
   const checklistItems = [
     {
@@ -174,34 +179,49 @@ export default function ClienteDetalhes() {
             <p className="text-sm text-muted-foreground">Nenhum projeto cadastrado para este cliente.</p>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {clientProjects.map((project) => (
-                <div key={project.id} className="rounded-lg border border-border p-3 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <p className="font-medium">{project.name}</p>
-                    <Badge variant="outline">{project.phase}</Badge>
-                  </div>
-                  <p className="text-sm text-muted-foreground">{project.responsible}</p>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div className="space-y-1 cursor-help">
-                          <div className="flex items-center justify-between text-xs text-muted-foreground">
-                            <span>Progresso</span>
-                            <span className="font-semibold text-foreground">{Math.round(project.progress)}%</span>
+              {clientProjects.map((project) => {
+                const responsibleName = project.responsible || project.responsibleNameLegacy || "Responsável pendente";
+                const forecastEndDate = project.forecastEndDate || project.endDate || "";
+                const overdue = forecastEndDate ? isPastDate(forecastEndDate) : false;
+                return (
+                  <div key={project.id} className="rounded-lg border border-border p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <p className="font-medium">{project.name}</p>
+                      <Badge variant="outline">{project.phase}</Badge>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-foreground">
+                      <Avatar className="h-7 w-7">
+                        <AvatarFallback className="bg-primary/10 text-primary">{getInitials(responsibleName)}</AvatarFallback>
+                      </Avatar>
+                      <span>{responsibleName}</span>
+                    </div>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="space-y-1 cursor-help">
+                            <div className="flex items-center justify-between text-xs text-muted-foreground">
+                              <span>Progresso</span>
+                              <span className="font-semibold text-foreground">{Math.round(project.progress)}%</span>
+                            </div>
+                            <Progress value={project.progress} className="h-1.5" />
                           </div>
-                          <Progress value={project.progress} className="h-1.5" />
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Calculado por tarefas, entregáveis e fases</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                  <p className="text-xs text-muted-foreground">
-                    {project.startDate} → {project.endDate}
-                  </p>
-                </div>
-              ))}
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Calculado por tarefas, entregáveis e fases</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>{project.startDate || "Sem início"}</span>
+                      <span>→</span>
+                      <div className="flex items-center gap-2">
+                        <span>{forecastEndDate || "Sem previsão"}</span>
+                        {overdue && <Badge variant="destructive">Atrasado</Badge>}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </CardContent>

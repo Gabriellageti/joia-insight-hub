@@ -89,11 +89,35 @@ export interface Project {
   statusOverrideJustification?: string;
   statusOverrideExpiresAt?: string;
   statusOverrideAuthor?: string;
+  responsibleUserId?: string | null;
+  responsibleNameLegacy?: string;
+  responsibleAvatarUrl?: string;
   responsible: string;
   startDate: string;
   endDate: string;
+  forecastEndDate?: string;
+  estimatedDuration?: "2w" | "4w" | "8w" | "3m" | "6m" | "manual" | null;
+  forecastAdjustedManually?: boolean;
+  legacyOpportunityMigrated?: boolean;
   moneyHypothesis?: string;
   createdAt: string;
+}
+
+export interface Opportunity {
+  id: string;
+  projectId: string;
+  clientId: string;
+  status: "Identificado" | "Em validação" | "Em execução" | "Resgatado";
+  type: "Receita incremental" | "Redução de custos" | "Eficiência operacional" | "Risco evitado" | "Outro";
+  description: string;
+  estimatedValue?: number | null;
+  confidence: "baixa" | "media" | "alta";
+  evidenceType: "a_coletar" | "upload";
+  evidenceReference?: string;
+  responsibleUserId?: string | null;
+  createdAt: string;
+  updatedAt?: string;
+  source?: "manual" | "legacy";
 }
 
 export interface ProjectDeliverable {
@@ -256,12 +280,14 @@ export interface Employee {
   name: string;
   email?: string;
   role: string;
+  accessRole?: "Admin" | "Gestor" | "Analista";
   seniority: "Junior" | "Pleno" | "Senior";
   startDate: string;
   projects: number;
   onboardingProgress: number;
   status: "active" | "onboarding";
   permissions: string[];
+  avatarUrl?: string;
   createdAt: string;
 }
 

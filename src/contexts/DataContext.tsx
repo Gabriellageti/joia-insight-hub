@@ -16,6 +16,7 @@ import {
   ClientContact,
   ProjectDeliverable,
   ProjectAuditLogEntry,
+  Opportunity,
 } from "@/types";
 import {
   buildProgressAuditMessage,
@@ -24,6 +25,8 @@ import {
   resolveProgressValue,
 } from "@/lib/projects/progress";
 import { buildStatusAuditMessage, resolveProjectStatus } from "@/lib/projects/status";
+import { calculateForecastEndDate, formatDatePtBR, parseDatePtBR, ProjectDuration, safeNumber } from "@/lib/dates";
+import { addDays } from "date-fns";
 
 interface DataContextType {
   // Clients
@@ -34,7 +37,13 @@ interface DataContextType {
 
   // Projects
   projects: Project[];
-  addProject: (project: Omit<Project, "id" | "createdAt" | "progress" | "status" | "statusReason" | "statusSource">) => void;
+  addProject: (
+    project: Omit<Project, "id" | "createdAt" | "progress" | "status" | "statusReason" | "statusSource">,
+    options?: {
+      opportunities?: Omit<Opportunity, "id" | "createdAt" | "updatedAt" | "source">[];
+      seedStructure?: boolean;
+    }
+  ) => void;
   updateProject: (id: string, project: Partial<Project>) => void;
   deleteProject: (id: string) => void;
 
@@ -113,6 +122,12 @@ interface DataContextType {
   // Project audit log
   projectAuditLogs: ProjectAuditLogEntry[];
   addProjectAuditLog: (entry: Omit<ProjectAuditLogEntry, "id" | "createdAt">) => ProjectAuditLogEntry;
+
+  // Opportunities
+  opportunities: Opportunity[];
+  addOpportunity: (opportunity: Omit<Opportunity, "id" | "createdAt" | "updatedAt" | "source">) => Opportunity;
+  updateOpportunity: (id: string, opportunity: Partial<Opportunity>) => void;
+  deleteOpportunity: (id: string) => void;
 
   // Client contacts
   clientContacts: ClientContact[];
@@ -207,6 +222,15 @@ const normalizeProject = (project: LegacyProject): Project => {
   const statusReason =
     project.statusReason || (statusOverrideEnabled ? "Status forçado manualmente" : "Sem alertas críticos");
   const statusSource = project.statusSource || (statusOverrideEnabled ? "manual" : "calculated");
+  const responsibleUserId = typeof project.responsibleUserId === "string" ? project.responsibleUserId : null;
+  const responsibleNameLegacy = project.responsibleNameLegacy ?? project.responsible ?? "";
+  const estimatedDuration = project.estimatedDuration ?? (project.forecastAdjustedManually ? "manual" : null);
+  const forecastEndDate =
+    project.forecastEndDate ||
+    calculateForecastEndDate(project.startDate, estimatedDuration as ProjectDuration | null) ||
+    project.endDate ||
+    "";
+
   return {
     id: project.id || generateId(),
     name: project.name || "Projeto",
@@ -228,12 +252,114 @@ const normalizeProject = (project: LegacyProject): Project => {
     statusOverrideJustification: project.statusOverrideJustification?.trim() || "",
     statusOverrideExpiresAt: project.statusOverrideExpiresAt || undefined,
     statusOverrideAuthor: project.statusOverrideAuthor || "",
-    responsible: project.responsible || "",
+    responsibleUserId,
+    responsibleNameLegacy,
+    responsibleAvatarUrl: project.responsibleAvatarUrl || "",
+    responsible: project.responsible || responsibleNameLegacy,
     startDate: project.startDate || "",
-    endDate: project.endDate || "",
+    endDate: project.endDate || forecastEndDate || "",
+    forecastEndDate,
+    estimatedDuration: estimatedDuration ?? null,
+    forecastAdjustedManually: project.forecastAdjustedManually ?? estimatedDuration === "manual",
+    legacyOpportunityMigrated: project.legacyOpportunityMigrated || false,
     moneyHypothesis: project.moneyHypothesis || "",
     createdAt: project.createdAt || getDate(),
   };
+};
+
+type LegacyOpportunity = Partial<Opportunity>;
+
+const normalizeOpportunity = (opportunity: LegacyOpportunity): Opportunity => {
+  const estimatedValue = safeNumber(opportunity.estimatedValue);
+  return {
+    id: opportunity.id || generateId(),
+    projectId: opportunity.projectId || "",
+    clientId: opportunity.clientId || "",
+    status: opportunity.status || "Identificado",
+    type: opportunity.type || "Outro",
+    description: opportunity.description || "",
+    estimatedValue,
+    confidence: opportunity.confidence || "media",
+    evidenceType: opportunity.evidenceType || "a_coletar",
+    evidenceReference: opportunity.evidenceReference || "",
+    responsibleUserId: typeof opportunity.responsibleUserId === "string" ? opportunity.responsibleUserId : null,
+    createdAt: opportunity.createdAt || getDate(),
+    updatedAt: opportunity.updatedAt,
+    source: opportunity.source || "manual",
+  };
+};
+
+const phaseSeeds: Record<string, { title: string; type: Task["type"]; offset: number; priority?: Task["priority"]; evidenceRequired?: boolean; impact?: string }[]> = {
+  Diagnóstico: [
+    { title: "Rodar kickoff com cliente", type: "processo", offset: 2, priority: "high" },
+    { title: "Aplicar template de diagnóstico", type: "processo", offset: 5, evidenceRequired: true },
+    { title: "Coletar evidências-chave", type: "processo", offset: 10, evidenceRequired: true },
+    { title: "Levantar KPIs baseline", type: "processo", offset: 12, priority: "medium" },
+    { title: "Registrar hipóteses prioritárias", type: "processo", offset: 14 },
+  ],
+  "Quick wins": [
+    { title: "Selecionar 3 ações rápidas", type: "processo", offset: 3, priority: "high" },
+    { title: "Executar ação 1", type: "processo", offset: 10 },
+    { title: "Executar ação 2", type: "processo", offset: 17 },
+    { title: "Executar ação 3", type: "processo", offset: 24 },
+    { title: "Validar impacto das ações", type: "financeiro", offset: 28, evidenceRequired: true },
+    { title: "Registrar evidências das entregas", type: "processo", offset: 30, evidenceRequired: true },
+  ],
+  Estruturação: [
+    { title: "Documentar POP prioritário", type: "processo", offset: 7 },
+    { title: "Treinar equipe do cliente", type: "treinamento", offset: 14, evidenceRequired: true },
+    { title: "Implementar rotina operacional", type: "processo", offset: 28 },
+    { title: "Criar dashboard de acompanhamento", type: "tecnologia", offset: 35, evidenceRequired: true },
+  ],
+  Acompanhamento: [
+    { title: "Revisão quinzenal com cliente", type: "processo", offset: 14 },
+    { title: "Checagem dos KPIs críticos", type: "processo", offset: 28 },
+    { title: "Relatório executivo", type: "processo", offset: 42, evidenceRequired: true },
+    { title: "Ajustes e novas oportunidades", type: "processo", offset: 56 },
+  ],
+};
+
+const buildSeedTasks = ({
+  phase,
+  startDate,
+  responsible,
+  projectId,
+  projectName,
+  clientId,
+  clientName,
+}: {
+  phase: string;
+  startDate?: string;
+  responsible: string;
+  projectId: string;
+  projectName: string;
+  clientId: string;
+  clientName: string;
+}): Task[] => {
+  const templates = phaseSeeds[phase] || [];
+  const baseDate = parseDatePtBR(startDate) || new Date();
+
+  return templates.map((template, index) => {
+    const dueDate = formatDatePtBR(addDays(baseDate, template.offset));
+    return {
+      id: generateId(),
+      title: template.title,
+      description: "Tarefa gerada automaticamente pela fase inteligente",
+      projectId,
+      projectName,
+      clientId,
+      clientName,
+      type: template.type,
+      responsible,
+      priority: template.priority || "medium",
+      dueDate,
+      impact: template.impact,
+      status: index === 0 ? "next" : "backlog",
+      checklist: [],
+      evidenceRequired: template.evidenceRequired ?? true,
+      createdAt: getDate(),
+    } as Task;
+  });
 };
 
 const initialClients: Client[] = [
@@ -289,11 +415,17 @@ const initialProjects: Project[] = [
     progressOverrideEnabled: false,
     manualProgress: null,
     status: "green",
+    responsibleUserId: "employee-1",
+    responsibleNameLegacy: "João Mendes",
     responsible: "João Mendes",
+    forecastEndDate: "30/03/2025",
+    estimatedDuration: "manual",
+    forecastAdjustedManually: true,
     startDate: "10/01/2025",
     endDate: "30/03/2025",
     createdAt: "05/01/2025",
     moneyHypothesis: "Redução de churn em 8%",
+    legacyOpportunityMigrated: true,
   },
   {
     id: "project-2",
@@ -308,7 +440,12 @@ const initialProjects: Project[] = [
     progressOverrideEnabled: false,
     manualProgress: null,
     status: "yellow",
+    responsibleUserId: "employee-2",
+    responsibleNameLegacy: "Bruna Lira",
     responsible: "Bruna Lira",
+    forecastEndDate: "20/04/2025",
+    estimatedDuration: "6m",
+    forecastAdjustedManually: false,
     startDate: "20/12/2024",
     endDate: "20/04/2025",
     createdAt: "15/12/2024",
@@ -326,10 +463,61 @@ const initialProjects: Project[] = [
     progressOverrideEnabled: false,
     manualProgress: null,
     status: "green",
+    responsibleUserId: null,
+    responsibleNameLegacy: "Marcos Vieira",
     responsible: "Marcos Vieira",
+    forecastEndDate: "15/04/2025",
+    estimatedDuration: "6m",
+    forecastAdjustedManually: false,
     startDate: "05/01/2025",
     endDate: "15/04/2025",
     createdAt: "18/12/2024",
+  },
+];
+
+const initialOpportunities: Opportunity[] = [
+  {
+    id: "opp-1",
+    projectId: "project-1",
+    clientId: "client-1",
+    status: "Identificado",
+    type: "Receita incremental",
+    description: "Redução de churn em 8% via BI operacional",
+    estimatedValue: 180000,
+    confidence: "media",
+    evidenceType: "a_coletar",
+    responsibleUserId: "employee-1",
+    createdAt: "05/01/2025",
+    source: "manual",
+  },
+  {
+    id: "opp-2",
+    projectId: "project-2",
+    clientId: "client-1",
+    status: "Em validação",
+    type: "Receita incremental",
+    description: "Upsell de CS com playbooks e cadência",
+    estimatedValue: 120000,
+    confidence: "alta",
+    evidenceType: "a_coletar",
+    responsibleUserId: "employee-2",
+    createdAt: "15/12/2024",
+    source: "manual",
+  },
+  {
+    id: "opp-3",
+    projectId: "project-3",
+    clientId: "client-2",
+    status: "Em execução",
+    type: "Eficiência operacional",
+    description: "Otimização de frete com torre de controle",
+    estimatedValue: 95000,
+    confidence: "media",
+    evidenceType: "upload",
+    evidenceReference: "planilha_custos.xlsx",
+    responsibleUserId: null,
+    createdAt: "18/12/2024",
+    source: "manual",
   },
 ];
 
@@ -506,7 +694,8 @@ const initialEmployees: Employee[] = [
     id: "employee-1",
     name: "João Mendes",
     email: "joao@joia.com",
-    role: "Consultor",
+    role: "Gestor de Projetos",
+    accessRole: "Gestor",
     seniority: "Senior",
     startDate: "01/03/2023",
     projects: 3,
@@ -519,7 +708,8 @@ const initialEmployees: Employee[] = [
     id: "employee-2",
     name: "Bruna Lira",
     email: "bruna@joia.com",
-    role: "CS Lead",
+    role: "Analista",
+    accessRole: "Analista",
     seniority: "Pleno",
     startDate: "10/06/2024",
     projects: 2,
@@ -527,6 +717,20 @@ const initialEmployees: Employee[] = [
     status: "active",
     permissions: ["clients", "projects"],
     createdAt: "10/06/2024",
+  },
+  {
+    id: "employee-3",
+    name: "Sara Martins",
+    email: "sara@joia.com",
+    role: "Gestora de Projetos",
+    accessRole: "Admin",
+    seniority: "Senior",
+    startDate: "15/02/2022",
+    projects: 4,
+    onboardingProgress: 100,
+    status: "active",
+    permissions: ["clients", "projects", "finance"],
+    createdAt: "15/02/2022",
   },
 ];
 
@@ -628,6 +832,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [clients, setClients] = useLocalStorage<Client[]>("joia_clients", initialClients);
   const [projects, setProjects] = useLocalStorage<Project[]>("joia_projects", initialProjects);
   const [tasks, setTasks] = useLocalStorage<Task[]>("joia_tasks", initialTasks);
+  const [opportunities, setOpportunities] = useLocalStorage<Opportunity[]>(
+    "joia_opportunities",
+    initialOpportunities
+  );
   const [deliverables, setDeliverables] = useLocalStorage<ProjectDeliverable[]>(
     "joia_deliverables",
     initialDeliverables
@@ -660,6 +868,46 @@ export function DataProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     setProjects((prev) => prev.map(normalizeProject));
   }, [setProjects]);
+
+  // Normaliza oportunidades legadas
+  useEffect(() => {
+    setOpportunities((prev) => prev.map(normalizeOpportunity));
+  }, [setOpportunities]);
+
+  // Migra hipóteses antigas para oportunidades estruturadas
+  useEffect(() => {
+    const projectsWithLegacyHypothesis = projects.filter(
+      (project) => project.moneyHypothesis && !project.legacyOpportunityMigrated
+    );
+
+    if (!projectsWithLegacyHypothesis.length) return;
+
+    const migrated = projectsWithLegacyHypothesis.map((project) =>
+      normalizeOpportunity({
+        projectId: project.id,
+        clientId: project.clientId,
+        status: "Identificado",
+        type: "Outro",
+        description: project.moneyHypothesis,
+        estimatedValue: null,
+        confidence: "media",
+        evidenceType: "a_coletar",
+        responsibleUserId: project.responsibleUserId ?? null,
+        source: "legacy",
+      })
+    );
+
+    if (migrated.length > 0) {
+      setOpportunities((prev) => [...prev, ...migrated]);
+      setProjects((prev) =>
+        prev.map((project) =>
+          projectsWithLegacyHypothesis.some((legacy) => legacy.id === project.id)
+            ? { ...project, legacyOpportunityMigrated: true }
+            : project
+        )
+      );
+    }
+  }, [projects, setOpportunities, setProjects]);
 
   const projectTasks = useCallback(
     (projectId: string) => tasks.filter((task) => task.projectId === projectId),
@@ -712,9 +960,19 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const computeProjectWithDerivedState = useCallback(
     (project: Project) => {
       const normalizedProject = normalizeProject(project);
+      const responsibleEmployee = employees.find((employee) => employee.id === normalizedProject.responsibleUserId);
+      const resolvedResponsible =
+        responsibleEmployee?.name || normalizedProject.responsible || normalizedProject.responsibleNameLegacy || "";
+      const resolvedAvatar = normalizedProject.responsibleAvatarUrl || responsibleEmployee?.avatarUrl || "";
+
+      const projectWithResponsible: Project = {
+        ...normalizedProject,
+        responsible: resolvedResponsible,
+        responsibleAvatarUrl: resolvedAvatar,
+      };
       const progressState = computeProgressValue(normalizedProject);
       const statusState = resolveProjectStatus({
-        project: normalizedProject,
+        project: projectWithResponsible,
         tasks: projectTasks(normalizedProject.id),
         meetings: projectMeetings(normalizedProject.id),
         indicators: projectIndicators(normalizedProject.id),
@@ -724,7 +982,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       });
 
       const nextProject: Project = {
-        ...normalizedProject,
+        ...projectWithResponsible,
         ...progressState,
         status: statusState.status,
         statusReason: statusState.reason,
@@ -747,6 +1005,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       projectIndicators,
       projectMeetings,
       projectTasks,
+      employees,
     ]
   );
 
@@ -839,7 +1098,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     deleteClient: (id) => setClients((prev) => prev.filter((c) => c.id !== id)),
 
     projects,
-    addProject: (project) => {
+    addProject: (project, options) => {
       const projectId = generateId();
       const baseProject = normalizeProject({
         ...project,
@@ -850,6 +1109,38 @@ export function DataProvider({ children }: { children: ReactNode }) {
       const auditLogs = deriveAuditLogs(undefined, newProject, { statusOverrideExpired });
 
       setProjects((prev) => [...prev, newProject]);
+
+      if (options?.seedStructure) {
+        const responsibleName = newProject.responsible || newProject.responsibleNameLegacy || "Responsável";
+        const seededTasks = buildSeedTasks({
+          phase: newProject.phase,
+          startDate: newProject.startDate,
+          responsible: responsibleName,
+          projectId,
+          projectName: newProject.name,
+          clientId: newProject.clientId,
+          clientName: newProject.clientName,
+        });
+
+        if (seededTasks.length) {
+          setTasks((prev) => [...prev, ...seededTasks]);
+        }
+      }
+
+      if (options?.opportunities?.length) {
+        const prepared = options.opportunities.map((opportunity) =>
+          normalizeOpportunity({
+            ...opportunity,
+            projectId,
+            clientId: newProject.clientId,
+            status: opportunity.status || "Identificado",
+            createdAt: opportunity.createdAt || getDate(),
+            source: opportunity.source || "manual",
+          })
+        );
+        setOpportunities((prev) => [...prev, ...prepared]);
+      }
+
       if (auditLogs.length) {
         setProjectAuditLogs((prev) => [...prev, ...auditLogs]);
       }
@@ -875,6 +1166,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
     addTask: (task) => setTasks((prev) => [...prev, { ...task, id: generateId(), createdAt: getDate() }]),
     updateTask: (id, task) => setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...task } : t))),
     deleteTask: (id) => setTasks((prev) => prev.filter((t) => t.id !== id)),
+
+    opportunities,
+    addOpportunity: (opportunity) => {
+      const newOpportunity = normalizeOpportunity({ ...opportunity, id: generateId(), createdAt: getDate() });
+      setOpportunities((prev) => [...prev, newOpportunity]);
+      return newOpportunity;
+    },
+    updateOpportunity: (id, opportunity) =>
+      setOpportunities((prev) => prev.map((opp) => (opp.id === id ? normalizeOpportunity({ ...opp, ...opportunity, updatedAt: getDate() }) : opp))),
+    deleteOpportunity: (id) => setOpportunities((prev) => prev.filter((opp) => opp.id !== id)),
 
     deliverables,
     addDeliverable: (deliverable) =>
