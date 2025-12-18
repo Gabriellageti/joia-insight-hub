@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ChevronDown, Loader2 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,9 +17,28 @@ import { Separator } from "@/components/ui/separator";
 import { useData } from "@/contexts/DataContext";
 import { Client } from "@/types";
 import { toast } from "sonner";
-import { ChevronDown, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
+
+type Address = {
+  cep: string;
+  logradouro: string;
+  numero: string;
+  complemento: string;
+  bairro: string;
+  cidade: string;
+  uf: string;
+};
+
+const emptyAddress: Address = {
+  cep: "",
+  logradouro: "",
+  numero: "",
+  complemento: "",
+  bairro: "",
+  cidade: "",
+  uf: "",
+};
 
 interface ClientDialogProps {
   open: boolean;
@@ -22,16 +49,20 @@ interface ClientDialogProps {
 export function ClientDialog({ open, onOpenChange, client }: ClientDialogProps) {
   const { addClient, updateClient } = useData();
   const navigate = useNavigate();
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isFetchingCep, setIsFetchingCep] = useState(false);
+  const [isAddressLocked, setIsAddressLocked] = useState(false);
+
   const [formData, setFormData] = useState({
     name: "",
     tradeName: "",
     cnpj: "",
     segment: "",
     city: "",
-    address: "",
+    address: emptyAddress as Address,
     primaryContactName: "",
     primaryContactEmail: "",
     primaryContactPhone: "",
@@ -41,55 +72,17 @@ export function ClientDialog({ open, onOpenChange, client }: ClientDialogProps) 
     followUpFrequency: "semanal" as "semanal" | "quinzenal" | "mensal",
   });
 
-  useEffect(() => {
-    if (client) {
-      setFormData({
-        name: client.name,
-        tradeName: client.tradeName || "",
-        cnpj: client.cnpj || "",
-        segment: client.segment,
-        city: client.city,
-        address: client.address || "",
-        primaryContactName: client.primaryContactName || "",
-        primaryContactEmail: client.primaryContactEmail || "",
-        primaryContactPhone: client.primaryContactPhone || "",
-        status: client.status,
-        risk: client.risk,
-        preferredMeetingDay: client.preferredMeetingDay || "",
-        followUpFrequency: client.followUpFrequency || "semanal",
-      });
-    } else {
-      setFormData({
-        name: "",
-        tradeName: "",
-        cnpj: "",
-        segment: "",
-        city: "",
-        address: "",
-        primaryContactName: "",
-        primaryContactEmail: "",
-        primaryContactPhone: "",
-        status: "ativo",
-        risk: "low",
-        preferredMeetingDay: "",
-        followUpFrequency: "semanal",
-      });
-    }
-    setErrors({});
-    setIsSubmitting(false);
-  }, [client, open]);
-
-  const requiredFields = useMemo(
-    () => ["name", "segment", "city", "primaryContactName", "primaryContactEmail"],
-    []
-  );
+  const requiredFields = useMemo(() => ["name", "segment", "city", "primaryContactName", "primaryContactEmail"], []);
 
   const validateForm = () => {
     const validationErrors: Record<string, string> = {};
 
+    const resolvedCity = (formData.address.cidade || formData.city || "").trim();
+
     if (!formData.name.trim()) validationErrors.name = "Razão social é obrigatória.";
     if (!formData.segment) validationErrors.segment = "Selecione o segmento.";
-    if (!formData.city.trim()) validationErrors.city = "Cidade é obrigatória.";
+    if (!resolvedCity) validationErrors.city = "Cidade é obrigatória.";
+
     if (!formData.primaryContactName.trim()) validationErrors.primaryContactName = "Informe o nome do contato principal.";
     if (!formData.primaryContactEmail.trim()) {
       validationErrors.primaryContactEmail = "E-mail do contato é obrigatório.";
@@ -103,14 +96,132 @@ export function ClientDialog({ open, onOpenChange, client }: ClientDialogProps) 
 
   const handleInputChange = (field: keyof typeof formData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
-    if (errors[field]) {
+    if (errors[field as string]) {
       setErrors((prev) => {
         const updated = { ...prev };
-        delete updated[field];
+        delete updated[field as string];
         return updated;
       });
     }
   };
+
+  const handleAddressChange = (field: keyof Address, value: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      address: { ...prev.address, [field]: value },
+      ...(field === "cidade" ? { city: value } : null),
+    }));
+
+    if (field === "cidade" && errors.city) {
+      setErrors((prev) => {
+        const updated = { ...prev };
+        delete updated.city;
+        return updated;
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (client) {
+      const rawAddress = client.address as unknown;
+
+      const normalizedAddress: Address =
+        typeof rawAddress === "string"
+          ? { ...emptyAddress, logradouro: rawAddress }
+          : { ...emptyAddress, ...(rawAddress as Partial<Address>) };
+
+      const resolvedCity = client.city || normalizedAddress.cidade || "";
+
+      setFormData({
+        name: client.name,
+        tradeName: client.tradeName || "",
+        cnpj: client.cnpj || "",
+        segment: client.segment || "",
+        city: resolvedCity,
+        address: { ...normalizedAddress, cidade: resolvedCity },
+        primaryContactName: (client as any).primaryContactName || "",
+        primaryContactEmail: (client as any).primaryContactEmail || "",
+        primaryContactPhone: (client as any).primaryContactPhone || "",
+        status: client.status,
+        risk: client.risk,
+        preferredMeetingDay: client.preferredMeetingDay || "",
+        followUpFrequency: client.followUpFrequency || "semanal",
+      });
+
+      setIsAddressLocked(false);
+      setIsFetchingCep(false);
+    } else {
+      setFormData({
+        name: "",
+        tradeName: "",
+        cnpj: "",
+        segment: "",
+        city: "",
+        address: emptyAddress,
+        primaryContactName: "",
+        primaryContactEmail: "",
+        primaryContactPhone: "",
+        status: "ativo",
+        risk: "low",
+        preferredMeetingDay: "",
+        followUpFrequency: "semanal",
+      });
+
+      setIsAddressLocked(false);
+      setIsFetchingCep(false);
+    }
+
+    setErrors({});
+    setIsSubmitting(false);
+  }, [client, open]);
+
+  useEffect(() => {
+    const cep = (formData.address.cep || "").replace(/\D/g, "");
+    if (!cep || cep.length !== 8) {
+      setIsAddressLocked(false);
+      setIsFetchingCep(false);
+      return;
+    }
+
+    setIsFetchingCep(true);
+    const controller = new AbortController();
+
+    const timer = setTimeout(async () => {
+      try {
+        const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`, { signal: controller.signal });
+        if (!response.ok) throw new Error("Erro ao buscar CEP");
+
+        const data = await response.json();
+        if (data?.erro) throw new Error("CEP não encontrado");
+
+        setFormData((prev) => ({
+          ...prev,
+          city: data.localidade || prev.city,
+          address: {
+            ...prev.address,
+            cep,
+            logradouro: data.logradouro || "",
+            complemento: data.complemento || "",
+            bairro: data.bairro || "",
+            cidade: data.localidade || "",
+            uf: data.uf || "",
+          },
+        }));
+
+        setIsAddressLocked(true);
+      } catch {
+        setIsAddressLocked(false);
+        toast.error("Não foi possível buscar o CEP. Preencha o endereço manualmente.");
+      } finally {
+        setIsFetchingCep(false);
+      }
+    }, 500);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [formData.address.cep]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -124,11 +235,15 @@ export function ClientDialog({ open, onOpenChange, client }: ClientDialogProps) 
       return;
     }
 
+    const resolvedCity = formData.address.cidade || formData.city || "";
+
     const clientData = {
       ...formData,
+      city: resolvedCity,
+      address: formData.address,
       projects: client?.projects || 0,
       nps: client?.nps || 0,
-      lastContact: new Date().toLocaleDateString('pt-BR'),
+      lastContact: new Date().toLocaleDateString("pt-BR"),
     };
 
     if (client) {
@@ -160,12 +275,14 @@ export function ClientDialog({ open, onOpenChange, client }: ClientDialogProps) 
           <DialogTitle>{client ? "Editar cliente" : "Criar cliente"}</DialogTitle>
           <DialogDescription>Organize os dados essenciais antes de avançar para o primeiro projeto.</DialogDescription>
         </DialogHeader>
+
         <form className="space-y-6" onSubmit={handleSubmit}>
           <section className="rounded-lg border p-4">
             <div className="space-y-1">
               <p className="text-sm font-medium text-foreground">Identificação</p>
               <p className="text-sm text-muted-foreground">Defina razão social, segmento e documentos fiscais.</p>
             </div>
+
             <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="name" className="flex items-center gap-1">
@@ -181,6 +298,7 @@ export function ClientDialog({ open, onOpenChange, client }: ClientDialogProps) 
                 />
                 {errors.name && <p className="text-sm text-destructive">{errors.name}</p>}
               </div>
+
               <div className="space-y-2">
                 <Label htmlFor="tradeName">Nome Fantasia</Label>
                 <Input
@@ -190,6 +308,7 @@ export function ClientDialog({ open, onOpenChange, client }: ClientDialogProps) 
                   placeholder="Nome fantasia"
                 />
               </div>
+
               <div className="space-y-2">
                 <Label htmlFor="cnpj">CNPJ</Label>
                 <Input
@@ -199,14 +318,12 @@ export function ClientDialog({ open, onOpenChange, client }: ClientDialogProps) 
                   placeholder="00.000.000/0000-00"
                 />
               </div>
+
               <div className="space-y-2">
                 <Label htmlFor="segment" className="flex items-center gap-1">
                   Segmento <span className="text-destructive">*</span>
                 </Label>
-                <Select
-                  value={formData.segment}
-                  onValueChange={(value) => handleInputChange("segment", value)}
-                >
+                <Select value={formData.segment} onValueChange={(value) => handleInputChange("segment", value)}>
                   <SelectTrigger className={cn(errors.segment && "border-destructive focus:ring-destructive")}>
                     <SelectValue placeholder="Selecione" />
                   </SelectTrigger>
@@ -229,6 +346,7 @@ export function ClientDialog({ open, onOpenChange, client }: ClientDialogProps) 
               <p className="text-sm font-medium text-foreground">Contato principal</p>
               <p className="text-sm text-muted-foreground">Quem será acionado nas comunicações iniciais.</p>
             </div>
+
             <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="primaryContactName" className="flex items-center gap-1">
@@ -244,6 +362,7 @@ export function ClientDialog({ open, onOpenChange, client }: ClientDialogProps) 
                 />
                 {errors.primaryContactName && <p className="text-sm text-destructive">{errors.primaryContactName}</p>}
               </div>
+
               <div className="space-y-2">
                 <Label htmlFor="primaryContactEmail" className="flex items-center gap-1">
                   E-mail do contato <span className="text-destructive">*</span>
@@ -259,6 +378,7 @@ export function ClientDialog({ open, onOpenChange, client }: ClientDialogProps) 
                 />
                 {errors.primaryContactEmail && <p className="text-sm text-destructive">{errors.primaryContactEmail}</p>}
               </div>
+
               <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="primaryContactPhone">Telefone/WhatsApp</Label>
                 <Input
@@ -274,31 +394,99 @@ export function ClientDialog({ open, onOpenChange, client }: ClientDialogProps) 
           <section className="rounded-lg border p-4">
             <div className="space-y-1">
               <p className="text-sm font-medium text-foreground">Endereço inteligente</p>
-              <p className="text-sm text-muted-foreground">Localização base para visitas e propostas.</p>
+              <p className="text-sm text-muted-foreground">Preencha o CEP e deixe o resto se comportar.</p>
             </div>
+
             <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="city" className="flex items-center gap-1">
+                <Label htmlFor="cep">CEP</Label>
+                <div className="relative">
+                  <Input
+                    id="cep"
+                    inputMode="numeric"
+                    value={formData.address.cep}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/\D/g, "").slice(0, 8);
+                      handleAddressChange("cep", value);
+                      if (!value) setIsAddressLocked(false);
+                    }}
+                    placeholder="00000000"
+                    maxLength={8}
+                  />
+                  {isFetchingCep && (
+                    <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="uf">UF</Label>
+                <Input
+                  id="uf"
+                  value={formData.address.uf}
+                  readOnly={isAddressLocked}
+                  onChange={(e) => handleAddressChange("uf", e.target.value.toUpperCase().slice(0, 2))}
+                  placeholder="UF"
+                  maxLength={2}
+                />
+              </div>
+
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="logradouro">Logradouro</Label>
+                <Input
+                  id="logradouro"
+                  value={formData.address.logradouro}
+                  readOnly={isAddressLocked}
+                  onChange={(e) => handleAddressChange("logradouro", e.target.value)}
+                  placeholder="Rua, avenida..."
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="numero">Número</Label>
+                <Input
+                  id="numero"
+                  value={formData.address.numero}
+                  onChange={(e) => handleAddressChange("numero", e.target.value)}
+                  placeholder="Número"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="complemento">Complemento</Label>
+                <Input
+                  id="complemento"
+                  value={formData.address.complemento}
+                  onChange={(e) => handleAddressChange("complemento", e.target.value)}
+                  placeholder="Apto, bloco, etc."
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="bairro">Bairro</Label>
+                <Input
+                  id="bairro"
+                  value={formData.address.bairro}
+                  readOnly={isAddressLocked}
+                  onChange={(e) => handleAddressChange("bairro", e.target.value)}
+                  placeholder="Bairro"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="cidade" className="flex items-center gap-1">
                   Cidade <span className="text-destructive">*</span>
                 </Label>
                 <Input
-                  id="city"
-                  value={formData.city}
-                  onChange={(e) => handleInputChange("city", e.target.value)}
+                  id="cidade"
+                  value={formData.address.cidade}
+                  readOnly={isAddressLocked}
+                  onChange={(e) => handleAddressChange("cidade", e.target.value)}
                   placeholder="Cidade"
                   className={cn(errors.city && "border-destructive focus-visible:ring-destructive")}
                   required={requiredFields.includes("city")}
                 />
                 {errors.city && <p className="text-sm text-destructive">{errors.city}</p>}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="address">Endereço</Label>
-                <Input
-                  id="address"
-                  value={formData.address}
-                  onChange={(e) => handleInputChange("address", e.target.value)}
-                  placeholder="Rua, número, complemento"
-                />
               </div>
             </div>
           </section>
@@ -311,22 +499,18 @@ export function ClientDialog({ open, onOpenChange, client }: ClientDialogProps) 
               >
                 <div className="flex flex-col">
                   <span>Detalhes avançados</span>
-                  <span className="text-sm font-normal text-muted-foreground">
-                    Status, risco e cadência de acompanhamento.
-                  </span>
+                  <span className="text-sm font-normal text-muted-foreground">Status, risco e cadência de acompanhamento.</span>
                 </div>
                 <ChevronDown className={cn("h-4 w-4 transition-transform", advancedOpen && "rotate-180")} />
               </button>
             </CollapsibleTrigger>
+
             <CollapsibleContent>
               <Separator />
               <div className="grid grid-cols-1 gap-4 p-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="status">Status</Label>
-                  <Select
-                    value={formData.status}
-                    onValueChange={(value: "ativo" | "inativo") => handleInputChange("status", value)}
-                  >
+                  <Select value={formData.status} onValueChange={(value: "ativo" | "inativo") => handleInputChange("status", value)}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -336,12 +520,10 @@ export function ClientDialog({ open, onOpenChange, client }: ClientDialogProps) 
                     </SelectContent>
                   </Select>
                 </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="risk">Risco</Label>
-                  <Select
-                    value={formData.risk}
-                    onValueChange={(value: "low" | "medium" | "high") => handleInputChange("risk", value)}
-                  >
+                  <Select value={formData.risk} onValueChange={(value: "low" | "medium" | "high") => handleInputChange("risk", value)}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -352,12 +534,10 @@ export function ClientDialog({ open, onOpenChange, client }: ClientDialogProps) 
                     </SelectContent>
                   </Select>
                 </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="preferredMeetingDay">Dia de reunião</Label>
-                  <Select
-                    value={formData.preferredMeetingDay}
-                    onValueChange={(value) => handleInputChange("preferredMeetingDay", value)}
-                  >
+                  <Select value={formData.preferredMeetingDay} onValueChange={(value) => handleInputChange("preferredMeetingDay", value)}>
                     <SelectTrigger>
                       <SelectValue placeholder="Selecione" />
                     </SelectTrigger>
@@ -370,13 +550,12 @@ export function ClientDialog({ open, onOpenChange, client }: ClientDialogProps) 
                     </SelectContent>
                   </Select>
                 </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="followUpFrequency">Frequência de acompanhamento</Label>
                   <Select
                     value={formData.followUpFrequency}
-                    onValueChange={(value: "semanal" | "quinzenal" | "mensal") =>
-                      handleInputChange("followUpFrequency", value)
-                    }
+                    onValueChange={(value: "semanal" | "quinzenal" | "mensal") => handleInputChange("followUpFrequency", value)}
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -396,16 +575,14 @@ export function ClientDialog({ open, onOpenChange, client }: ClientDialogProps) 
             <Button type="button" variant="outline" className="flex-1" onClick={() => onOpenChange(false)}>
               Cancelar
             </Button>
-            <Button
-              type="submit"
-              className="flex-1 bg-accent text-accent-foreground hover:bg-accent/90"
-              disabled={isSubmitting}
-            >
+            <Button type="submit" className="flex-1 bg-accent text-accent-foreground hover:bg-accent/90" disabled={isSubmitting}>
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Processando...
                 </>
+              ) : client ? (
+                "Salvar alterações"
               ) : (
                 "Criar cliente"
               )}
