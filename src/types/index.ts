@@ -232,6 +232,7 @@ export interface TemplateQuestion {
   helperText?: string;
   placeholder?: string;
   order: number;
+  includeInScore?: boolean;
   minValue?: number | null;
   maxValue?: number | null;
   options?: string[];

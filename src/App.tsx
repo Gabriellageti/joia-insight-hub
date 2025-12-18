@@ -28,6 +28,7 @@ import TemplatesList from "./pages/templates/TemplatesList";
 import TemplateCreate from "./pages/templates/TemplateCreate";
 import TemplateEdit from "./pages/templates/TemplateEdit";
 import TemplatePreview from "./pages/templates/TemplatePreview";
+import TemplateDiagnosticPreview from "./pages/templates/TemplateDiagnosticPreview";
 
 const queryClient = new QueryClient();
 
@@ -57,6 +58,7 @@ const App = () => (
                         <Route path="/templates/novo" element={<TemplateCreate />} />
                         <Route path="/templates/:id/editar" element={<TemplateEdit />} />
                         <Route path="/templates/:id/preview" element={<TemplatePreview />} />
+                        <Route path="/templates-diagnostico/:templateId/preview" element={<TemplateDiagnosticPreview />} />
                         <Route path="/plano-acao" element={<PlanoAcao />} />
                         <Route path="/indicadores" element={<Indicadores />} />
                         <Route path="/reunioes" element={<Reunioes />} />

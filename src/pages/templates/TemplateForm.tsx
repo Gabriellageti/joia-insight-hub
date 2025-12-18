@@ -43,6 +43,7 @@ const createQuestion = (order: number): TemplateQuestion => ({
   weight: 1,
   criticality: "media",
   required: true,
+  includeInScore: true,
   order,
   options: [],
 });
@@ -77,6 +78,7 @@ export function TemplateForm({ initialTemplate, onSubmit, submitLabel }: Templat
         criticality: question.criticality || "media",
         type: question.type || "yes_no",
         required: question.required ?? true,
+        includeInScore: question.includeInScore ?? true,
       })),
     }));
 
@@ -328,7 +330,7 @@ export function TemplateForm({ initialTemplate, onSubmit, submitLabel }: Templat
                                 <span className="sr-only">Remover pergunta</span>
                               </Button>
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-center">
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-center">
                               <div className="space-y-2">
                                 <Label>Tipo</Label>
                                 <Select
@@ -377,6 +379,20 @@ export function TemplateForm({ initialTemplate, onSubmit, submitLabel }: Templat
                                   checked={question.required}
                                   onCheckedChange={(checked) =>
                                     updateQuestion(section.id, question.id, { required: checked })
+                                  }
+                                />
+                              </div>
+                              <div className="flex items-center justify-between rounded-md border px-3 py-2">
+                                <div>
+                                  <p className="text-sm font-medium">Entra no score</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    Desative para perguntas de contexto que não pontuam.
+                                  </p>
+                                </div>
+                                <Switch
+                                  checked={question.includeInScore ?? true}
+                                  onCheckedChange={(checked) =>
+                                    updateQuestion(section.id, question.id, { includeInScore: checked })
                                   }
                                 />
                               </div>

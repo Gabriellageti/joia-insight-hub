@@ -66,6 +66,7 @@ const createQuestion = (order: number): TemplateQuestion => ({
   title: `Pergunta ${order}`,
   type: "yes_no",
   weight: 1,
+  includeInScore: true,
   criticality: "media",
   required: true,
   order,
@@ -789,7 +790,7 @@ export function TemplateBuilder({ initialTemplate, onSubmit }: TemplateBuilderPr
                                   required
                                 />
                               </div>
-                              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-center">
+                              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-center">
                                 <div className="space-y-2">
                                   <Label>Tipo</Label>
                                   <Select
@@ -852,6 +853,20 @@ export function TemplateBuilder({ initialTemplate, onSubmit }: TemplateBuilderPr
                                     checked={question.required}
                                     onCheckedChange={(checked) =>
                                       updateQuestion(section.id, question.id, { required: checked })
+                                    }
+                                  />
+                                </div>
+                                <div className="flex items-center justify-between rounded-md border px-3 py-2">
+                                  <div>
+                                    <p className="text-sm font-medium">Entra no score</p>
+                                    <p className="text-xs text-muted-foreground">
+                                      Desative para perguntas que não devem impactar a nota.
+                                    </p>
+                                  </div>
+                                  <Switch
+                                    checked={question.includeInScore ?? true}
+                                    onCheckedChange={(checked) =>
+                                      updateQuestion(section.id, question.id, { includeInScore: checked })
                                     }
                                   />
                                 </div>
