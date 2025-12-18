@@ -7,7 +7,7 @@ import {
 interface DataContextType {
   // Clients
   clients: Client[];
-  addClient: (client: Omit<Client, 'id' | 'createdAt'>) => void;
+  addClient: (client: Omit<Client, 'id' | 'createdAt'>) => Client;
   updateClient: (id: string, client: Partial<Client>) => void;
   deleteClient: (id: string) => void;
   
@@ -190,7 +190,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const value: DataContextType = {
     clients,
-    addClient: (client) => setClients(prev => [...prev, { ...client, id: generateId(), createdAt: getDate() }]),
+    addClient: (client) => {
+      const newClient = { ...client, id: generateId(), createdAt: getDate() };
+      setClients(prev => [...prev, newClient]);
+      return newClient;
+    },
     updateClient: (id, client) => setClients(prev => prev.map(c => c.id === id ? { ...c, ...client } : c)),
     deleteClient: (id) => setClients(prev => prev.filter(c => c.id !== id)),
 
