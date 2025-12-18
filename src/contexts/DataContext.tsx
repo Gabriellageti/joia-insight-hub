@@ -13,6 +13,7 @@ import {
   Expense,
   ContentItem,
   Diagnostic,
+  DiagnosticTemplate,
   ClientContact,
   ProjectDeliverable,
   ProjectAuditLogEntry,
@@ -27,6 +28,15 @@ import {
 import { buildStatusAuditMessage, resolveProjectStatus } from "@/lib/projects/status";
 import { calculateForecastEndDate, formatDatePtBR, parseDatePtBR, ProjectDuration, safeNumber } from "@/lib/dates";
 import { addDays } from "date-fns";
+import {
+  ApplyDiagnosticInput,
+  applyDiagnostic as applyDiagnosticMock,
+  fetchDiagnostics,
+  fetchTemplates,
+  getDefaultDiagnosticName,
+  getDiagnosticsSeed,
+  getTemplatesSeed,
+} from "@/lib/diagnostics";
 
 interface DataContextType {
   // Clients
@@ -100,6 +110,17 @@ interface DataContextType {
   addDiagnostic: (diagnostic: Omit<Diagnostic, "id" | "createdAt">) => void;
   updateDiagnostic: (id: string, diagnostic: Partial<Diagnostic>) => void;
   deleteDiagnostic: (id: string) => void;
+  templates: DiagnosticTemplate[];
+  addTemplate: (template: Omit<DiagnosticTemplate, "id"> & { id?: string }) => DiagnosticTemplate;
+  updateTemplate: (id: string, template: Partial<DiagnosticTemplate>) => void;
+  deleteTemplate: (id: string) => void;
+  refreshDiagnostics: () => Promise<void>;
+  refreshTemplates: () => Promise<void>;
+  applyDiagnostic: (diagnostic: ApplyDiagnosticInput) => Promise<Diagnostic>;
+  duplicateDiagnostic: (
+    diagnostic: Diagnostic,
+    target: { projectId: string; projectName: string; clientId: string; clientName: string }
+  ) => Promise<Diagnostic>;
 
   // Content
   contentItems: ContentItem[];
@@ -264,6 +285,58 @@ const normalizeProject = (project: LegacyProject): Project => {
     legacyOpportunityMigrated: project.legacyOpportunityMigrated || false,
     moneyHypothesis: project.moneyHypothesis || "",
     createdAt: project.createdAt || getDate(),
+  };
+};
+
+const normalizeTemplate = (template: DiagnosticTemplate): DiagnosticTemplate => {
+  const questionCountFromSections = template.sections?.reduce((count, section) => count + (section.questions?.length || 0), 0) || 0;
+
+  return {
+    id: template.id || generateId(),
+    name: template.name || "Template",
+    tags: template.tags || [],
+    sections: template.sections || [],
+    questionCount: typeof template.questionCount === "number" ? template.questionCount : questionCountFromSections,
+    sectionsCount: template.sectionsCount ?? template.sections?.length ?? 0,
+    estimatedTimeMinutes: typeof template.estimatedTimeMinutes === "number" ? template.estimatedTimeMinutes : null,
+    version: template.version || "v1.0",
+    updatedAt: template.updatedAt || getDate(),
+  };
+};
+
+const normalizeDiagnostic = (diagnostic: Partial<Diagnostic>): Diagnostic => {
+  const totalQuestions = diagnostic.totalQuestions ?? 40;
+  const progressValue = typeof diagnostic.progress === "number" ? diagnostic.progress : 0;
+  const answeredQuestions =
+    typeof diagnostic.answeredQuestions === "number"
+      ? diagnostic.answeredQuestions
+      : Math.round((progressValue / 100) * totalQuestions);
+  const templateName = diagnostic.templateName || "Template";
+  const projectName = diagnostic.projectName || "Projeto";
+  const createdAt = diagnostic.createdAt || getDate();
+
+  return {
+    id: diagnostic.id || generateId(),
+    name: diagnostic.name || getDefaultDiagnosticName(templateName, projectName),
+    projectId: diagnostic.projectId || "",
+    projectName,
+    clientId: diagnostic.clientId || "",
+    clientName: diagnostic.clientName || "",
+    templateId: diagnostic.templateId || "",
+    templateName,
+    status: diagnostic.status || "draft",
+    progress: progressValue,
+    score: diagnostic.score,
+    opportunities: diagnostic.opportunities ?? 0,
+    createdAt,
+    updatedAt: diagnostic.updatedAt || createdAt,
+    totalQuestions,
+    answeredQuestions,
+    autoGenerateOpportunities: diagnostic.autoGenerateOpportunities ?? true,
+    responsibleName: diagnostic.responsibleName || "Equipe JoIA",
+    responsibleId: diagnostic.responsibleId,
+    hasResponses: diagnostic.hasResponses ?? answeredQuestions > 0,
+    dueDate: diagnostic.dueDate,
   };
 };
 
@@ -763,21 +836,8 @@ const initialLeads: Lead[] = [
   },
 ];
 
-const initialDiagnostics: Diagnostic[] = [
-  {
-    id: "diagnostic-1",
-    projectId: "project-1",
-    projectName: "Implantação BI Operacional",
-    clientId: "client-1",
-    clientName: "Alfa Tecnologia LTDA",
-    templateId: "template-1",
-    templateName: "Operações SaaS",
-    status: "in_progress",
-    progress: 55,
-    opportunities: 7,
-    createdAt: "22/01/2025",
-  },
-];
+const initialDiagnostics: Diagnostic[] = getDiagnosticsSeed();
+const initialTemplates: DiagnosticTemplate[] = getTemplatesSeed();
 
 const initialContentItems: ContentItem[] = [
   {
@@ -846,6 +906,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [playbooks, setPlaybooks] = useLocalStorage<Playbook[]>("joia_playbooks", initialPlaybooks);
   const [employees, setEmployees] = useLocalStorage<Employee[]>("joia_employees", initialEmployees);
   const [leads, setLeads] = useLocalStorage<Lead[]>("joia_leads", initialLeads);
+  const [templates, setTemplates] = useLocalStorage<DiagnosticTemplate[]>("joia_diagnostic_templates", initialTemplates);
   const [diagnostics, setDiagnostics] = useLocalStorage<Diagnostic[]>("joia_diagnostics", initialDiagnostics);
   const [contentItems, setContentItems] = useLocalStorage<ContentItem[]>("joia_content", initialContentItems);
   const [contracts, setContracts] = useLocalStorage<Contract[]>("joia_contracts", []);
@@ -873,6 +934,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     setOpportunities((prev) => prev.map(normalizeOpportunity));
   }, [setOpportunities]);
+
+  useEffect(() => {
+    setDiagnostics((prev) => prev.map(normalizeDiagnostic));
+  }, [setDiagnostics]);
+
+  useEffect(() => {
+    setTemplates((prev) => prev.map(normalizeTemplate));
+  }, [setTemplates]);
 
   // Migra hipóteses antigas para oportunidades estruturadas
   useEffect(() => {
@@ -908,6 +977,65 @@ export function DataProvider({ children }: { children: ReactNode }) {
       );
     }
   }, [projects, setOpportunities, setProjects]);
+
+  const refreshDiagnostics = useCallback(async () => {
+    const data = await fetchDiagnostics();
+    setDiagnostics(data.map(normalizeDiagnostic));
+  }, [setDiagnostics]);
+
+  const refreshTemplates = useCallback(async () => {
+    const data = await fetchTemplates();
+    setTemplates(data.map(normalizeTemplate));
+  }, [setTemplates]);
+
+  const handleApplyDiagnostic = useCallback(
+    async (diagnostic: ApplyDiagnosticInput) => {
+      const template = templates.find((item) => item.id === diagnostic.templateId);
+      const created = await applyDiagnosticMock({
+        ...diagnostic,
+        templateQuestionCount: diagnostic.templateQuestionCount ?? template?.questionCount,
+        templateName: diagnostic.templateName || template?.name || diagnostic.templateId,
+      });
+      const normalized = normalizeDiagnostic(created);
+      setDiagnostics((prev) => [...prev, normalized]);
+      return normalized;
+    },
+    [setDiagnostics, templates]
+  );
+
+  const handleDuplicateDiagnostic = useCallback(
+    async (
+      diagnostic: Diagnostic,
+      target: { projectId: string; projectName: string; clientId: string; clientName: string }
+    ) => {
+      const duplicated = await applyDiagnosticMock({
+        projectId: target.projectId,
+        projectName: target.projectName,
+        clientId: target.clientId,
+        clientName: target.clientName,
+        templateId: diagnostic.templateId,
+        templateName: diagnostic.templateName,
+        responsibleId: diagnostic.responsibleId,
+        responsibleName: diagnostic.responsibleName,
+        dueDate: diagnostic.dueDate,
+        autoGenerateOpportunities: diagnostic.autoGenerateOpportunities,
+        name: getDefaultDiagnosticName(diagnostic.templateName, target.projectName),
+        templateQuestionCount: diagnostic.totalQuestions,
+      });
+
+      const normalized = normalizeDiagnostic({
+        ...duplicated,
+        status: "draft",
+        progress: 0,
+        answeredQuestions: 0,
+        hasResponses: false,
+      });
+
+      setDiagnostics((prev) => [...prev, normalized]);
+      return normalized;
+    },
+    [setDiagnostics]
+  );
 
   const projectTasks = useCallback(
     (projectId: string) => tasks.filter((task) => task.projectId === projectId),
@@ -1227,12 +1355,35 @@ export function DataProvider({ children }: { children: ReactNode }) {
     updateLead: (id, lead) => setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, ...lead } : l))),
     deleteLead: (id) => setLeads((prev) => prev.filter((l) => l.id !== id)),
 
+    templates,
+    addTemplate: (template) => {
+      const normalized = normalizeTemplate({ ...template, id: template.id || generateId() });
+      setTemplates((prev) => [...prev, normalized]);
+      return normalized;
+    },
+    updateTemplate: (id, template) =>
+      setTemplates((prev) => prev.map((t) => (t.id === id ? normalizeTemplate({ ...t, ...template }) : t))),
+    deleteTemplate: (id) => setTemplates((prev) => prev.filter((t) => t.id !== id)),
+
     diagnostics,
     addDiagnostic: (diagnostic) =>
-      setDiagnostics((prev) => [...prev, { ...diagnostic, id: generateId(), createdAt: getDate() }]),
+      setDiagnostics((prev) => [
+        ...prev,
+        normalizeDiagnostic({ ...diagnostic, id: generateId(), createdAt: getDate(), updatedAt: getDate() }),
+      ]),
     updateDiagnostic: (id, diagnostic) =>
-      setDiagnostics((prev) => prev.map((d) => (d.id === id ? { ...d, ...diagnostic } : d))),
+      setDiagnostics((prev) =>
+        prev.map((d) =>
+          d.id === id
+            ? normalizeDiagnostic({ ...d, ...diagnostic, updatedAt: diagnostic.updatedAt || getDate() })
+            : d
+        )
+      ),
     deleteDiagnostic: (id) => setDiagnostics((prev) => prev.filter((d) => d.id !== id)),
+    refreshDiagnostics,
+    refreshTemplates,
+    applyDiagnostic: handleApplyDiagnostic,
+    duplicateDiagnostic: handleDuplicateDiagnostic,
 
     contentItems,
     addContentItem: (item) =>

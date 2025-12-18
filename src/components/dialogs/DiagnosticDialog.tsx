@@ -1,27 +1,102 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useData } from "@/contexts/DataContext";
-import { Diagnostic } from "@/types";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { cn } from "@/lib/utils";
+import { ChevronDown, Calendar, Loader2, Copy } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-
-const templates = [
-  { id: "1", name: "Diagnóstico Completo JoIA" },
-  { id: "2", name: "Diagnóstico de Compras" },
-  { id: "3", name: "Diagnóstico de Estoque" },
-  { id: "4", name: "Diagnóstico Financeiro" },
-];
+import { useData } from "@/contexts/DataContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { Diagnostic } from "@/types";
+import { formatDatePtBR } from "@/lib/dates";
+import { getDefaultDiagnosticName } from "@/lib/diagnostics";
 
 interface DiagnosticDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   diagnostic?: Diagnostic | null;
+  defaultTemplateId?: string;
 }
 
-export function DiagnosticDialog({ open, onOpenChange, diagnostic }: DiagnosticDialogProps) {
-  const { addDiagnostic, updateDiagnostic, projects, clients } = useData();
+interface SelectOption {
+  value: string;
+  label: string;
+  description?: string;
+}
+
+function SearchableSelect({
+  placeholder,
+  value,
+  onSelect,
+  options,
+  disabled,
+}: {
+  placeholder: string;
+  value: string;
+  onSelect: (value: string) => void;
+  options: SelectOption[];
+  disabled?: boolean;
+}) {
+  const selectedLabel = options.find((item) => item.value === value)?.label;
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          className={cn("w-full justify-between", !value && "text-muted-foreground")}
+          disabled={disabled}
+        >
+          {selectedLabel || placeholder}
+          <ChevronDown className="ml-2 h-4 w-4 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="p-0" align="start">
+        <Command>
+          <CommandInput placeholder={`Buscar ${placeholder.toLowerCase()}`} />
+          <CommandList>
+            <CommandEmpty>Nenhum resultado encontrado</CommandEmpty>
+            <CommandGroup>
+              {options.map((option) => (
+                <CommandItem key={option.value} value={option.value} onSelect={() => onSelect(option.value)}>
+                  <div className="flex flex-col">
+                    <span>{option.label}</span>
+                    {option.description && <span className="text-xs text-muted-foreground">{option.description}</span>}
+                  </div>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+const toInputDateValue = (value?: string) => {
+  if (!value) return "";
+  const normalized = value.includes("/") ? value.split("/").reverse().join("-") : value;
+  const parsed = new Date(normalized);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toISOString().slice(0, 10);
+};
+
+export function DiagnosticDialog({ open, onOpenChange, diagnostic, defaultTemplateId }: DiagnosticDialogProps) {
+  const navigate = useNavigate();
+  const { projects, clients, templates, applyDiagnostic, updateDiagnostic, addProjectAuditLog, duplicateDiagnostic } = useData();
+  const { user } = useAuth();
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [nameTouched, setNameTouched] = useState(false);
+  const [duplicateProjectId, setDuplicateProjectId] = useState("");
+
   const [formData, setFormData] = useState({
     projectId: "",
     projectName: "",
@@ -29,11 +104,33 @@ export function DiagnosticDialog({ open, onOpenChange, diagnostic }: DiagnosticD
     clientName: "",
     templateId: "",
     templateName: "",
-    status: "draft" as "draft" | "in_progress" | "completed",
-    progress: 0,
-    score: undefined as number | undefined,
-    opportunities: 0,
+    responsibleName: "",
+    responsibleId: "",
+    name: "",
+    dueDate: "",
+    autoGenerateOpportunities: true,
+    status: "draft" as Diagnostic["status"],
   });
+
+  const projectOptions = useMemo<SelectOption[]>(
+    () =>
+      projects.map((project) => ({
+        value: project.id,
+        label: project.name,
+        description: clients.find((c) => c.id === project.clientId)?.name,
+      })),
+    [clients, projects]
+  );
+
+  const templateOptions = useMemo<SelectOption[]>(
+    () =>
+      templates.map((template) => ({
+        value: template.id,
+        label: template.name,
+        description: template.tags?.join(", ") || undefined,
+      })),
+    [templates]
+  );
 
   useEffect(() => {
     if (diagnostic) {
@@ -44,51 +141,66 @@ export function DiagnosticDialog({ open, onOpenChange, diagnostic }: DiagnosticD
         clientName: diagnostic.clientName,
         templateId: diagnostic.templateId,
         templateName: diagnostic.templateName,
+        responsibleName: diagnostic.responsibleName || user?.user_metadata?.full_name || "Equipe JoIA",
+        responsibleId: diagnostic.responsibleId || user?.id || "",
+        name: diagnostic.name,
+        dueDate: diagnostic.dueDate || "",
+        autoGenerateOpportunities: diagnostic.autoGenerateOpportunities ?? true,
         status: diagnostic.status,
-        progress: diagnostic.progress,
-        score: diagnostic.score,
-        opportunities: diagnostic.opportunities,
       });
+      setNameTouched(true);
     } else {
-      setFormData({
+      const defaultResponsible = user?.user_metadata?.full_name || "Você";
+      setFormData((prev) => ({
+        ...prev,
         projectId: "",
         projectName: "",
         clientId: "",
         clientName: "",
-        templateId: "",
-        templateName: "",
+        templateId: defaultTemplateId || "",
+        templateName: templates.find((t) => t.id === defaultTemplateId)?.name || "",
+        responsibleName: defaultResponsible,
+        responsibleId: user?.id || "",
+        name: "",
+        dueDate: "",
+        autoGenerateOpportunities: true,
         status: "draft",
-        progress: 0,
-        score: undefined,
-        opportunities: 0,
-      });
+      }));
+      setNameTouched(false);
     }
-  }, [diagnostic, open]);
+    setDuplicateProjectId("");
+  }, [diagnostic, defaultTemplateId, templates, user]);
+
+  useEffect(() => {
+    if (!diagnostic && formData.templateId && formData.projectId && !nameTouched) {
+      const templateName = templates.find((template) => template.id === formData.templateId)?.name || "Template";
+      const projectName = projects.find((project) => project.id === formData.projectId)?.name || "Projeto";
+      setFormData((prev) => ({ ...prev, name: getDefaultDiagnosticName(templateName, projectName) }));
+    }
+  }, [diagnostic, formData.projectId, formData.templateId, nameTouched, projects, templates]);
 
   const handleProjectChange = (projectId: string) => {
-    const project = projects.find(p => p.id === projectId);
-    const client = clients.find(c => c.id === project?.clientId);
-    setFormData({ 
-      ...formData, 
-      projectId, 
+    const project = projects.find((p) => p.id === projectId);
+    const client = clients.find((c) => c.id === project?.clientId);
+    setFormData((prev) => ({
+      ...prev,
+      projectId,
       projectName: project?.name || "",
       clientId: project?.clientId || "",
       clientName: client?.name || "",
-    });
+    }));
   };
 
   const handleTemplateChange = (templateId: string) => {
-    const template = templates.find(t => t.id === templateId);
-    setFormData({ 
-      ...formData, 
-      templateId, 
+    const template = templates.find((t) => t.id === templateId);
+    setFormData((prev) => ({
+      ...prev,
+      templateId,
       templateName: template?.name || "",
-    });
+    }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
+  const handleCreate = async (navigateAfterCreate: boolean) => {
     if (!formData.projectId) {
       toast.error("Selecione um projeto");
       return;
@@ -98,75 +210,236 @@ export function DiagnosticDialog({ open, onOpenChange, diagnostic }: DiagnosticD
       return;
     }
 
-    if (diagnostic) {
-      updateDiagnostic(diagnostic.id, formData);
-      toast.success("Diagnóstico atualizado com sucesso");
-    } else {
-      addDiagnostic(formData);
+    setIsSubmitting(true);
+    try {
+      const payload = {
+        projectId: formData.projectId,
+        projectName: formData.projectName,
+        clientId: formData.clientId,
+        clientName: formData.clientName,
+        templateId: formData.templateId,
+        templateName: formData.templateName,
+        responsibleName: formData.responsibleName,
+        responsibleId: formData.responsibleId,
+        dueDate: formData.dueDate,
+        autoGenerateOpportunities: formData.autoGenerateOpportunities,
+        name: formData.name || getDefaultDiagnosticName(formData.templateName, formData.projectName),
+      };
+
+      const created = await applyDiagnostic(payload);
       toast.success("Diagnóstico criado com sucesso");
+      onOpenChange(false);
+      if (navigateAfterCreate) {
+        navigate(`/diagnosticos/${created.id}`);
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Não foi possível criar o diagnóstico");
+    } finally {
+      setIsSubmitting(false);
     }
-    onOpenChange(false);
   };
+
+  const handleUpdate = async () => {
+    if (!diagnostic) return;
+    setIsSubmitting(true);
+    try {
+      updateDiagnostic(diagnostic.id, {
+        status: formData.status,
+        responsibleName: formData.responsibleName,
+        dueDate: formData.dueDate,
+        autoGenerateOpportunities: formData.autoGenerateOpportunities,
+      });
+      addProjectAuditLog({
+        projectId: diagnostic.projectId,
+        projectName: diagnostic.projectName,
+        message: `Diagnóstico atualizado (status: ${formData.status}, responsável: ${formData.responsibleName})`,
+        type: "update",
+      });
+      toast.success("Diagnóstico atualizado");
+      onOpenChange(false);
+    } catch (error) {
+      console.error(error);
+      toast.error("Não foi possível atualizar o diagnóstico");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDuplicate = async () => {
+    if (!diagnostic || !duplicateProjectId) return;
+    const targetProject = projects.find((project) => project.id === duplicateProjectId);
+    if (!targetProject) return;
+    const client = clients.find((c) => c.id === targetProject.clientId);
+
+    setIsSubmitting(true);
+    try {
+      const duplicated = await duplicateDiagnostic(diagnostic, {
+        projectId: targetProject.id,
+        projectName: targetProject.name,
+        clientId: targetProject.clientId,
+        clientName: client?.name || "",
+      });
+      toast.success("Diagnóstico duplicado para o projeto selecionado");
+      navigate(`/diagnosticos/${duplicated.id}`);
+    } catch (error) {
+      console.error(error);
+      toast.error("Não foi possível duplicar o diagnóstico");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const isEditingWithResponses = diagnostic?.hasResponses;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-3xl">
         <DialogHeader>
-          <DialogTitle>{diagnostic ? "Editar Diagnóstico" : "Novo Diagnóstico"}</DialogTitle>
+          <DialogTitle>{diagnostic ? "Editar diagnóstico" : "Aplicar diagnóstico"}</DialogTitle>
+          {isEditingWithResponses && (
+            <p className="text-sm text-muted-foreground">
+              Este diagnóstico já possui respostas registradas. O projeto e o template não podem ser alterados; ajuste apenas
+              status ou responsável.
+            </p>
+          )}
         </DialogHeader>
-        <form onSubmit={handleSubmit}>
-          <div className="grid gap-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="project">Projeto *</Label>
-              <Select value={formData.projectId} onValueChange={handleProjectChange}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o projeto" />
-                </SelectTrigger>
-                <SelectContent>
-                  {projects.map((project) => (
-                    <SelectItem key={project.id} value={project.id}>{project.name} - {project.clientName}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="template">Template *</Label>
-              <Select value={formData.templateId} onValueChange={handleTemplateChange}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o template" />
-                </SelectTrigger>
-                <SelectContent>
-                  {templates.map((template) => (
-                    <SelectItem key={template.id} value={template.id}>{template.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {diagnostic && (
-              <div className="space-y-2">
-                <Label htmlFor="status">Status</Label>
-                <Select value={formData.status} onValueChange={(value: "draft" | "in_progress" | "completed") => setFormData({ ...formData, status: value })}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="draft">Rascunho</SelectItem>
-                    <SelectItem value="in_progress">Em Andamento</SelectItem>
-                    <SelectItem value="completed">Concluído</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
+          <div className="space-y-2">
+            <Label>Projeto *</Label>
+            <SearchableSelect
+              placeholder="Selecione o projeto"
+              value={formData.projectId}
+              onSelect={handleProjectChange}
+              options={projectOptions}
+              disabled={isEditingWithResponses}
+            />
           </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          <div className="space-y-2">
+            <Label>Template *</Label>
+            <SearchableSelect
+              placeholder="Selecione o template"
+              value={formData.templateId}
+              onSelect={handleTemplateChange}
+              options={templateOptions}
+              disabled={isEditingWithResponses}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Nome do diagnóstico</Label>
+            <Input
+              value={formData.name}
+              onChange={(e) => {
+                setFormData((prev) => ({ ...prev, name: e.target.value }));
+                setNameTouched(true);
+              }}
+              placeholder="Template • Projeto • MM/AAAA"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Responsável</Label>
+            <Input
+              value={formData.responsibleName}
+              onChange={(e) => setFormData((prev) => ({ ...prev, responsibleName: e.target.value }))}
+              placeholder="Quem vai conduzir o diagnóstico"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Data alvo</Label>
+            <div className="flex items-center gap-2">
+              <Input
+                type="date"
+                value={toInputDateValue(formData.dueDate)}
+                onChange={(e) => setFormData((prev) => ({ ...prev, dueDate: formatDatePtBR(e.target.value) }))}
+              />
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label>Gerar oportunidades automaticamente ao concluir</Label>
+            <div className="flex items-center justify-between rounded-lg border px-3 py-2">
+              <span className="text-sm text-muted-foreground">Cria oportunidades assim que o diagnóstico for finalizado</span>
+              <Switch
+                checked={formData.autoGenerateOpportunities}
+                onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, autoGenerateOpportunities: checked }))}
+              />
+            </div>
+          </div>
+          {diagnostic && (
+            <div className="space-y-2">
+              <Label>Status</Label>
+              <Select
+                value={formData.status}
+                onValueChange={(value: Diagnostic["status"]) => setFormData((prev) => ({ ...prev, status: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="draft">Rascunho</SelectItem>
+                  <SelectItem value="in_progress">Em andamento</SelectItem>
+                  <SelectItem value="completed">Concluído</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          {diagnostic && (
+            <div className="space-y-2">
+              <Label>Duplicar para outro projeto</Label>
+              <div className="flex items-center gap-2">
+                <SearchableSelect
+                  placeholder="Selecionar projeto"
+                  value={duplicateProjectId}
+                  onSelect={setDuplicateProjectId}
+                  options={projectOptions}
+                  disabled={isSubmitting}
+                />
+                <Button variant="outline" onClick={handleDuplicate} disabled={!duplicateProjectId || isSubmitting}>
+                  <Copy className="mr-2 h-4 w-4" />Duplicar
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+        <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:justify-between">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Calendar className="h-4 w-4" />
+            <span>Nome sugerido: {formData.templateName && formData.projectName ? getDefaultDiagnosticName(formData.templateName, formData.projectName) : "Template • Projeto • MM/AAAA"}</span>
+          </div>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
               Cancelar
             </Button>
-            <Button type="submit" className="bg-accent text-accent-foreground hover:bg-accent/90">
-              {diagnostic ? "Salvar" : "Criar"}
-            </Button>
-          </DialogFooter>
-        </form>
+            {diagnostic ? (
+              <Button onClick={handleUpdate} disabled={isSubmitting}>
+                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Salvar alterações
+              </Button>
+            ) : (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => handleCreate(false)}
+                  disabled={isSubmitting}
+                  className="order-2 sm:order-1"
+                >
+                  {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Criar e fechar
+                </Button>
+                <Button
+                  type="button"
+                  className="order-1 sm:order-2"
+                  onClick={() => handleCreate(true)}
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Criar e iniciar
+                </Button>
+              </>
+            )}
+          </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

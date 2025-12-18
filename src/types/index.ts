@@ -165,6 +165,7 @@ export interface Task {
 
 export interface Diagnostic {
   id: string;
+  name: string;
   projectId: string;
   projectName: string;
   clientId: string;
@@ -176,12 +177,26 @@ export interface Diagnostic {
   score?: number;
   opportunities: number;
   createdAt: string;
+  updatedAt: string;
+  totalQuestions: number;
+  answeredQuestions: number;
+  autoGenerateOpportunities?: boolean;
+  responsibleName?: string;
+  responsibleId?: string;
+  hasResponses?: boolean;
+  dueDate?: string;
 }
 
 export interface DiagnosticTemplate {
   id: string;
   name: string;
+  tags: string[];
   sections: { id: string; name: string; questions: DiagnosticQuestion[] }[];
+  questionCount?: number;
+  sectionsCount?: number;
+  estimatedTimeMinutes?: number | null;
+  version?: string;
+  updatedAt?: string;
 }
 
 export interface DiagnosticQuestion {
