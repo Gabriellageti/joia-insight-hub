@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { ChevronDown, Loader2 } from "lucide-react";
 import {
   Dialog,
@@ -11,9 +11,19 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Separator } from "@/components/ui/separator";
 import { useData } from "@/contexts/DataContext";
 import { Client } from "@/types";
@@ -82,8 +92,11 @@ const formatWhatsapp = (value: string) => {
 
 const isValidCnpj = (value: string) => sanitizeNumbers(value).length === 14;
 const isValidWhatsapp = (value: string) => sanitizeNumbers(value).length === 11;
+
 const isValidEmail = (value: string) =>
-  /^(?!.*\.\.)([\w+-]+\.)*[\w+-]+@([\w-]+\.)+[A-Za-z]{2,}$/.test(value.trim());
+  /^(?!.*\.\.)([\w+-]+\.)*[\w+-]+@([\w-]+\.)+[A-Za-z]{2,}$/.test(
+    value.trim()
+  );
 
 const mapSegmentFromCnae = (description?: string) => {
   if (!description) return "";
@@ -96,7 +109,12 @@ const mapSegmentFromCnae = (description?: string) => {
   return "Outro";
 };
 
-export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient }: ClientDialogProps) {
+export function ClientDialog({
+  open,
+  onOpenChange,
+  client,
+  onOpenExistingClient,
+}: ClientDialogProps) {
   const { addClient, updateClient, clients } = useData();
   const navigate = useNavigate();
 
@@ -127,10 +145,6 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
     },
   });
 
-  const setFieldError = (field: string, message: string) => {
-    setErrors((prev) => ({ ...prev, [field]: message }));
-  };
-
   const clearFieldError = (field: string) => {
     setErrors((prev) => {
       const next = { ...prev };
@@ -142,13 +156,16 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
   const validateForm = () => {
     const validationErrors: Record<string, string> = {};
 
-    if (!formData.razaoSocial.trim()) validationErrors.razaoSocial = "Razão social é obrigatória.";
+    if (!formData.razaoSocial.trim())
+      validationErrors.razaoSocial = "Razão social é obrigatória.";
 
     const email = formData.contatoPrincipal.email.trim();
-    if (email && !isValidEmail(email)) validationErrors.contatoPrincipalEmail = "E-mail inválido.";
+    if (email && !isValidEmail(email))
+      validationErrors.contatoPrincipalEmail = "E-mail inválido.";
 
     const whatsapp = formData.contatoPrincipal.whatsapp.trim();
-    if (whatsapp && !isValidWhatsapp(whatsapp)) validationErrors.contatoPrincipalWhatsapp = "WhatsApp inválido.";
+    if (whatsapp && !isValidWhatsapp(whatsapp))
+      validationErrors.contatoPrincipalWhatsapp = "WhatsApp inválido.";
 
     const cnpj = formData.cnpj.trim();
     if (cnpj && !isValidCnpj(cnpj)) validationErrors.cnpj = "CNPJ inválido.";
@@ -187,8 +204,14 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
         },
         observacoesInternas: (client as any).observacoesInternas || "",
         preferenciasRelacionamento: {
-          diaReuniao: (client as any).preferenciasRelacionamento?.diaReuniao || (client as any).preferredMeetingDay || "",
-          frequencia: (client as any).preferenciasRelacionamento?.frequencia || (client as any).followUpFrequency || "semanal",
+          diaReuniao:
+            (client as any).preferenciasRelacionamento?.diaReuniao ||
+            (client as any).preferredMeetingDay ||
+            "",
+          frequencia:
+            (client as any).preferenciasRelacionamento?.frequencia ||
+            (client as any).followUpFrequency ||
+            "semanal",
         },
       });
 
@@ -229,7 +252,9 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
 
     const timer = setTimeout(async () => {
       try {
-        const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`, { signal: controller.signal });
+        const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`, {
+          signal: controller.signal,
+        });
         if (!response.ok) throw new Error("Erro ao buscar CEP");
 
         const data = await response.json();
@@ -274,7 +299,9 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
     setIsFetchingCnpj(true);
 
     try {
-      const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${normalizedCnpj}`);
+      const response = await fetch(
+        `https://brasilapi.com.br/api/cnpj/v1/${normalizedCnpj}`
+      );
       if (!response.ok) throw new Error("Erro ao buscar CNPJ");
 
       const data = await response.json();
@@ -298,7 +325,7 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (isSubmitting) return;
 
@@ -318,9 +345,10 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
     const normalizedCnpj = sanitizeNumbers(formData.cnpj);
     const duplicatedClient =
       normalizedCnpj && Array.isArray(clients)
-        ? clients.find(
+        ? (clients as any[]).find(
             (existing: any) =>
-              existing.id !== client?.id && sanitizeNumbers(existing.cnpj || "") === normalizedCnpj
+              existing.id !== (client as any)?.id &&
+              sanitizeNumbers(existing.cnpj || "") === normalizedCnpj
           )
         : undefined;
 
@@ -344,7 +372,9 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
       risk: formData.risk,
       contatoPrincipal: {
         nome: formData.contatoPrincipal.nome.trim(),
-        whatsapp: formData.contatoPrincipal.whatsapp ? formatWhatsapp(formData.contatoPrincipal.whatsapp) : "",
+        whatsapp: formData.contatoPrincipal.whatsapp
+          ? formatWhatsapp(formData.contatoPrincipal.whatsapp)
+          : "",
         email: formData.contatoPrincipal.email.trim(),
       },
       endereco: {
@@ -363,7 +393,8 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
       },
       projects: (client as any)?.projects || 0,
       nps: (client as any)?.nps || 0,
-      lastContact: (client as any)?.lastContact || new Date().toLocaleDateString("pt-BR"),
+      lastContact:
+        (client as any)?.lastContact || new Date().toLocaleDateString("pt-BR"),
     };
 
     if (client) {
@@ -371,13 +402,14 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
       toast.success("Cliente atualizado com sucesso");
       onOpenChange(false);
       setIsSubmitting(false);
-    } else {
-      const newClient = addClient(clientData);
-      toast.success("Cliente criado. Próximo passo: criar um projeto.");
-      onOpenChange(false);
-      navigate(`/clientes?cliente=${(newClient as any).id}`);
-      setIsSubmitting(false);
+      return;
     }
+
+    const newClient = addClient(clientData);
+    toast.success("Cliente criado. Próximo passo: criar um projeto.");
+    onOpenChange(false);
+    navigate(`/clientes?cliente=${(newClient as any).id}`);
+    setIsSubmitting(false);
   };
 
   return (
@@ -393,14 +425,18 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
       >
         <DialogHeader className="space-y-1">
           <DialogTitle>{client ? "Editar cliente" : "Criar cliente"}</DialogTitle>
-          <DialogDescription>Organize os dados essenciais antes de avançar para o primeiro projeto.</DialogDescription>
+          <DialogDescription>
+            Organize os dados essenciais antes de avançar para o primeiro projeto.
+          </DialogDescription>
         </DialogHeader>
 
         <form className="space-y-6" onSubmit={handleSubmit}>
           <section className="rounded-lg border p-4">
             <div className="space-y-1">
               <p className="text-sm font-medium text-foreground">Identificação</p>
-              <p className="text-sm text-muted-foreground">Razão social, CNPJ e tags de segmento.</p>
+              <p className="text-sm text-muted-foreground">
+                Razão social, CNPJ e tags de segmento.
+              </p>
             </div>
 
             <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -416,9 +452,13 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
                     if (errors.razaoSocial) clearFieldError("razaoSocial");
                   }}
                   placeholder="Razão social"
-                  className={cn(errors.razaoSocial && "border-destructive focus-visible:ring-destructive")}
+                  className={cn(
+                    errors.razaoSocial && "border-destructive focus-visible:ring-destructive"
+                  )}
                 />
-                {errors.razaoSocial && <p className="text-sm text-destructive">{errors.razaoSocial}</p>}
+                {errors.razaoSocial && (
+                  <p className="text-sm text-destructive">{errors.razaoSocial}</p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -426,7 +466,9 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
                 <Input
                   id="nomeFantasia"
                   value={formData.nomeFantasia}
-                  onChange={(e) => setFormData((p) => ({ ...p, nomeFantasia: e.target.value }))}
+                  onChange={(e) =>
+                    setFormData((p) => ({ ...p, nomeFantasia: e.target.value }))
+                  }
                   placeholder="Nome fantasia"
                 />
               </div>
@@ -444,7 +486,12 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
                     placeholder="00.000.000/0000-00"
                     className={cn(errors.cnpj && "border-destructive focus-visible:ring-destructive")}
                   />
-                  <Button type="button" variant="outline" onClick={handleCnpjLookup} disabled={isFetchingCnpj}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleCnpjLookup}
+                    disabled={isFetchingCnpj}
+                  >
                     {isFetchingCnpj ? "Buscando..." : "Buscar dados"}
                   </Button>
                 </div>
@@ -456,7 +503,9 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
                 <Input
                   id="segmentoTagsText"
                   value={formData.segmentoTagsText}
-                  onChange={(e) => setFormData((p) => ({ ...p, segmentoTagsText: e.target.value }))}
+                  onChange={(e) =>
+                    setFormData((p) => ({ ...p, segmentoTagsText: e.target.value }))
+                  }
                   placeholder="Ex: Varejo, Distribuição, Serviços"
                 />
               </div>
@@ -466,7 +515,9 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
           <section className="rounded-lg border p-4">
             <div className="space-y-1">
               <p className="text-sm font-medium text-foreground">Contato principal</p>
-              <p className="text-sm text-muted-foreground">Para comunicação inicial e alinhamentos.</p>
+              <p className="text-sm text-muted-foreground">
+                Para comunicação inicial e alinhamentos.
+              </p>
             </div>
 
             <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -476,7 +527,10 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
                   id="contatoPrincipalNome"
                   value={formData.contatoPrincipal.nome}
                   onChange={(e) =>
-                    setFormData((p) => ({ ...p, contatoPrincipal: { ...p.contatoPrincipal, nome: e.target.value } }))
+                    setFormData((p) => ({
+                      ...p,
+                      contatoPrincipal: { ...p.contatoPrincipal, nome: e.target.value },
+                    }))
                   }
                   placeholder="Nome do contato"
                 />
@@ -490,14 +544,25 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
                   onChange={(e) => {
                     setFormData((p) => ({
                       ...p,
-                      contatoPrincipal: { ...p.contatoPrincipal, whatsapp: formatWhatsapp(e.target.value) },
+                      contatoPrincipal: {
+                        ...p.contatoPrincipal,
+                        whatsapp: formatWhatsapp(e.target.value),
+                      },
                     }));
-                    if (errors.contatoPrincipalWhatsapp) clearFieldError("contatoPrincipalWhatsapp");
+                    if (errors.contatoPrincipalWhatsapp)
+                      clearFieldError("contatoPrincipalWhatsapp");
                   }}
                   placeholder="(00) 00000-0000"
-                  className={cn(errors.contatoPrincipalWhatsapp && "border-destructive focus-visible:ring-destructive")}
+                  className={cn(
+                    errors.contatoPrincipalWhatsapp &&
+                      "border-destructive focus-visible:ring-destructive"
+                  )}
                 />
-                {errors.contatoPrincipalWhatsapp && <p className="text-sm text-destructive">{errors.contatoPrincipalWhatsapp}</p>}
+                {errors.contatoPrincipalWhatsapp && (
+                  <p className="text-sm text-destructive">
+                    {errors.contatoPrincipalWhatsapp}
+                  </p>
+                )}
               </div>
 
               <div className="space-y-2 md:col-span-1">
@@ -506,13 +571,22 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
                   id="contatoPrincipalEmail"
                   value={formData.contatoPrincipal.email}
                   onChange={(e) => {
-                    setFormData((p) => ({ ...p, contatoPrincipal: { ...p.contatoPrincipal, email: e.target.value } }));
-                    if (errors.contatoPrincipalEmail) clearFieldError("contatoPrincipalEmail");
+                    setFormData((p) => ({
+                      ...p,
+                      contatoPrincipal: { ...p.contatoPrincipal, email: e.target.value },
+                    }));
+                    if (errors.contatoPrincipalEmail)
+                      clearFieldError("contatoPrincipalEmail");
                   }}
                   placeholder="contato@empresa.com"
-                  className={cn(errors.contatoPrincipalEmail && "border-destructive focus-visible:ring-destructive")}
+                  className={cn(
+                    errors.contatoPrincipalEmail &&
+                      "border-destructive focus-visible:ring-destructive"
+                  )}
                 />
-                {errors.contatoPrincipalEmail && <p className="text-sm text-destructive">{errors.contatoPrincipalEmail}</p>}
+                {errors.contatoPrincipalEmail && (
+                  <p className="text-sm text-destructive">{errors.contatoPrincipalEmail}</p>
+                )}
               </div>
             </div>
           </section>
@@ -520,7 +594,9 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
           <section className="rounded-lg border p-4">
             <div className="space-y-1">
               <p className="text-sm font-medium text-foreground">Endereço inteligente</p>
-              <p className="text-sm text-muted-foreground">Preencha o CEP e deixe o resto se comportar.</p>
+              <p className="text-sm text-muted-foreground">
+                Preencha o CEP e deixe o resto se comportar.
+              </p>
             </div>
 
             <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -569,7 +645,10 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
                   value={formData.endereco.logradouro}
                   readOnly={isAddressLocked}
                   onChange={(e) =>
-                    setFormData((p) => ({ ...p, endereco: { ...p.endereco, logradouro: e.target.value } }))
+                    setFormData((p) => ({
+                      ...p,
+                      endereco: { ...p.endereco, logradouro: e.target.value },
+                    }))
                   }
                   placeholder="Rua, avenida..."
                 />
@@ -581,7 +660,10 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
                   id="numero"
                   value={formData.endereco.numero}
                   onChange={(e) =>
-                    setFormData((p) => ({ ...p, endereco: { ...p.endereco, numero: e.target.value } }))
+                    setFormData((p) => ({
+                      ...p,
+                      endereco: { ...p.endereco, numero: e.target.value },
+                    }))
                   }
                   placeholder="Número"
                 />
@@ -593,7 +675,10 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
                   id="complemento"
                   value={formData.endereco.complemento}
                   onChange={(e) =>
-                    setFormData((p) => ({ ...p, endereco: { ...p.endereco, complemento: e.target.value } }))
+                    setFormData((p) => ({
+                      ...p,
+                      endereco: { ...p.endereco, complemento: e.target.value },
+                    }))
                   }
                   placeholder="Apto, bloco, etc."
                 />
@@ -606,7 +691,10 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
                   value={formData.endereco.bairro}
                   readOnly={isAddressLocked}
                   onChange={(e) =>
-                    setFormData((p) => ({ ...p, endereco: { ...p.endereco, bairro: e.target.value } }))
+                    setFormData((p) => ({
+                      ...p,
+                      endereco: { ...p.endereco, bairro: e.target.value },
+                    }))
                   }
                   placeholder="Bairro"
                 />
@@ -619,7 +707,10 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
                   value={formData.endereco.cidade}
                   readOnly={isAddressLocked}
                   onChange={(e) =>
-                    setFormData((p) => ({ ...p, endereco: { ...p.endereco, cidade: e.target.value } }))
+                    setFormData((p) => ({
+                      ...p,
+                      endereco: { ...p.endereco, cidade: e.target.value },
+                    }))
                   }
                   placeholder="Cidade"
                 />
@@ -690,7 +781,10 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
                     onValueChange={(value) =>
                       setFormData((p) => ({
                         ...p,
-                        preferenciasRelacionamento: { ...p.preferenciasRelacionamento, diaReuniao: value },
+                        preferenciasRelacionamento: {
+                          ...p.preferenciasRelacionamento,
+                          diaReuniao: value,
+                        },
                       }))
                     }
                   >
@@ -714,7 +808,10 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
                     onValueChange={(value: "semanal" | "quinzenal" | "mensal") =>
                       setFormData((p) => ({
                         ...p,
-                        preferenciasRelacionamento: { ...p.preferenciasRelacionamento, frequencia: value },
+                        preferenciasRelacionamento: {
+                          ...p.preferenciasRelacionamento,
+                          frequencia: value,
+                        },
                       }))
                     }
                   >
@@ -734,7 +831,9 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
                   <Textarea
                     id="observacoesInternas"
                     value={formData.observacoesInternas}
-                    onChange={(e) => setFormData((p) => ({ ...p, observacoesInternas: e.target.value }))}
+                    onChange={(e) =>
+                      setFormData((p) => ({ ...p, observacoesInternas: e.target.value }))
+                    }
                     placeholder="Notas internas, contexto e direcionamentos"
                     rows={3}
                   />
