@@ -11,9 +11,19 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Separator } from "@/components/ui/separator";
 import { useData } from "@/contexts/DataContext";
 import { Client } from "@/types";
@@ -90,13 +100,19 @@ const mapSegmentFromCnae = (description?: string) => {
   const normalized = description.toLowerCase();
   if (normalized.includes("ind") || normalized.includes("fabr")) return "Indústria";
   if (normalized.includes("manuf")) return "Manufatura";
-  if (normalized.includes("varej") || normalized.includes("comércio") || normalized.includes("comercio")) return "Varejo";
+  if (normalized.includes("varej") || normalized.includes("comércio") || normalized.includes("comercio"))
+    return "Varejo";
   if (normalized.includes("servi")) return "Serviços";
   if (normalized.includes("tec")) return "Tecnologia";
   return "Outro";
 };
 
-export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient }: ClientDialogProps) {
+export function ClientDialog({
+  open,
+  onOpenChange,
+  client,
+  onOpenExistingClient,
+}: ClientDialogProps) {
   const { addClient, updateClient, clients } = useData();
   const navigate = useNavigate();
 
@@ -187,8 +203,14 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
         },
         observacoesInternas: (client as any).observacoesInternas || "",
         preferenciasRelacionamento: {
-          diaReuniao: (client as any).preferenciasRelacionamento?.diaReuniao || (client as any).preferredMeetingDay || "",
-          frequencia: (client as any).preferenciasRelacionamento?.frequencia || (client as any).followUpFrequency || "semanal",
+          diaReuniao:
+            (client as any).preferenciasRelacionamento?.diaReuniao ||
+            (client as any).preferredMeetingDay ||
+            "",
+          frequencia:
+            (client as any).preferenciasRelacionamento?.frequencia ||
+            (client as any).followUpFrequency ||
+            "semanal",
         },
       });
 
@@ -229,7 +251,9 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
 
     const timer = setTimeout(async () => {
       try {
-        const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`, { signal: controller.signal });
+        const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`, {
+          signal: controller.signal,
+        });
         if (!response.ok) throw new Error("Erro ao buscar CEP");
 
         const data = await response.json();
@@ -319,8 +343,7 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
     const duplicatedClient =
       normalizedCnpj && Array.isArray(clients)
         ? clients.find(
-            (existing: any) =>
-              existing.id !== client?.id && sanitizeNumbers(existing.cnpj || "") === normalizedCnpj
+            (existing: any) => existing.id !== (client as any)?.id && sanitizeNumbers(existing.cnpj || "") === normalizedCnpj
           )
         : undefined;
 
@@ -344,7 +367,9 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
       risk: formData.risk,
       contatoPrincipal: {
         nome: formData.contatoPrincipal.nome.trim(),
-        whatsapp: formData.contatoPrincipal.whatsapp ? formatWhatsapp(formData.contatoPrincipal.whatsapp) : "",
+        whatsapp: formData.contatoPrincipal.whatsapp
+          ? formatWhatsapp(formData.contatoPrincipal.whatsapp)
+          : "",
         email: formData.contatoPrincipal.email.trim(),
       },
       endereco: {
@@ -372,10 +397,10 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
       onOpenChange(false);
       setIsSubmitting(false);
     } else {
-      const newClient = addClient(clientData);
+      const createdClient = addClient(clientData);
       toast.success("Cliente criado. Próximo passo: criar um projeto.");
       onOpenChange(false);
-      navigate(`/clientes?cliente=${(newClient as any).id}`);
+      navigate(`/clientes/${(createdClient as any).id}`);
       setIsSubmitting(false);
     }
   };
@@ -495,9 +520,13 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
                     if (errors.contatoPrincipalWhatsapp) clearFieldError("contatoPrincipalWhatsapp");
                   }}
                   placeholder="(00) 00000-0000"
-                  className={cn(errors.contatoPrincipalWhatsapp && "border-destructive focus-visible:ring-destructive")}
+                  className={cn(
+                    errors.contatoPrincipalWhatsapp && "border-destructive focus-visible:ring-destructive"
+                  )}
                 />
-                {errors.contatoPrincipalWhatsapp && <p className="text-sm text-destructive">{errors.contatoPrincipalWhatsapp}</p>}
+                {errors.contatoPrincipalWhatsapp && (
+                  <p className="text-sm text-destructive">{errors.contatoPrincipalWhatsapp}</p>
+                )}
               </div>
 
               <div className="space-y-2 md:col-span-1">
@@ -512,7 +541,9 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
                   placeholder="contato@empresa.com"
                   className={cn(errors.contatoPrincipalEmail && "border-destructive focus-visible:ring-destructive")}
                 />
-                {errors.contatoPrincipalEmail && <p className="text-sm text-destructive">{errors.contatoPrincipalEmail}</p>}
+                {errors.contatoPrincipalEmail && (
+                  <p className="text-sm text-destructive">{errors.contatoPrincipalEmail}</p>
+                )}
               </div>
             </div>
           </section>
@@ -580,9 +611,7 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
                 <Input
                   id="numero"
                   value={formData.endereco.numero}
-                  onChange={(e) =>
-                    setFormData((p) => ({ ...p, endereco: { ...p.endereco, numero: e.target.value } }))
-                  }
+                  onChange={(e) => setFormData((p) => ({ ...p, endereco: { ...p.endereco, numero: e.target.value } }))}
                   placeholder="Número"
                 />
               </div>
@@ -605,9 +634,7 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
                   id="bairro"
                   value={formData.endereco.bairro}
                   readOnly={isAddressLocked}
-                  onChange={(e) =>
-                    setFormData((p) => ({ ...p, endereco: { ...p.endereco, bairro: e.target.value } }))
-                  }
+                  onChange={(e) => setFormData((p) => ({ ...p, endereco: { ...p.endereco, bairro: e.target.value } }))}
                   placeholder="Bairro"
                 />
               </div>
@@ -618,9 +645,7 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
                   id="cidade"
                   value={formData.endereco.cidade}
                   readOnly={isAddressLocked}
-                  onChange={(e) =>
-                    setFormData((p) => ({ ...p, endereco: { ...p.endereco, cidade: e.target.value } }))
-                  }
+                  onChange={(e) => setFormData((p) => ({ ...p, endereco: { ...p.endereco, cidade: e.target.value } }))}
                   placeholder="Cidade"
                 />
               </div>
@@ -650,9 +675,7 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
                   <Label htmlFor="status">Status</Label>
                   <Select
                     value={formData.status}
-                    onValueChange={(value: "ativo" | "inativo") =>
-                      setFormData((p) => ({ ...p, status: value }))
-                    }
+                    onValueChange={(value: "ativo" | "inativo") => setFormData((p) => ({ ...p, status: value }))}
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -668,9 +691,7 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
                   <Label htmlFor="risk">Risco</Label>
                   <Select
                     value={formData.risk}
-                    onValueChange={(value: "low" | "medium" | "high") =>
-                      setFormData((p) => ({ ...p, risk: value }))
-                    }
+                    onValueChange={(value: "low" | "medium" | "high") => setFormData((p) => ({ ...p, risk: value }))}
                   >
                     <SelectTrigger>
                       <SelectValue />

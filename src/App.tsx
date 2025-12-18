@@ -22,6 +22,7 @@ import Marketing from "./pages/Marketing";
 import Configuracoes from "./pages/Configuracoes";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
+import ClienteDetalhes from "./pages/ClienteDetalhes";
 
 const queryClient = new QueryClient();
 
@@ -43,6 +44,7 @@ const App = () => (
                       <Routes>
                         <Route path="/" element={<Dashboard />} />
                         <Route path="/clientes" element={<Clientes />} />
+                        <Route path="/clientes/:id" element={<ClienteDetalhes />} />
                         <Route path="/projetos" element={<Projetos />} />
                         <Route path="/diagnostico" element={<Diagnostico />} />
                         <Route path="/plano-acao" element={<PlanoAcao />} />
