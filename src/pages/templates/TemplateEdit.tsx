@@ -6,6 +6,8 @@ import { useData } from "@/contexts/DataContext";
 import { toast } from "sonner";
 import { formatDatePtBR } from "@/lib/dates";
 import { TemplateBuilder, TemplateBuilderAction } from "@/components/diagnostico/template-builder";
+import { buildDuplicatedTemplateDraft } from "@/lib/diagnostics";
+import { DiagnosticTemplate } from "@/types";
 
 export default function TemplateEdit() {
   const navigate = useNavigate();
@@ -30,13 +32,7 @@ export default function TemplateEdit() {
 
   const handleSubmit = (payload: Parameters<typeof updateTemplate>[1], action: TemplateBuilderAction) => {
     if (action === "duplicate") {
-      const duplicated = addTemplate({
-        ...payload,
-        id: undefined,
-        name: `${payload.name} (cópia)`,
-        updatedAt: formatDatePtBR(new Date()),
-        revision: (template.revision || 1) + 1,
-      });
+      const duplicated = addTemplate(buildDuplicatedTemplateDraft(payload as DiagnosticTemplate));
       toast.success(`Template "${duplicated.name}" duplicado`);
       navigate(`/templates/${duplicated.id}/editar`);
       return;

@@ -10,11 +10,17 @@ import { useData } from "@/contexts/DataContext";
 import { DiagnosticTemplate } from "@/types";
 import { formatDatePtBR } from "@/lib/dates";
 import { toast } from "sonner";
+import { buildDuplicatedTemplateDraft } from "@/lib/diagnostics";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function TemplatesList() {
   const navigate = useNavigate();
-  const { templates, addTemplate, deleteTemplate } = useData();
+  const { templates, addTemplate, deleteTemplate, updateTemplate } = useData();
+  const { user } = useAuth();
   const [search, setSearch] = useState("");
+
+  const userRole = (user?.user_metadata as Record<string, string | undefined> | undefined)?.role;
+  const canArchive = Boolean(userRole && (userRole.toLowerCase().includes("admin") || userRole.toLowerCase().includes("gestor")));
 
   const filteredTemplates = useMemo(() => {
     const query = search.toLowerCase();
@@ -26,13 +32,7 @@ export default function TemplatesList() {
   }, [search, templates]);
 
   const handleDuplicate = (template: DiagnosticTemplate) => {
-    const duplicated = addTemplate({
-      ...template,
-      id: undefined,
-      name: `${template.name} (cópia)`,
-      updatedAt: formatDatePtBR(new Date()),
-      revision: (template.revision || 1) + 1,
-    });
+    const duplicated = addTemplate(buildDuplicatedTemplateDraft(template));
     toast.success(`Template "${duplicated.name}" duplicado`);
   };
 
@@ -43,9 +43,24 @@ export default function TemplatesList() {
     }
   };
 
-  const handlePreview = (template: DiagnosticTemplate) => navigate(`/templates-diagnostico/${template.id}/preview`);
+  const handlePreview = (template: DiagnosticTemplate) => {
+    if (template.status === "archived") {
+      toast.error("Templates arquivados não podem ser aplicados.");
+      return;
+    }
+    navigate(`/templates-diagnostico/${template.id}/preview`);
+  };
   const handleEdit = (template: DiagnosticTemplate) => navigate(`/templates/${template.id}/editar`);
   const goToCreate = () => navigate("/templates/novo");
+
+  const handleArchive = (template: DiagnosticTemplate) => {
+    if (!canArchive) {
+      toast.error("Somente Admin ou Gestor podem arquivar templates.");
+      return;
+    }
+    updateTemplate(template.id, { status: "archived", updatedAt: formatDatePtBR(new Date()) });
+    toast.success(`Template "${template.name}" arquivado`);
+  };
 
   return (
     <div className="space-y-6">
@@ -110,6 +125,9 @@ export default function TemplatesList() {
               onEdit={handleEdit}
               onDuplicate={handleDuplicate}
               onDelete={handleDelete}
+              onArchive={handleArchive}
+              canArchive={canArchive}
+              disableApply={template.status === "archived"}
               primaryActionLabel="Preview completo"
             />
           ))}

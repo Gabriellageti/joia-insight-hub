@@ -4,21 +4,28 @@ import { TemplatePageHeader } from "./TemplatePageHeader";
 import { useData } from "@/contexts/DataContext";
 import { toast } from "sonner";
 import { TemplateBuilder, TemplateBuilderAction } from "@/components/diagnostico/template-builder";
+import { buildDuplicatedTemplateDraft } from "@/lib/diagnostics";
+import { DiagnosticTemplate } from "@/types";
 
 export default function TemplateCreate() {
   const navigate = useNavigate();
   const { addTemplate } = useData();
 
   const handleSubmit = (template: Parameters<typeof addTemplate>[0], action: TemplateBuilderAction) => {
+    if (action === "duplicate") {
+      const duplicated = addTemplate(buildDuplicatedTemplateDraft(template as DiagnosticTemplate));
+      toast.success("Template duplicado");
+      navigate(`/templates/${duplicated.id}/editar`);
+      return;
+    }
+
     const created = addTemplate(template);
     const actionMessage =
       action === "publish"
         ? "Template publicado"
-        : action === "duplicate"
-          ? "Template duplicado"
-          : action === "preview"
-            ? "Preview salvo"
-            : "Rascunho salvo";
+        : action === "preview"
+          ? "Preview salvo"
+          : "Rascunho salvo";
 
     toast.success(actionMessage);
 

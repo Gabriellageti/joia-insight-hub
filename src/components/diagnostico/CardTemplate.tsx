@@ -18,7 +18,10 @@ interface CardTemplateProps {
   onEdit: (template: DiagnosticTemplate) => void;
   onDuplicate: (template: DiagnosticTemplate) => void;
   onDelete: (template: DiagnosticTemplate) => void;
+  onArchive?: (template: DiagnosticTemplate) => void;
   primaryActionLabel?: string;
+  disableApply?: boolean;
+  canArchive?: boolean;
 }
 
 export function CardTemplate({
@@ -27,14 +30,31 @@ export function CardTemplate({
   onEdit,
   onDuplicate,
   onDelete,
+  onArchive,
   primaryActionLabel,
+  disableApply,
+  canArchive,
 }: CardTemplateProps) {
+  const isArchived = template.status === "archived";
+  const applyDisabled = disableApply || isArchived;
+
+  const statusLabel: Record<DiagnosticTemplate["status"], string> = {
+    draft: "Rascunho",
+    published: "Publicado",
+    archived: "Arquivado",
+  };
+
   return (
     <Card className="h-full hover:shadow-md transition-shadow">
       <CardHeader className="pb-4">
         <div className="flex items-start justify-between gap-2">
           <div className="space-y-1">
-            <CardTitle className="text-lg leading-tight">{template.name}</CardTitle>
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-lg leading-tight">{template.name}</CardTitle>
+              <Badge variant={isArchived ? "outline" : "secondary"} className={isArchived ? "text-muted-foreground" : "bg-emerald-100 text-emerald-800"}>
+                {statusLabel[template.status]}
+              </Badge>
+            </div>
             <div className="flex flex-wrap gap-2">
               {template.tags?.map((tag) => (
                 <Badge key={tag} variant="secondary" className="bg-accent/10 text-accent-foreground">
@@ -53,6 +73,9 @@ export function CardTemplate({
               <DropdownMenuLabel>Ações</DropdownMenuLabel>
               <DropdownMenuItem onClick={() => onDuplicate(template)}>Duplicar</DropdownMenuItem>
               <DropdownMenuItem onClick={() => onEdit(template)}>Editar</DropdownMenuItem>
+              {canArchive && onArchive && template.status !== "archived" && (
+                <DropdownMenuItem onClick={() => onArchive(template)}>Arquivar</DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem className="text-destructive" onClick={() => onDelete(template)}>
                 Excluir
@@ -81,6 +104,10 @@ export function CardTemplate({
           <span>{template.version || "-"}</span>
         </div>
         <div className="flex items-center gap-2">
+          <Badge variant="outline">Última publicação</Badge>
+          <span>{template.lastPublishedAt || "-"}</span>
+        </div>
+        <div className="flex items-center gap-2">
           <Badge variant="outline">Atualizado em</Badge>
           <span>{template.updatedAt || "-"}</span>
         </div>
@@ -88,13 +115,15 @@ export function CardTemplate({
       <CardFooter className="flex items-center justify-between pt-0">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Sparkles className="h-4 w-4" />
-          <span>Pronto para aplicar</span>
+          <span>{isArchived ? "Arquivado" : "Pronto para aplicar"}</span>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={() => onEdit(template)}>
             Editar
           </Button>
-          <Button onClick={() => onApply(template)}>{primaryActionLabel || "Aplicar"}</Button>
+          <Button onClick={() => onApply(template)} disabled={applyDisabled}>
+            {applyDisabled ? "Indisponível" : primaryActionLabel || "Aplicar"}
+          </Button>
         </div>
       </CardFooter>
     </Card>
