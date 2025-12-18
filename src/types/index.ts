@@ -23,6 +23,8 @@ export interface ClientRelationshipPreferences {
 
 export interface Client {
   id: string;
+
+  // Estrutura atual (padrão)
   razaoSocial: string;
   nomeFantasia?: string;
   cnpj?: string;
@@ -32,11 +34,24 @@ export interface Client {
   endereco: ClientAddress;
   observacoesInternas?: string;
   preferenciasRelacionamento: ClientRelationshipPreferences;
+
   projects: number;
   nps: number;
   risk: "low" | "medium" | "high";
   lastContact: string;
   createdAt: string;
+
+  // Campos legados (compatibilidade)
+  segment?: string;
+  city?: string;
+  address?: ClientAddress | string;
+  primaryContactName?: string;
+  primaryContactEmail?: string;
+  primaryContactPhone?: string;
+  preferredMeetingDay?: string;
+  followUpFrequency?: "semanal" | "quinzenal" | "mensal";
+  whatsapp?: string;
+  email?: string;
 }
 
 export interface ClientContact {
@@ -171,7 +186,15 @@ export interface Indicator {
 export interface Document {
   id: string;
   name: string;
-  category: "contrato" | "proposta" | "diagnóstico" | "indicadores" | "evidências" | "reuniões" | "processos" | "treinamento";
+  category:
+    | "contrato"
+    | "proposta"
+    | "diagnóstico"
+    | "indicadores"
+    | "evidências"
+    | "reuniões"
+    | "processos"
+    | "treinamento";
   projectId?: string;
   projectName?: string;
   clientId?: string;
