@@ -196,8 +196,16 @@ export interface AuditMetadata {
 
 export type DiagnosticTemplateStatus = "draft" | "published" | "archived";
 
-export type DiagnosticQuestionType = "yes_no" | "scale" | "text" | "number" | "attachment";
+export type DiagnosticQuestionType = "yes_no" | "scale" | "text" | "number" | "attachment" | "multiple_choice";
 export type QuestionCriticality = "baixa" | "media" | "alta";
+
+export type OpportunityRuleCondition =
+  | { type: "yes_no"; expectedAnswer: "yes" | "no" }
+  | { type: "scale"; minValue?: number | null; maxValue?: number | null }
+  | { type: "number"; operator: ">" | ">=" | "<" | "<=" | "="; value?: number | null; unit?: "numero" | "moeda" | "percentual" }
+  | { type: "multiple_choice"; matchingOptions?: string[]; matchStrategy?: "any" | "all" }
+  | { type: "text"; keyword?: string }
+  | { type: "always" };
 
 export interface TemplateOpportunityRule {
   id: string;
@@ -209,6 +217,7 @@ export interface TemplateOpportunityRule {
   evidenceType?: Opportunity["evidenceType"];
   enabled: boolean;
   autoGenerate: boolean;
+  condition?: OpportunityRuleCondition;
   audit?: AuditMetadata;
 }
 

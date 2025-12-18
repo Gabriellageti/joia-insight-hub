@@ -23,6 +23,7 @@ import {
   TemplateSection,
   TemplateOpportunityRule,
   QuestionCriticality,
+  OpportunityRuleCondition,
 } from "@/types";
 import {
   buildProgressAuditMessage,
@@ -309,6 +310,48 @@ const normalizeAudit = (audit?: AuditMetadata): AuditMetadata | undefined => {
   };
 };
 
+const normalizeOpportunityCondition = (
+  condition?: OpportunityRuleCondition
+): OpportunityRuleCondition | undefined => {
+  if (!condition) return undefined;
+
+  if (condition.type === "yes_no") {
+    return { type: "yes_no", expectedAnswer: condition.expectedAnswer === "yes" ? "yes" : "no" };
+  }
+
+  if (condition.type === "scale") {
+    return {
+      type: "scale",
+      minValue: typeof condition.minValue === "number" ? condition.minValue : null,
+      maxValue: typeof condition.maxValue === "number" ? condition.maxValue : null,
+    };
+  }
+
+  if (condition.type === "number") {
+    const parsedValue = safeNumber(condition.value);
+    return {
+      type: "number",
+      operator: condition.operator || ">",
+      value: typeof parsedValue === "number" ? parsedValue : null,
+      unit: condition.unit || "numero",
+    };
+  }
+
+  if (condition.type === "multiple_choice") {
+    return {
+      type: "multiple_choice",
+      matchingOptions: condition.matchingOptions || [],
+      matchStrategy: condition.matchStrategy || "any",
+    };
+  }
+
+  if (condition.type === "text") {
+    return { type: "text", keyword: condition.keyword?.trim() || undefined };
+  }
+
+  return { type: "always" };
+};
+
 const normalizeOpportunityRule = (rule?: Partial<TemplateOpportunityRule>): TemplateOpportunityRule | undefined => {
   if (!rule) return undefined;
 
@@ -324,6 +367,7 @@ const normalizeOpportunityRule = (rule?: Partial<TemplateOpportunityRule>): Temp
     evidenceType: rule.evidenceType || "a_coletar",
     enabled: rule.enabled ?? true,
     autoGenerate: rule.autoGenerate ?? true,
+    condition: normalizeOpportunityCondition(rule.condition),
     audit: normalizeAudit(rule.audit),
   };
 };

@@ -2,7 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { DiagnosticTemplateStatus, TemplateQuestion, TemplateSection } from "@/types";
+import { DiagnosticTemplateStatus, TemplateOpportunityRule, TemplateQuestion, TemplateSection } from "@/types";
 import { AlarmClock, BookOpenText, Layers } from "lucide-react";
 
 interface TemplatePreviewPanelProps {
@@ -20,6 +20,7 @@ const questionTypeLabels: Record<TemplateQuestion["type"], string> = {
   scale: "Escala",
   text: "Texto",
   number: "Número",
+  multiple_choice: "Múltipla escolha",
   attachment: "Evidência",
 };
 
@@ -33,6 +34,45 @@ const statusVariant: Record<DiagnosticTemplateStatus, "secondary" | "default" | 
   draft: "secondary",
   published: "default",
   archived: "outline",
+};
+
+const formatOpportunityCondition = (rule?: TemplateOpportunityRule): string | null => {
+  if (!rule?.enabled) return null;
+
+  const condition = rule.condition;
+  if (!condition) return "Condição manual";
+
+  switch (condition.type) {
+    case "yes_no":
+      return condition.expectedAnswer === "yes" ? "Quando a resposta for Sim" : "Quando a resposta for Não";
+    case "scale": {
+      const min = condition.minValue ?? "0";
+      const max = condition.maxValue ?? "10";
+      return `Escala entre ${min} e ${max}`;
+    }
+    case "number": {
+      const operators: Record<">" | ">=" | "<" | "<=" | "=", string> = {
+        ">": "Maior que",
+        ">=": "Maior ou igual a",
+        "<": "Menor que",
+        "<=": "Menor ou igual a",
+        "=": "Igual a",
+      };
+      const prefix = condition.unit === "moeda" ? "R$ " : "";
+      const suffix = condition.unit === "percentual" ? "%" : "";
+      const value = condition.value ?? 0;
+      return `${operators[condition.operator]} ${prefix}${value}${suffix}`;
+    }
+    case "multiple_choice": {
+      const options = (condition.matchingOptions || []).join(", ");
+      if (!options) return "Opções específicas";
+      return `${condition.matchStrategy === "all" ? "Todas" : "Qualquer"} das opções: ${options}`;
+    }
+    case "text":
+      return condition.keyword ? `Palavra-chave: ${condition.keyword}` : "Revisar texto manualmente";
+    default:
+      return "Gera oportunidade";
+  }
 };
 
 export function TemplatePreviewPanel({
@@ -115,29 +155,42 @@ export function TemplatePreviewPanel({
                   </div>
                   <div className="space-y-2">
                     {section.questions?.length ? (
-                      section.questions.map((question, questionIndex) => (
-                        <div key={question.id} className="rounded-md border p-3 space-y-2">
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <p className="text-sm font-semibold">
-                                {sectionIndex + 1}.{questionIndex + 1} {question.title}
-                              </p>
-                              {question.description && (
-                                <p className="text-xs text-muted-foreground">{question.description}</p>
-                              )}
-                              {question.helperText && (
-                                <p className="text-xs text-primary mt-1">{question.helperText}</p>
-                              )}
+                      section.questions.map((question, questionIndex) => {
+                        const conditionLabel = formatOpportunityCondition(question.regraOportunidade);
+                        return (
+                          <div key={question.id} className="rounded-md border p-3 space-y-2">
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <p className="text-sm font-semibold">
+                                  {sectionIndex + 1}.{questionIndex + 1} {question.title}
+                                </p>
+                                {question.description && (
+                                  <p className="text-xs text-muted-foreground">{question.description}</p>
+                                )}
+                                {question.helperText && (
+                                  <p className="text-xs text-primary mt-1">{question.helperText}</p>
+                                )}
+                              </div>
+                              <Badge variant="outline">{questionTypeLabels[question.type]}</Badge>
                             </div>
-                            <Badge variant="outline">{questionTypeLabels[question.type]}</Badge>
+                            <div className="flex flex-wrap items-center gap-2 text-xs">
+                              <Badge variant={criticalityVariants[question.criticality]}>Criticidade: {question.criticality}</Badge>
+                              {question.required && <Badge variant="secondary">Obrigatória</Badge>}
+                              {question.type === "attachment" && <Badge variant="outline">Evidência</Badge>}
+                            </div>
+                            {question.regraOportunidade?.enabled && (
+                              <div className="flex flex-wrap items-center gap-2 text-xs">
+                                <Badge>Gera oportunidade</Badge>
+                                <Badge variant="outline">{question.regraOportunidade.type}</Badge>
+                                <Badge variant={question.regraOportunidade.autoGenerate ? "secondary" : "outline"}>
+                                  {question.regraOportunidade.autoGenerate ? "Automática" : "Revisar"}
+                                </Badge>
+                                {conditionLabel && <Badge variant="outline">{conditionLabel}</Badge>}
+                              </div>
+                            )}
                           </div>
-                          <div className="flex flex-wrap items-center gap-2 text-xs">
-                            <Badge variant={criticalityVariants[question.criticality]}>Criticidade: {question.criticality}</Badge>
-                            {question.required && <Badge variant="secondary">Obrigatória</Badge>}
-                            {question.type === "attachment" && <Badge variant="outline">Evidência</Badge>}
-                          </div>
-                        </div>
-                      ))
+                        );
+                      })
                     ) : (
                       <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
                         Nenhuma pergunta cadastrada.
