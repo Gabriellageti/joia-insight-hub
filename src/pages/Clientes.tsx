@@ -13,6 +13,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 
 const riskColors = { low: "bg-green-500/10 text-green-700", medium: "bg-yellow-500/10 text-yellow-700", high: "bg-red-500/10 text-red-700" };
 const riskLabels = { low: "Baixo", medium: "Médio", high: "Alto" };
+const followUpLabels = { semanal: "Semanal", quinzenal: "Quinzenal", mensal: "Mensal" };
 
 export default function Clientes() {
   const { clients, deleteClient } = useData();
@@ -21,7 +22,21 @@ export default function Clientes() {
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
-  const filteredClients = clients.filter(client => client.name.toLowerCase().includes(search.toLowerCase()));
+  const searchTerm = search.toLowerCase();
+  const filteredClients = clients.filter((client) => {
+    const normalizedCnpj = client.cnpj?.replace(/\D/g, "") || "";
+    const terms = [
+      client.nomeFantasia,
+      client.razaoSocial,
+      client.cnpj,
+      normalizedCnpj,
+      client.contatoPrincipal?.nome,
+      client.endereco?.cidade,
+      client.endereco?.uf,
+      client.segmentoTags?.join(" "),
+    ];
+    return terms.some((term) => term?.toLowerCase().includes(searchTerm));
+  });
 
   const handleEdit = (client: Client) => { setEditingClient(client); setDialogOpen(true); };
   const handleDelete = () => { if (deleteId) { deleteClient(deleteId); toast.success("Cliente excluído"); setDeleteId(null); } };
@@ -42,13 +57,69 @@ export default function Clientes() {
         </CardHeader>
         <CardContent>
           <Table>
-            <TableHeader><TableRow><TableHead>Nome</TableHead><TableHead>Segmento</TableHead><TableHead>Cidade</TableHead><TableHead>Status</TableHead><TableHead>Projetos</TableHead><TableHead>NPS</TableHead><TableHead>Risco</TableHead><TableHead>Último Contato</TableHead><TableHead></TableHead></TableRow></TableHeader>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Cliente</TableHead>
+                <TableHead>Segmentos</TableHead>
+                <TableHead>Localização</TableHead>
+                <TableHead>Contato</TableHead>
+                <TableHead>Relacionamento</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Projetos</TableHead>
+                <TableHead>NPS</TableHead>
+                <TableHead>Risco</TableHead>
+                <TableHead>Último Contato</TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
             <TableBody>
               {filteredClients.map((client) => (
                 <TableRow key={client.id}>
-                  <TableCell className="font-medium">{client.name}</TableCell>
-                  <TableCell>{client.segment}</TableCell>
-                  <TableCell>{client.city}</TableCell>
+                  <TableCell className="font-medium">
+                    <div className="flex flex-col gap-0.5">
+                      <span>{client.nomeFantasia || client.razaoSocial}</span>
+                      <span className="text-sm text-muted-foreground">{client.razaoSocial}</span>
+                      {client.cnpj && <span className="text-xs text-muted-foreground">CNPJ: {client.cnpj}</span>}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    {client.segmentoTags?.length ? (
+                      <div className="flex flex-wrap gap-1">
+                        {client.segmentoTags.map((tag, index) => (
+                          <Badge key={`${client.id}-segment-${index}`} variant="outline">{tag}</Badge>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-col gap-0.5">
+                      <span>{[client.endereco?.cidade, client.endereco?.uf].filter(Boolean).join(" - ") || "-"}</span>
+                      {client.endereco?.logradouro && (
+                        <span className="text-xs text-muted-foreground">
+                          {[client.endereco.logradouro, client.endereco.numero].filter(Boolean).join(", ")}
+                        </span>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-col gap-0.5">
+                      <span>{client.contatoPrincipal?.nome || "-"}</span>
+                      {client.contatoPrincipal?.whatsapp && <span className="text-xs text-muted-foreground">{client.contatoPrincipal.whatsapp}</span>}
+                      {client.contatoPrincipal?.email && <span className="text-xs text-muted-foreground">{client.contatoPrincipal.email}</span>}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-col gap-0.5">
+                      <span>{client.preferenciasRelacionamento?.diaReuniao || "-"}</span>
+                      {client.preferenciasRelacionamento?.frequencia && (
+                        <span className="text-xs text-muted-foreground">
+                          Frequência: {followUpLabels[client.preferenciasRelacionamento.frequencia]}
+                        </span>
+                      )}
+                    </div>
+                  </TableCell>
                   <TableCell><Badge variant={client.status === "ativo" ? "default" : "secondary"}>{client.status === "ativo" ? "Ativo" : "Inativo"}</Badge></TableCell>
                   <TableCell>{client.projects}</TableCell>
                   <TableCell><span className={client.nps >= 8 ? "text-green-600 font-medium" : client.nps >= 6 ? "text-yellow-600" : "text-red-600"}>{client.nps}</span></TableCell>

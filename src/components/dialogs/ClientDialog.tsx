@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronDown, Loader2 } from "lucide-react";
 import {
   Dialog,
@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Separator } from "@/components/ui/separator";
 import { useData } from "@/contexts/DataContext";
@@ -107,119 +108,104 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
   const [isFetchingCnpj, setIsFetchingCnpj] = useState(false);
 
   const [formData, setFormData] = useState({
-    name: "",
-    tradeName: "",
+    razaoSocial: "",
+    nomeFantasia: "",
     cnpj: "",
-    segment: "",
-    city: "",
-    address: emptyAddress as Address,
-    primaryContactName: "",
-    primaryContactEmail: "",
-    primaryContactPhone: "",
+    segmentoTagsText: "",
     status: "ativo" as "ativo" | "inativo",
     risk: "low" as "low" | "medium" | "high",
-    preferredMeetingDay: "",
-    followUpFrequency: "semanal" as "semanal" | "quinzenal" | "mensal",
+    contatoPrincipal: {
+      nome: "",
+      whatsapp: "",
+      email: "",
+    },
+    endereco: emptyAddress as Address,
+    observacoesInternas: "",
+    preferenciasRelacionamento: {
+      diaReuniao: "",
+      frequencia: "semanal" as "semanal" | "quinzenal" | "mensal",
+    },
   });
 
-  const requiredFields = useMemo(
-    () => ["name", "segment", "city", "primaryContactName", "primaryContactEmail"],
-    []
-  );
+  const setFieldError = (field: string, message: string) => {
+    setErrors((prev) => ({ ...prev, [field]: message }));
+  };
+
+  const clearFieldError = (field: string) => {
+    setErrors((prev) => {
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+  };
 
   const validateForm = () => {
     const validationErrors: Record<string, string> = {};
 
-    const resolvedCity = (formData.address.cidade || formData.city || "").trim();
+    if (!formData.razaoSocial.trim()) validationErrors.razaoSocial = "Razão social é obrigatória.";
 
-    if (!formData.name.trim()) validationErrors.name = "Razão social é obrigatória.";
-    if (!formData.segment) validationErrors.segment = "Selecione o segmento.";
-    if (!resolvedCity) validationErrors.city = "Cidade é obrigatória.";
+    const email = formData.contatoPrincipal.email.trim();
+    if (email && !isValidEmail(email)) validationErrors.contatoPrincipalEmail = "E-mail inválido.";
 
-    if (!formData.primaryContactName.trim())
-      validationErrors.primaryContactName = "Informe o nome do contato principal.";
+    const whatsapp = formData.contatoPrincipal.whatsapp.trim();
+    if (whatsapp && !isValidWhatsapp(whatsapp)) validationErrors.contatoPrincipalWhatsapp = "WhatsApp inválido.";
 
-    if (!formData.primaryContactEmail.trim()) {
-      validationErrors.primaryContactEmail = "E-mail do contato é obrigatório.";
-    } else if (!isValidEmail(formData.primaryContactEmail)) {
-      validationErrors.primaryContactEmail = "E-mail inválido.";
-    }
+    const cnpj = formData.cnpj.trim();
+    if (cnpj && !isValidCnpj(cnpj)) validationErrors.cnpj = "CNPJ inválido.";
 
     setErrors(validationErrors);
     return Object.keys(validationErrors).length === 0;
   };
 
-  const handleInputChange = (field: keyof typeof formData, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-    if (errors[field as string]) {
-      setErrors((prev) => {
-        const updated = { ...prev };
-        delete updated[field as string];
-        return updated;
-      });
-    }
-  };
-
-  const handleAddressChange = (field: keyof Address, value: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      address: { ...prev.address, [field]: value },
-      ...(field === "cidade" ? { city: value } : null),
-    }));
-
-    if (field === "cidade" && errors.city) {
-      setErrors((prev) => {
-        const updated = { ...prev };
-        delete updated.city;
-        return updated;
-      });
-    }
-  };
-
   useEffect(() => {
     if (client) {
-      const rawAddress = client.address as unknown;
+      const segmentoTagsText =
+        (client as any).segmentoTags?.length ? (client as any).segmentoTags.join(", ") : "";
 
-      const normalizedAddress: Address =
-        typeof rawAddress === "string"
-          ? { ...emptyAddress, logradouro: rawAddress }
-          : { ...emptyAddress, ...(rawAddress as Partial<Address>) };
-
-      const resolvedCity = client.city || normalizedAddress.cidade || "";
+      const enderecoFromClient = (client as any).endereco || {};
+      const contatoFromClient = (client as any).contatoPrincipal || {};
 
       setFormData({
-        name: client.name,
-        tradeName: client.tradeName || "",
-        cnpj: client.cnpj ? formatCnpj(client.cnpj) : "",
-        segment: client.segment || "",
-        city: resolvedCity,
-        address: { ...normalizedAddress, cidade: resolvedCity },
-        primaryContactName: (client as any).primaryContactName || "",
-        primaryContactEmail: (client as any).primaryContactEmail || "",
-        primaryContactPhone: (client as any).primaryContactPhone ? formatWhatsapp((client as any).primaryContactPhone) : "",
-        status: client.status,
-        risk: client.risk,
-        preferredMeetingDay: client.preferredMeetingDay || "",
-        followUpFrequency: client.followUpFrequency || "semanal",
+        razaoSocial: (client as any).razaoSocial || (client as any).name || "",
+        nomeFantasia: (client as any).nomeFantasia || (client as any).tradeName || "",
+        cnpj: (client as any).cnpj ? formatCnpj((client as any).cnpj) : "",
+        segmentoTagsText,
+        status: (client as any).status || "ativo",
+        risk: (client as any).risk || "low",
+        contatoPrincipal: {
+          nome: contatoFromClient.nome || (client as any).primaryContactName || "",
+          whatsapp: contatoFromClient.whatsapp
+            ? formatWhatsapp(contatoFromClient.whatsapp)
+            : (client as any).primaryContactPhone
+              ? formatWhatsapp((client as any).primaryContactPhone)
+              : "",
+          email: contatoFromClient.email || (client as any).primaryContactEmail || "",
+        },
+        endereco: {
+          ...emptyAddress,
+          ...enderecoFromClient,
+        },
+        observacoesInternas: (client as any).observacoesInternas || "",
+        preferenciasRelacionamento: {
+          diaReuniao: (client as any).preferenciasRelacionamento?.diaReuniao || (client as any).preferredMeetingDay || "",
+          frequencia: (client as any).preferenciasRelacionamento?.frequencia || (client as any).followUpFrequency || "semanal",
+        },
       });
 
       setIsAddressLocked(false);
       setIsFetchingCep(false);
     } else {
       setFormData({
-        name: "",
-        tradeName: "",
+        razaoSocial: "",
+        nomeFantasia: "",
         cnpj: "",
-        segment: "",
-        city: "",
-        address: emptyAddress,
-        primaryContactName: "",
-        primaryContactEmail: "",
-        primaryContactPhone: "",
+        segmentoTagsText: "",
         status: "ativo",
         risk: "low",
-        preferredMeetingDay: "",
-        followUpFrequency: "semanal",
+        contatoPrincipal: { nome: "", whatsapp: "", email: "" },
+        endereco: emptyAddress,
+        observacoesInternas: "",
+        preferenciasRelacionamento: { diaReuniao: "", frequencia: "semanal" },
       });
 
       setIsAddressLocked(false);
@@ -231,7 +217,7 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
   }, [client, open]);
 
   useEffect(() => {
-    const cep = (formData.address.cep || "").replace(/\D/g, "");
+    const cep = (formData.endereco.cep || "").replace(/\D/g, "");
     if (!cep || cep.length !== 8) {
       setIsAddressLocked(false);
       setIsFetchingCep(false);
@@ -251,9 +237,8 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
 
         setFormData((prev) => ({
           ...prev,
-          city: data.localidade || prev.city,
-          address: {
-            ...prev.address,
+          endereco: {
+            ...prev.endereco,
             cep,
             logradouro: data.logradouro || "",
             complemento: data.complemento || "",
@@ -276,7 +261,7 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
       clearTimeout(timer);
       controller.abort();
     };
-  }, [formData.address.cep]);
+  }, [formData.endereco.cep]);
 
   const handleCnpjLookup = async () => {
     const normalizedCnpj = sanitizeNumbers(formData.cnpj);
@@ -293,12 +278,17 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
       if (!response.ok) throw new Error("Erro ao buscar CNPJ");
 
       const data = await response.json();
+      const inferred = mapSegmentFromCnae(data.cnae_fiscal_descricao);
 
-      setFormData((prev) => ({
-        ...prev,
-        name: prev.name || data.razao_social || prev.name,
-        segment: prev.segment || mapSegmentFromCnae(data.cnae_fiscal_descricao) || prev.segment,
-      }));
+      setFormData((prev) => {
+        const existingTags = prev.segmentoTagsText.trim();
+        const nextTags = existingTags ? existingTags : inferred ? inferred : "";
+        return {
+          ...prev,
+          razaoSocial: prev.razaoSocial || data.razao_social || prev.razaoSocial,
+          segmentoTagsText: nextTags,
+        };
+      });
 
       toast.success("Dados do CNPJ carregados");
     } catch {
@@ -314,35 +304,22 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
 
     setIsSubmitting(true);
 
-    const isValid = validateForm();
-    if (!isValid) {
+    const ok = validateForm();
+    if (!ok) {
       setIsSubmitting(false);
       return;
     }
 
-    if (formData.cnpj && !isValidCnpj(formData.cnpj)) {
-      toast.error("Informe um CNPJ válido");
-      setIsSubmitting(false);
-      return;
-    }
-
-    if (formData.primaryContactPhone && !isValidWhatsapp(formData.primaryContactPhone)) {
-      toast.error("Informe um WhatsApp válido");
-      setIsSubmitting(false);
-      return;
-    }
-
-    if (formData.primaryContactEmail && !isValidEmail(formData.primaryContactEmail)) {
-      toast.error("Informe um e-mail válido");
-      setIsSubmitting(false);
-      return;
-    }
+    const segmentoTags = formData.segmentoTagsText
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter(Boolean);
 
     const normalizedCnpj = sanitizeNumbers(formData.cnpj);
     const duplicatedClient =
       normalizedCnpj && Array.isArray(clients)
         ? clients.find(
-            (existing) =>
+            (existing: any) =>
               existing.id !== client?.id && sanitizeNumbers(existing.cnpj || "") === normalizedCnpj
           )
         : undefined;
@@ -358,21 +335,39 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
       return;
     }
 
-    const resolvedCity = formData.address.cidade || formData.city || "";
-
-    const clientData = {
-      ...formData,
-      city: resolvedCity,
-      address: formData.address,
+    const clientData: any = {
+      razaoSocial: formData.razaoSocial.trim(),
+      nomeFantasia: formData.nomeFantasia.trim(),
       cnpj: formData.cnpj ? formatCnpj(formData.cnpj) : "",
-      primaryContactPhone: formData.primaryContactPhone ? formatWhatsapp(formData.primaryContactPhone) : "",
-      projects: client?.projects || 0,
-      nps: client?.nps || 0,
-      lastContact: new Date().toLocaleDateString("pt-BR"),
+      segmentoTags,
+      status: formData.status,
+      risk: formData.risk,
+      contatoPrincipal: {
+        nome: formData.contatoPrincipal.nome.trim(),
+        whatsapp: formData.contatoPrincipal.whatsapp ? formatWhatsapp(formData.contatoPrincipal.whatsapp) : "",
+        email: formData.contatoPrincipal.email.trim(),
+      },
+      endereco: {
+        cep: formData.endereco.cep.trim(),
+        logradouro: formData.endereco.logradouro.trim(),
+        numero: formData.endereco.numero.trim(),
+        complemento: formData.endereco.complemento.trim(),
+        bairro: formData.endereco.bairro.trim(),
+        cidade: formData.endereco.cidade.trim(),
+        uf: formData.endereco.uf.trim(),
+      },
+      observacoesInternas: formData.observacoesInternas.trim(),
+      preferenciasRelacionamento: {
+        diaReuniao: formData.preferenciasRelacionamento.diaReuniao,
+        frequencia: formData.preferenciasRelacionamento.frequencia,
+      },
+      projects: (client as any)?.projects || 0,
+      nps: (client as any)?.nps || 0,
+      lastContact: (client as any)?.lastContact || new Date().toLocaleDateString("pt-BR"),
     };
 
     if (client) {
-      updateClient(client.id, clientData);
+      updateClient((client as any).id, clientData);
       toast.success("Cliente atualizado com sucesso");
       onOpenChange(false);
       setIsSubmitting(false);
@@ -380,7 +375,7 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
       const newClient = addClient(clientData);
       toast.success("Cliente criado. Próximo passo: criar um projeto.");
       onOpenChange(false);
-      navigate(`/clientes?cliente=${newClient.id}`);
+      navigate(`/clientes?cliente=${(newClient as any).id}`);
       setIsSubmitting(false);
     }
   };
@@ -405,31 +400,33 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
           <section className="rounded-lg border p-4">
             <div className="space-y-1">
               <p className="text-sm font-medium text-foreground">Identificação</p>
-              <p className="text-sm text-muted-foreground">Defina razão social, segmento e documentos fiscais.</p>
+              <p className="text-sm text-muted-foreground">Razão social, CNPJ e tags de segmento.</p>
             </div>
 
             <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="name" className="flex items-center gap-1">
+                <Label htmlFor="razaoSocial" className="flex items-center gap-1">
                   Razão Social <span className="text-destructive">*</span>
                 </Label>
                 <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) => handleInputChange("name", e.target.value)}
-                  placeholder="Nome da empresa"
-                  className={cn(errors.name && "border-destructive focus-visible:ring-destructive")}
-                  required={requiredFields.includes("name")}
+                  id="razaoSocial"
+                  value={formData.razaoSocial}
+                  onChange={(e) => {
+                    setFormData((p) => ({ ...p, razaoSocial: e.target.value }));
+                    if (errors.razaoSocial) clearFieldError("razaoSocial");
+                  }}
+                  placeholder="Razão social"
+                  className={cn(errors.razaoSocial && "border-destructive focus-visible:ring-destructive")}
                 />
-                {errors.name && <p className="text-sm text-destructive">{errors.name}</p>}
+                {errors.razaoSocial && <p className="text-sm text-destructive">{errors.razaoSocial}</p>}
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="tradeName">Nome Fantasia</Label>
+                <Label htmlFor="nomeFantasia">Nome Fantasia</Label>
                 <Input
-                  id="tradeName"
-                  value={formData.tradeName}
-                  onChange={(e) => handleInputChange("tradeName", e.target.value)}
+                  id="nomeFantasia"
+                  value={formData.nomeFantasia}
+                  onChange={(e) => setFormData((p) => ({ ...p, nomeFantasia: e.target.value }))}
                   placeholder="Nome fantasia"
                 />
               </div>
@@ -440,33 +437,28 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
                   <Input
                     id="cnpj"
                     value={formData.cnpj}
-                    onChange={(e) => handleInputChange("cnpj", formatCnpj(e.target.value))}
+                    onChange={(e) => {
+                      setFormData((p) => ({ ...p, cnpj: formatCnpj(e.target.value) }));
+                      if (errors.cnpj) clearFieldError("cnpj");
+                    }}
                     placeholder="00.000.000/0000-00"
+                    className={cn(errors.cnpj && "border-destructive focus-visible:ring-destructive")}
                   />
                   <Button type="button" variant="outline" onClick={handleCnpjLookup} disabled={isFetchingCnpj}>
                     {isFetchingCnpj ? "Buscando..." : "Buscar dados"}
                   </Button>
                 </div>
+                {errors.cnpj && <p className="text-sm text-destructive">{errors.cnpj}</p>}
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="segment" className="flex items-center gap-1">
-                  Segmento <span className="text-destructive">*</span>
-                </Label>
-                <Select value={formData.segment} onValueChange={(value) => handleInputChange("segment", value)}>
-                  <SelectTrigger className={cn(errors.segment && "border-destructive focus:ring-destructive")}>
-                    <SelectValue placeholder="Selecione" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Indústria">Indústria</SelectItem>
-                    <SelectItem value="Manufatura">Manufatura</SelectItem>
-                    <SelectItem value="Varejo">Varejo</SelectItem>
-                    <SelectItem value="Serviços">Serviços</SelectItem>
-                    <SelectItem value="Tecnologia">Tecnologia</SelectItem>
-                    <SelectItem value="Outro">Outro</SelectItem>
-                  </SelectContent>
-                </Select>
-                {errors.segment && <p className="text-sm text-destructive">{errors.segment}</p>}
+                <Label htmlFor="segmentoTagsText">Segmentos (tags)</Label>
+                <Input
+                  id="segmentoTagsText"
+                  value={formData.segmentoTagsText}
+                  onChange={(e) => setFormData((p) => ({ ...p, segmentoTagsText: e.target.value }))}
+                  placeholder="Ex: Varejo, Distribuição, Serviços"
+                />
               </div>
             </div>
           </section>
@@ -474,49 +466,53 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
           <section className="rounded-lg border p-4">
             <div className="space-y-1">
               <p className="text-sm font-medium text-foreground">Contato principal</p>
-              <p className="text-sm text-muted-foreground">Quem será acionado nas comunicações iniciais.</p>
+              <p className="text-sm text-muted-foreground">Para comunicação inicial e alinhamentos.</p>
             </div>
 
-            <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="primaryContactName" className="flex items-center gap-1">
-                  Nome do contato <span className="text-destructive">*</span>
-                </Label>
+            <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
+              <div className="space-y-2 md:col-span-1">
+                <Label htmlFor="contatoPrincipalNome">Nome</Label>
                 <Input
-                  id="primaryContactName"
-                  value={formData.primaryContactName}
-                  onChange={(e) => handleInputChange("primaryContactName", e.target.value)}
-                  placeholder="Responsável direto"
-                  className={cn(errors.primaryContactName && "border-destructive focus-visible:ring-destructive")}
-                  required={requiredFields.includes("primaryContactName")}
+                  id="contatoPrincipalNome"
+                  value={formData.contatoPrincipal.nome}
+                  onChange={(e) =>
+                    setFormData((p) => ({ ...p, contatoPrincipal: { ...p.contatoPrincipal, nome: e.target.value } }))
+                  }
+                  placeholder="Nome do contato"
                 />
-                {errors.primaryContactName && <p className="text-sm text-destructive">{errors.primaryContactName}</p>}
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="primaryContactEmail" className="flex items-center gap-1">
-                  E-mail do contato <span className="text-destructive">*</span>
-                </Label>
+              <div className="space-y-2 md:col-span-1">
+                <Label htmlFor="contatoPrincipalWhatsapp">WhatsApp</Label>
                 <Input
-                  id="primaryContactEmail"
-                  type="email"
-                  value={formData.primaryContactEmail}
-                  onChange={(e) => handleInputChange("primaryContactEmail", e.target.value)}
-                  placeholder="contato@empresa.com"
-                  className={cn(errors.primaryContactEmail && "border-destructive focus-visible:ring-destructive")}
-                  required={requiredFields.includes("primaryContactEmail")}
-                />
-                {errors.primaryContactEmail && <p className="text-sm text-destructive">{errors.primaryContactEmail}</p>}
-              </div>
-
-              <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="primaryContactPhone">Telefone/WhatsApp</Label>
-                <Input
-                  id="primaryContactPhone"
-                  value={formData.primaryContactPhone}
-                  onChange={(e) => handleInputChange("primaryContactPhone", formatWhatsapp(e.target.value))}
+                  id="contatoPrincipalWhatsapp"
+                  value={formData.contatoPrincipal.whatsapp}
+                  onChange={(e) => {
+                    setFormData((p) => ({
+                      ...p,
+                      contatoPrincipal: { ...p.contatoPrincipal, whatsapp: formatWhatsapp(e.target.value) },
+                    }));
+                    if (errors.contatoPrincipalWhatsapp) clearFieldError("contatoPrincipalWhatsapp");
+                  }}
                   placeholder="(00) 00000-0000"
+                  className={cn(errors.contatoPrincipalWhatsapp && "border-destructive focus-visible:ring-destructive")}
                 />
+                {errors.contatoPrincipalWhatsapp && <p className="text-sm text-destructive">{errors.contatoPrincipalWhatsapp}</p>}
+              </div>
+
+              <div className="space-y-2 md:col-span-1">
+                <Label htmlFor="contatoPrincipalEmail">E-mail</Label>
+                <Input
+                  id="contatoPrincipalEmail"
+                  value={formData.contatoPrincipal.email}
+                  onChange={(e) => {
+                    setFormData((p) => ({ ...p, contatoPrincipal: { ...p.contatoPrincipal, email: e.target.value } }));
+                    if (errors.contatoPrincipalEmail) clearFieldError("contatoPrincipalEmail");
+                  }}
+                  placeholder="contato@empresa.com"
+                  className={cn(errors.contatoPrincipalEmail && "border-destructive focus-visible:ring-destructive")}
+                />
+                {errors.contatoPrincipalEmail && <p className="text-sm text-destructive">{errors.contatoPrincipalEmail}</p>}
               </div>
             </div>
           </section>
@@ -534,10 +530,10 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
                   <Input
                     id="cep"
                     inputMode="numeric"
-                    value={formData.address.cep}
+                    value={formData.endereco.cep}
                     onChange={(e) => {
                       const value = e.target.value.replace(/\D/g, "").slice(0, 8);
-                      handleAddressChange("cep", value);
+                      setFormData((p) => ({ ...p, endereco: { ...p.endereco, cep: value } }));
                       if (!value) setIsAddressLocked(false);
                     }}
                     placeholder="00000000"
@@ -553,9 +549,14 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
                 <Label htmlFor="uf">UF</Label>
                 <Input
                   id="uf"
-                  value={formData.address.uf}
+                  value={formData.endereco.uf}
                   readOnly={isAddressLocked}
-                  onChange={(e) => handleAddressChange("uf", e.target.value.toUpperCase().slice(0, 2))}
+                  onChange={(e) =>
+                    setFormData((p) => ({
+                      ...p,
+                      endereco: { ...p.endereco, uf: e.target.value.toUpperCase().slice(0, 2) },
+                    }))
+                  }
                   placeholder="UF"
                   maxLength={2}
                 />
@@ -565,9 +566,11 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
                 <Label htmlFor="logradouro">Logradouro</Label>
                 <Input
                   id="logradouro"
-                  value={formData.address.logradouro}
+                  value={formData.endereco.logradouro}
                   readOnly={isAddressLocked}
-                  onChange={(e) => handleAddressChange("logradouro", e.target.value)}
+                  onChange={(e) =>
+                    setFormData((p) => ({ ...p, endereco: { ...p.endereco, logradouro: e.target.value } }))
+                  }
                   placeholder="Rua, avenida..."
                 />
               </div>
@@ -576,8 +579,10 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
                 <Label htmlFor="numero">Número</Label>
                 <Input
                   id="numero"
-                  value={formData.address.numero}
-                  onChange={(e) => handleAddressChange("numero", e.target.value)}
+                  value={formData.endereco.numero}
+                  onChange={(e) =>
+                    setFormData((p) => ({ ...p, endereco: { ...p.endereco, numero: e.target.value } }))
+                  }
                   placeholder="Número"
                 />
               </div>
@@ -586,8 +591,10 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
                 <Label htmlFor="complemento">Complemento</Label>
                 <Input
                   id="complemento"
-                  value={formData.address.complemento}
-                  onChange={(e) => handleAddressChange("complemento", e.target.value)}
+                  value={formData.endereco.complemento}
+                  onChange={(e) =>
+                    setFormData((p) => ({ ...p, endereco: { ...p.endereco, complemento: e.target.value } }))
+                  }
                   placeholder="Apto, bloco, etc."
                 />
               </div>
@@ -596,27 +603,26 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
                 <Label htmlFor="bairro">Bairro</Label>
                 <Input
                   id="bairro"
-                  value={formData.address.bairro}
+                  value={formData.endereco.bairro}
                   readOnly={isAddressLocked}
-                  onChange={(e) => handleAddressChange("bairro", e.target.value)}
+                  onChange={(e) =>
+                    setFormData((p) => ({ ...p, endereco: { ...p.endereco, bairro: e.target.value } }))
+                  }
                   placeholder="Bairro"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="cidade" className="flex items-center gap-1">
-                  Cidade <span className="text-destructive">*</span>
-                </Label>
+                <Label htmlFor="cidade">Cidade</Label>
                 <Input
                   id="cidade"
-                  value={formData.address.cidade}
+                  value={formData.endereco.cidade}
                   readOnly={isAddressLocked}
-                  onChange={(e) => handleAddressChange("cidade", e.target.value)}
+                  onChange={(e) =>
+                    setFormData((p) => ({ ...p, endereco: { ...p.endereco, cidade: e.target.value } }))
+                  }
                   placeholder="Cidade"
-                  className={cn(errors.city && "border-destructive focus-visible:ring-destructive")}
-                  required={requiredFields.includes("city")}
                 />
-                {errors.city && <p className="text-sm text-destructive">{errors.city}</p>}
               </div>
             </div>
           </section>
@@ -630,7 +636,7 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
                 <div className="flex flex-col">
                   <span>Detalhes avançados</span>
                   <span className="text-sm font-normal text-muted-foreground">
-                    Status, risco e cadência de acompanhamento.
+                    Status, risco, preferências e notas internas.
                   </span>
                 </div>
                 <ChevronDown className={cn("h-4 w-4 transition-transform", advancedOpen && "rotate-180")} />
@@ -642,7 +648,12 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
               <div className="grid grid-cols-1 gap-4 p-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="status">Status</Label>
-                  <Select value={formData.status} onValueChange={(value: "ativo" | "inativo") => handleInputChange("status", value)}>
+                  <Select
+                    value={formData.status}
+                    onValueChange={(value: "ativo" | "inativo") =>
+                      setFormData((p) => ({ ...p, status: value }))
+                    }
+                  >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -655,7 +666,12 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
 
                 <div className="space-y-2">
                   <Label htmlFor="risk">Risco</Label>
-                  <Select value={formData.risk} onValueChange={(value: "low" | "medium" | "high") => handleInputChange("risk", value)}>
+                  <Select
+                    value={formData.risk}
+                    onValueChange={(value: "low" | "medium" | "high") =>
+                      setFormData((p) => ({ ...p, risk: value }))
+                    }
+                  >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -668,8 +684,16 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="preferredMeetingDay">Dia de reunião</Label>
-                  <Select value={formData.preferredMeetingDay} onValueChange={(value) => handleInputChange("preferredMeetingDay", value)}>
+                  <Label htmlFor="diaReuniao">Dia de Reunião</Label>
+                  <Select
+                    value={formData.preferenciasRelacionamento.diaReuniao}
+                    onValueChange={(value) =>
+                      setFormData((p) => ({
+                        ...p,
+                        preferenciasRelacionamento: { ...p.preferenciasRelacionamento, diaReuniao: value },
+                      }))
+                    }
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Selecione" />
                     </SelectTrigger>
@@ -684,10 +708,15 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="followUpFrequency">Frequência de acompanhamento</Label>
+                  <Label htmlFor="frequencia">Frequência de Acompanhamento</Label>
                   <Select
-                    value={formData.followUpFrequency}
-                    onValueChange={(value: "semanal" | "quinzenal" | "mensal") => handleInputChange("followUpFrequency", value)}
+                    value={formData.preferenciasRelacionamento.frequencia}
+                    onValueChange={(value: "semanal" | "quinzenal" | "mensal") =>
+                      setFormData((p) => ({
+                        ...p,
+                        preferenciasRelacionamento: { ...p.preferenciasRelacionamento, frequencia: value },
+                      }))
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -698,6 +727,17 @@ export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient 
                       <SelectItem value="mensal">Mensal</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="observacoesInternas">Observações Internas</Label>
+                  <Textarea
+                    id="observacoesInternas"
+                    value={formData.observacoesInternas}
+                    onChange={(e) => setFormData((p) => ({ ...p, observacoesInternas: e.target.value }))}
+                    placeholder="Notas internas, contexto e direcionamentos"
+                    rows={3}
+                  />
                 </div>
               </div>
             </CollapsibleContent>
