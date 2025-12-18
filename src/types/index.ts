@@ -18,6 +18,9 @@ export interface Client {
   segment: string;
   city: string;
   address?: ClientAddress;
+  primaryContactName?: string;
+  primaryContactEmail?: string;
+  primaryContactPhone?: string;
   status: "ativo" | "inativo";
   projects: number;
   nps: number;
@@ -160,7 +163,15 @@ export interface Indicator {
 export interface Document {
   id: string;
   name: string;
-  category: "contrato" | "proposta" | "diagnóstico" | "indicadores" | "evidências" | "reuniões" | "processos" | "treinamento";
+  category:
+    | "contrato"
+    | "proposta"
+    | "diagnóstico"
+    | "indicadores"
+    | "evidências"
+    | "reuniões"
+    | "processos"
+    | "treinamento";
   projectId?: string;
   projectName?: string;
   clientId?: string;
