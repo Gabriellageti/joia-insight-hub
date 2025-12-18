@@ -506,6 +506,7 @@ export function ProjectDialog({
               {project ? "Editar Projeto" : "Novo Projeto"}
             </DialogTitle>
           </DialogHeader>
+
           <ScrollArea className="flex-1 px-6 pb-6">
             <div className="grid grid-cols-2 gap-4 py-4">
               <div className="space-y-2">
@@ -519,6 +520,7 @@ export function ProjectDialog({
                   placeholder="Nome do projeto"
                 />
               </div>
+
               <div className="space-y-2">
                 <Label htmlFor="client">Cliente *</Label>
                 <Select
@@ -539,6 +541,7 @@ export function ProjectDialog({
                   </SelectContent>
                 </Select>
               </div>
+
               <div className="col-span-2 space-y-2">
                 <Label htmlFor="objective">Objetivo</Label>
                 <Textarea
@@ -551,6 +554,7 @@ export function ProjectDialog({
                   rows={2}
                 />
               </div>
+
               <div className="col-span-2 space-y-2">
                 <Label htmlFor="scope">Escopo</Label>
                 <Textarea
@@ -563,6 +567,7 @@ export function ProjectDialog({
                   rows={2}
                 />
               </div>
+
               <div className="space-y-2">
                 <Label htmlFor="phase">Fase</Label>
                 <Select
@@ -587,6 +592,7 @@ export function ProjectDialog({
                   </SelectContent>
                 </Select>
               </div>
+
               <div className="space-y-2">
                 <Label>Responsável *</Label>
                 <Popover
@@ -665,6 +671,7 @@ export function ProjectDialog({
                     </Command>
                   </PopoverContent>
                 </Popover>
+
                 {!selectedResponsible && formData.responsibleNameLegacy && (
                   <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
                     <span>
@@ -681,6 +688,7 @@ export function ProjectDialog({
                   </div>
                 )}
               </div>
+
               <div className="space-y-2">
                 <Label htmlFor="startDate">Data Início</Label>
                 <Input
@@ -692,6 +700,7 @@ export function ProjectDialog({
                   placeholder="dd/mm/aaaa"
                 />
               </div>
+
               <div className="space-y-2">
                 <Label>Duração estimada</Label>
                 {formData.forecastAdjustedManually ? (
@@ -731,6 +740,7 @@ export function ProjectDialog({
                   Usada para calcular a previsão de término.
                 </p>
               </div>
+
               <div className="col-span-2 space-y-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="forecastEndDate">Previsão de fim</Label>
@@ -764,6 +774,7 @@ export function ProjectDialog({
                   readOnly={!formData.forecastAdjustedManually}
                 />
               </div>
+
               <div className="col-span-2 flex items-center gap-3 rounded-md border border-dashed border-border p-3">
                 <Switch
                   id="autoStructure"
@@ -785,6 +796,7 @@ export function ProjectDialog({
                   </p>
                 </div>
               </div>
+
               <div className="col-span-2 space-y-4 rounded-lg border border-border p-4">
                 <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                   <div>
@@ -810,6 +822,7 @@ export function ProjectDialog({
                     </Badge>
                   </div>
                 </div>
+
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div className="flex items-center gap-3">
                     <Switch
@@ -853,6 +866,7 @@ export function ProjectDialog({
                       </p>
                     </div>
                   </div>
+
                   {formData.statusOverrideEnabled && (
                     <div className="space-y-2">
                       <Label htmlFor="statusOverrideValue">
@@ -878,6 +892,7 @@ export function ProjectDialog({
                       </Select>
                     </div>
                   )}
+
                   {formData.statusOverrideEnabled && (
                     <div className="space-y-2">
                       <Label htmlFor="statusOverrideJustification">
@@ -897,6 +912,7 @@ export function ProjectDialog({
                       />
                     </div>
                   )}
+
                   {formData.statusOverrideEnabled && (
                     <div className="space-y-2">
                       <Label htmlFor="statusOverrideExpiresAt">
@@ -917,6 +933,7 @@ export function ProjectDialog({
                   )}
                 </div>
               </div>
+
               <div className="col-span-2 space-y-4 rounded-lg border border-border p-4">
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                   <div>
@@ -953,6 +970,7 @@ export function ProjectDialog({
                     </Label>
                   </div>
                 </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="manualProgress">Progresso manual (%)</Label>
@@ -975,6 +993,7 @@ export function ProjectDialog({
                       disabled={!formData.progressOverrideEnabled}
                     />
                   </div>
+
                   <div className="space-y-2">
                     <Label htmlFor="progressJustification">Justificativa</Label>
                     <Textarea
@@ -993,6 +1012,7 @@ export function ProjectDialog({
                   </div>
                 </div>
               </div>
+
               <div className="col-span-2 space-y-4 rounded-lg border border-border p-4">
                 <div className="flex items-center justify-between">
                   <div>
@@ -1013,6 +1033,7 @@ export function ProjectDialog({
                     Adicionar oportunidade
                   </Button>
                 </div>
+
                 <ScrollArea className="max-h-[360px] pr-2">
                   <div className="space-y-3">
                     {opportunityDrafts.map((opportunity, index) => (
@@ -1041,6 +1062,7 @@ export function ProjectDialog({
                               </SelectContent>
                             </Select>
                           </div>
+
                           {opportunityDrafts.length > 1 && (
                             <Button
                               type="button"
@@ -1053,6 +1075,7 @@ export function ProjectDialog({
                             </Button>
                           )}
                         </div>
+
                         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                           <div className="space-y-2">
                             <Label>Tipo</Label>
@@ -1074,6 +1097,7 @@ export function ProjectDialog({
                               </SelectContent>
                             </Select>
                           </div>
+
                           <div className="space-y-2">
                             <Label>Confiança</Label>
                             <Select
@@ -1107,6 +1131,7 @@ export function ProjectDialog({
                               </SelectContent>
                             </Select>
                           </div>
+
                           <div className="space-y-2">
                             <Label>Valor estimado (opcional)</Label>
                             <Input
@@ -1121,6 +1146,7 @@ export function ProjectDialog({
                               placeholder="R$ 0,00"
                             />
                           </div>
+
                           <div className="space-y-2">
                             <Label>Tipo de evidência</Label>
                             <Select
@@ -1149,6 +1175,7 @@ export function ProjectDialog({
                             </Select>
                           </div>
                         </div>
+
                         {opportunity.evidenceType === "upload" && (
                           <div className="space-y-2">
                             <Label>Evidência inicial</Label>
@@ -1165,6 +1192,7 @@ export function ProjectDialog({
                             />
                           </div>
                         )}
+
                         <div className="space-y-2">
                           <Label>Descrição curta *</Label>
                           <Textarea
@@ -1187,6 +1215,7 @@ export function ProjectDialog({
               </div>
             </div>
           </ScrollArea>
+
           <DialogFooter className="gap-2 border-t border-border px-6 py-4">
             <Button
               type="button"
