@@ -15,6 +15,8 @@ export interface Client {
   lastContact: string;
   preferredMeetingDay?: string;
   followUpFrequency?: "semanal" | "quinzenal" | "mensal";
+  whatsapp?: string;
+  email?: string;
   createdAt: string;
 }
 

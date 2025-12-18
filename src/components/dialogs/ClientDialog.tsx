@@ -12,10 +12,59 @@ interface ClientDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   client?: Client | null;
+  onOpenExistingClient?: (client: Client) => void;
 }
 
-export function ClientDialog({ open, onOpenChange, client }: ClientDialogProps) {
-  const { addClient, updateClient } = useData();
+const sanitizeNumbers = (value: string) => value.replace(/\D/g, "");
+
+const formatCnpj = (value: string) => {
+  const digits = sanitizeNumbers(value).slice(0, 14);
+  const parts = [
+    digits.slice(0, 2),
+    digits.slice(2, 5),
+    digits.slice(5, 8),
+    digits.slice(8, 12),
+    digits.slice(12, 14),
+  ];
+
+  return parts
+    .map((part, index) => {
+      if (!part) return "";
+      if (index === 0) return part;
+      if (index === 1) return `.${part}`;
+      if (index === 2) return `.${part}`;
+      if (index === 3) return `/${part}`;
+      return `-${part}`;
+    })
+    .join("");
+};
+
+const formatWhatsapp = (value: string) => {
+  const digits = sanitizeNumbers(value).slice(0, 11);
+  if (!digits) return "";
+  if (digits.length <= 2) return `(${digits}`;
+  if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+};
+
+const isValidCnpj = (value: string) => sanitizeNumbers(value).length === 14;
+const isValidWhatsapp = (value: string) => sanitizeNumbers(value).length === 11;
+const isValidEmail = (value: string) => /^(?!.*\.\.)([\w+-]+\.)*[\w+-]+@([\w-]+\.)+[A-Za-z]{2,}$/.test(value.trim());
+
+const mapSegmentFromCnae = (description?: string) => {
+  if (!description) return "";
+  const normalized = description.toLowerCase();
+  if (normalized.includes("ind") || normalized.includes("fabr")) return "Indústria";
+  if (normalized.includes("manuf")) return "Manufatura";
+  if (normalized.includes("varej") || normalized.includes("comércio") || normalized.includes("comercio")) return "Varejo";
+  if (normalized.includes("servi")) return "Serviços";
+  if (normalized.includes("tec")) return "Tecnologia";
+  return "Outro";
+};
+
+export function ClientDialog({ open, onOpenChange, client, onOpenExistingClient }: ClientDialogProps) {
+  const { addClient, updateClient, clients } = useData();
+  const [isFetchingCnpj, setIsFetchingCnpj] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     tradeName: "",
@@ -23,6 +72,8 @@ export function ClientDialog({ open, onOpenChange, client }: ClientDialogProps) 
     segment: "",
     city: "",
     address: "",
+    whatsapp: "",
+    email: "",
     status: "ativo" as "ativo" | "inativo",
     risk: "low" as "low" | "medium" | "high",
     preferredMeetingDay: "",
@@ -38,6 +89,8 @@ export function ClientDialog({ open, onOpenChange, client }: ClientDialogProps) 
         segment: client.segment,
         city: client.city,
         address: client.address || "",
+        whatsapp: client.whatsapp || "",
+        email: client.email || "",
         status: client.status,
         risk: client.risk,
         preferredMeetingDay: client.preferredMeetingDay || "",
@@ -51,6 +104,8 @@ export function ClientDialog({ open, onOpenChange, client }: ClientDialogProps) 
         segment: "",
         city: "",
         address: "",
+        whatsapp: "",
+        email: "",
         status: "ativo",
         risk: "low",
         preferredMeetingDay: "",
@@ -67,8 +122,40 @@ export function ClientDialog({ open, onOpenChange, client }: ClientDialogProps) 
       return;
     }
 
+    if (!formData.cnpj || !isValidCnpj(formData.cnpj)) {
+      toast.error("Informe um CNPJ válido");
+      return;
+    }
+
+    if (formData.whatsapp && !isValidWhatsapp(formData.whatsapp)) {
+      toast.error("Informe um WhatsApp válido");
+      return;
+    }
+
+    if (formData.email && !isValidEmail(formData.email)) {
+      toast.error("Informe um e-mail válido");
+      return;
+    }
+
+    const normalizedCnpj = sanitizeNumbers(formData.cnpj);
+    const duplicatedClient = clients.find((existing) => existing.id !== client?.id && sanitizeNumbers(existing.cnpj || "") === normalizedCnpj);
+
+    if (!client && duplicatedClient) {
+      toast.error("Já existe um cliente com este CNPJ. Abrir cadastro existente.", {
+        action: {
+          label: "Abrir cliente",
+          onClick: () => {
+            onOpenExistingClient?.(duplicatedClient);
+          },
+        },
+      });
+      return;
+    }
+
     const clientData = {
       ...formData,
+      cnpj: formatCnpj(formData.cnpj),
+      whatsapp: formData.whatsapp ? formatWhatsapp(formData.whatsapp) : "",
       projects: client?.projects || 0,
       nps: client?.nps || 0,
       lastContact: new Date().toLocaleDateString('pt-BR'),
@@ -82,6 +169,38 @@ export function ClientDialog({ open, onOpenChange, client }: ClientDialogProps) 
       toast.success("Cliente criado com sucesso");
     }
     onOpenChange(false);
+  };
+
+  const handleCnpjLookup = async () => {
+    const normalizedCnpj = sanitizeNumbers(formData.cnpj);
+
+    if (!isValidCnpj(formData.cnpj)) {
+      toast.error("Informe um CNPJ válido para buscar");
+      return;
+    }
+
+    setIsFetchingCnpj(true);
+
+    try {
+      const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${normalizedCnpj}`);
+      if (!response.ok) {
+        throw new Error("Erro ao buscar CNPJ");
+      }
+
+      const data = await response.json();
+
+      setFormData((prev) => ({
+        ...prev,
+        name: prev.name || data.razao_social || prev.name,
+        segment: prev.segment || mapSegmentFromCnae(data.cnae_fiscal_descricao) || prev.segment,
+      }));
+
+      toast.success("Dados do CNPJ carregados");
+    } catch {
+      toast.warning("Não foi possível buscar dados do CNPJ");
+    } finally {
+      setIsFetchingCnpj(false);
+    }
   };
 
   return (
@@ -112,12 +231,17 @@ export function ClientDialog({ open, onOpenChange, client }: ClientDialogProps) 
             </div>
             <div className="space-y-2">
               <Label htmlFor="cnpj">CNPJ</Label>
-              <Input
-                id="cnpj"
-                value={formData.cnpj}
-                onChange={(e) => setFormData({ ...formData, cnpj: e.target.value })}
-                placeholder="00.000.000/0000-00"
-              />
+              <div className="flex gap-2">
+                <Input
+                  id="cnpj"
+                  value={formData.cnpj}
+                  onChange={(e) => setFormData({ ...formData, cnpj: formatCnpj(e.target.value) })}
+                  placeholder="00.000.000/0000-00"
+                />
+                <Button type="button" variant="outline" onClick={handleCnpjLookup} disabled={isFetchingCnpj}>
+                  {isFetchingCnpj ? "Buscando..." : "Buscar dados"}
+                </Button>
+              </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="segment">Segmento</Label>
@@ -134,6 +258,25 @@ export function ClientDialog({ open, onOpenChange, client }: ClientDialogProps) 
                   <SelectItem value="Outro">Outro</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="whatsapp">WhatsApp</Label>
+              <Input
+                id="whatsapp"
+                value={formData.whatsapp}
+                onChange={(e) => setFormData({ ...formData, whatsapp: formatWhatsapp(e.target.value) })}
+                placeholder="(00) 00000-0000"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="email">E-mail</Label>
+              <Input
+                id="email"
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                placeholder="contato@empresa.com"
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="city">Cidade</Label>
