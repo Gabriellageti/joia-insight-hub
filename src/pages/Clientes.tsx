@@ -25,6 +25,7 @@ export default function Clientes() {
 
   const handleEdit = (client: Client) => { setEditingClient(client); setDialogOpen(true); };
   const handleDelete = () => { if (deleteId) { deleteClient(deleteId); toast.success("Cliente excluído"); setDeleteId(null); } };
+  const handleOpenExistingClient = (selectedClient: Client) => { setEditingClient(selectedClient); setDialogOpen(true); };
 
   return (
     <div className="space-y-6">
@@ -60,7 +61,7 @@ export default function Clientes() {
           </Table>
         </CardContent>
       </Card>
-      <ClientDialog open={dialogOpen} onOpenChange={setDialogOpen} client={editingClient} />
+      <ClientDialog open={dialogOpen} onOpenChange={setDialogOpen} client={editingClient} onOpenExistingClient={handleOpenExistingClient} />
       <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Confirmar exclusão</AlertDialogTitle><AlertDialogDescription>Tem certeza que deseja excluir este cliente?</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleDelete}>Excluir</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
     </div>
   );
