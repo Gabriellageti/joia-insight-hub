@@ -6,12 +6,22 @@ import { toast } from "sonner";
 import { TemplateBuilder, TemplateBuilderAction } from "@/components/diagnostico/template-builder";
 import { buildDuplicatedTemplateDraft } from "@/lib/diagnostics";
 import { DiagnosticTemplate } from "@/types";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function TemplateCreate() {
   const navigate = useNavigate();
   const { addTemplate } = useData();
+  const { user } = useAuth();
+
+  const userRole = (user?.user_metadata as Record<string, string | undefined> | undefined)?.role;
+  const isAnalyst = (userRole || "").toLowerCase().includes("analista");
 
   const handleSubmit = (template: Parameters<typeof addTemplate>[0], action: TemplateBuilderAction) => {
+    if (isAnalyst) {
+      toast.error("Analistas não podem criar, editar ou publicar templates.");
+      return;
+    }
+
     if (action === "duplicate") {
       const duplicated = addTemplate(buildDuplicatedTemplateDraft(template as DiagnosticTemplate));
       toast.success("Template duplicado");

@@ -137,6 +137,7 @@ export function TemplateBuilder({ initialTemplate, onSubmit }: TemplateBuilderPr
   const { user } = useAuth();
   const userRole = (user?.user_metadata as Record<string, string | undefined> | undefined)?.role;
   const canArchive = Boolean(userRole && (userRole.toLowerCase().includes("admin") || userRole.toLowerCase().includes("gestor")));
+  const isAnalyst = (userRole || "").toLowerCase().includes("analista");
   const [formState, setFormState] = useState<TemplateFormState>({
     name: initialTemplate?.name || "",
     description: initialTemplate?.description || "",
@@ -580,6 +581,11 @@ export function TemplateBuilder({ initialTemplate, onSubmit }: TemplateBuilderPr
   };
 
   const handleAction = (action: TemplateBuilderAction) => {
+    if (isAnalyst) {
+      toast.error("Analistas não podem criar, editar ou publicar templates.");
+      return;
+    }
+
     if (!validateBeforeAction(action)) return;
 
     if (action === "publish") {
@@ -593,6 +599,12 @@ export function TemplateBuilder({ initialTemplate, onSubmit }: TemplateBuilderPr
   };
 
   const handlePublishConfirm = () => {
+    if (isAnalyst) {
+      toast.error("Analistas não podem criar, editar ou publicar templates.");
+      setPublishDialogOpen(false);
+      return;
+    }
+
     const payload = buildPayload("published");
     const nextVersion = calculateNextTemplateVersion(payload.version, publishChangeType);
     const publishedAt = formatDatePtBR(new Date());
@@ -1132,8 +1144,16 @@ export function TemplateBuilder({ initialTemplate, onSubmit }: TemplateBuilderPr
             </AlertDescription>
           </Alert>
         )}
-
         <Card>
+          {isAnalyst && (
+            <Alert variant="destructive" className="mx-6 mt-6">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Acesso restrito</AlertTitle>
+              <AlertDescription>
+                Perfis de Analista podem visualizar templates, mas não criar, editar ou publicar.
+              </AlertDescription>
+            </Alert>
+          )}
           <CardContent className="flex flex-wrap items-center justify-between gap-3 pt-6">
             <div className="flex items-center gap-4 text-sm text-muted-foreground">
               <span className="flex items-center gap-2">
@@ -1144,19 +1164,19 @@ export function TemplateBuilder({ initialTemplate, onSubmit }: TemplateBuilderPr
               </span>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <Button variant="outline" className="gap-2" onClick={() => handleAction("draft")}>
+              <Button variant="outline" className="gap-2" onClick={() => handleAction("draft")} disabled={isAnalyst}>
                 <Save className="h-4 w-4" />
                 Salvar rascunho
               </Button>
-              <Button variant="outline" className="gap-2" onClick={() => handleAction("preview")}>
+              <Button variant="outline" className="gap-2" onClick={() => handleAction("preview")} disabled={isAnalyst}>
                 <Eye className="h-4 w-4" />
                 Preview completo
               </Button>
-              <Button variant="secondary" className="gap-2" onClick={() => handleAction("duplicate")}>
+              <Button variant="secondary" className="gap-2" onClick={() => handleAction("duplicate")} disabled={isAnalyst}>
                 <Copy className="h-4 w-4" />
                 Duplicar
               </Button>
-              <Button className="gap-2" onClick={() => handleAction("publish")}>
+              <Button className="gap-2" onClick={() => handleAction("publish")} disabled={isAnalyst}>
                 <Send className="h-4 w-4" />
                 Publicar
               </Button>
@@ -1243,7 +1263,9 @@ export function TemplateBuilder({ initialTemplate, onSubmit }: TemplateBuilderPr
               <Button variant="outline" onClick={() => setPublishDialogOpen(false)}>
                 Cancelar
               </Button>
-              <Button onClick={handlePublishConfirm}>Publicar template</Button>
+              <Button onClick={handlePublishConfirm} disabled={isAnalyst}>
+                Publicar template
+              </Button>
             </DialogFooter>
           </div>
         </DialogContent>
