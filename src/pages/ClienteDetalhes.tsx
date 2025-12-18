@@ -17,6 +17,14 @@ const riskColors = { low: "bg-green-500/10 text-green-700", medium: "bg-yellow-5
 const riskLabels = { low: "Baixo", medium: "Médio", high: "Alto" };
 const getInitials = (value?: string) => value?.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase() || "--";
 
+// Helper to get address as string
+const getAddressString = (address?: string | { logradouro?: string; cidade?: string; uf?: string }): string => {
+  if (!address) return "";
+  if (typeof address === "string") return address;
+  const parts = [address.logradouro, address.cidade, address.uf].filter(Boolean);
+  return parts.join(", ");
+};
+
 export default function ClienteDetalhes() {
   const { id } = useParams<{ id: string }>();
   const { clients, projects, clientContacts } = useData();
@@ -62,8 +70,8 @@ export default function ClienteDetalhes() {
     {
       id: "address",
       title: "Confirmar endereço",
-      description: client.address ? client.address : "Endereço ainda não informado",
-      completed: Boolean(client.address && client.address.trim().length > 0),
+      description: getAddressString(client.address) || "Endereço ainda não informado",
+      completed: Boolean(getAddressString(client.address).trim().length > 0),
     },
     {
       id: "owners",
@@ -126,7 +134,7 @@ export default function ClienteDetalhes() {
               <div>
                 <p className="text-sm text-muted-foreground">Localização</p>
                 <p className="font-medium">{client.city || "Cidade não informada"}</p>
-                <p className="text-sm text-muted-foreground">{client.address || "Endereço não informado"}</p>
+                <p className="text-sm text-muted-foreground">{getAddressString(client.address) || "Endereço não informado"}</p>
               </div>
             </div>
             <div className="flex items-start gap-3 rounded-lg border border-border p-3">

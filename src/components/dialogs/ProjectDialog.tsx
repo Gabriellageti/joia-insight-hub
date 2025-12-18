@@ -268,7 +268,7 @@ export function ProjectDialog({
       (employee) =>
         employee.status === "active" &&
         RESPONSIBLE_ROLES.includes(
-          (employee.accessRole || employee.role) as string,
+          (employee.accessRole || employee.role) as "Admin" | "Gestor" | "Analista",
         ),
     )
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -472,6 +472,7 @@ export function ProjectDialog({
         opportunities: parsedOpportunities.map((opportunity) => ({
           ...opportunity,
           clientId: payload.clientId,
+          projectId: "", // Will be set by addProject
         })),
         seedStructure: autoStructure,
       });

@@ -489,7 +489,7 @@ export function TemplateBuilder({ initialTemplate, onSubmit }: TemplateBuilderPr
               placeholder="Valor"
             />
             <Select
-              value={current.unit || "numero"}
+              value={current.type === "number" && "unit" in current && current.unit ? current.unit : "numero"}
               onValueChange={(value) =>
                 handleOpportunityConditionChange(sectionId, question.id, (previous) => ({
                   type: "number",
