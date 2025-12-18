@@ -408,7 +408,7 @@ export function ClientDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-w-3xl"
+        className="w-full max-h-[90vh] overflow-y-auto sm:max-w-xl lg:max-w-2xl"
         onKeyDown={(event) => {
           if (event.key === "Escape") {
             event.preventDefault();
