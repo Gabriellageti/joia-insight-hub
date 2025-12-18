@@ -1,7 +1,13 @@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { Slider } from "@/components/ui/slider";
+import { Textarea } from "@/components/ui/textarea";
 import { DiagnosticTemplateStatus, TemplateOpportunityRule, TemplateQuestion, TemplateSection } from "@/types";
 import { AlarmClock, BookOpenText, Layers } from "lucide-react";
 
@@ -34,6 +40,38 @@ const statusVariant: Record<DiagnosticTemplateStatus, "secondary" | "default" | 
   draft: "secondary",
   published: "default",
   archived: "outline",
+};
+
+const getOptionsWithWeight = (question: TemplateQuestion) => {
+  if (question.optionsWithWeight?.length) return question.optionsWithWeight;
+  if (question.options?.length) return question.options.map((label) => ({ label, weight: 1 }));
+  return [] as { label: string; weight?: number | null }[];
+};
+
+const getValidationMessages = (question: TemplateQuestion): string[] => {
+  const messages: string[] = [];
+
+  if (question.required) {
+    messages.push("Resposta obrigatória para o diagnóstico.");
+  }
+
+  if (question.type === "scale" || question.type === "number") {
+    const hasMin = typeof question.minValue === "number";
+    const hasMax = typeof question.maxValue === "number";
+    if (hasMin && hasMax && (question.minValue as number) >= (question.maxValue as number)) {
+      messages.push("O valor mínimo deve ser menor que o máximo.");
+    }
+  }
+
+  if (question.type === "multiple_choice" && getOptionsWithWeight(question).length === 0) {
+    messages.push("Adicione ao menos uma opção para múltipla escolha.");
+  }
+
+  if (question.type === "attachment" && question.allowedFileTypes?.length === 0) {
+    messages.push("Defina ao menos um tipo de arquivo permitido.");
+  }
+
+  return messages;
 };
 
 const formatOpportunityCondition = (rule?: TemplateOpportunityRule): string | null => {
@@ -157,8 +195,96 @@ export function TemplatePreviewPanel({
                     {section.questions?.length ? (
                       section.questions.map((question, questionIndex) => {
                         const conditionLabel = formatOpportunityCondition(question.regraOportunidade);
+                        const optionsWithWeight = getOptionsWithWeight(question);
+                        const validationMessages = getValidationMessages(question);
+                        const scaleMin = question.minValue ?? 0;
+                        const scaleMax = question.maxValue ?? 10;
+                        const safeScaleMax = scaleMax > scaleMin ? scaleMax : scaleMin + 10;
+                        const hasScore = question.includeInScore !== false;
+
+                        const renderFieldPreview = () => {
+                          switch (question.type) {
+                            case "yes_no":
+                              return (
+                                <RadioGroup value="yes" className="grid grid-cols-2 gap-2" disabled>
+                                  <div className="flex items-center space-x-2 rounded-md border px-3 py-2">
+                                    <RadioGroupItem value="yes" id={`${question.id}-yes-static`} />
+                                    <Label htmlFor={`${question.id}-yes-static`}>Sim</Label>
+                                  </div>
+                                  <div className="flex items-center space-x-2 rounded-md border px-3 py-2">
+                                    <RadioGroupItem value="no" id={`${question.id}-no-static`} />
+                                    <Label htmlFor={`${question.id}-no-static`}>Não</Label>
+                                  </div>
+                                </RadioGroup>
+                              );
+                            case "scale":
+                              return (
+                                <div className="space-y-2">
+                                  <Slider value={[scaleMin]} min={scaleMin} max={safeScaleMax} step={1} disabled />
+                                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                    <span>Mín: {scaleMin}</span>
+                                    <span>Máx: {safeScaleMax}</span>
+                                  </div>
+                                </div>
+                              );
+                            case "number":
+                              return (
+                                <Input
+                                  type="number"
+                                  value=""
+                                  placeholder={question.placeholder || "Digite um número"}
+                                  disabled
+                                />
+                              );
+                            case "text":
+                              return (
+                                <Textarea
+                                  placeholder={question.placeholder || "Descreva sua resposta"}
+                                  disabled
+                                  rows={3}
+                                />
+                              );
+                            case "multiple_choice":
+                              return (
+                                <div className="space-y-2">
+                                  {optionsWithWeight.length === 0 ? (
+                                    <p className="text-xs text-muted-foreground">Nenhuma opção configurada.</p>
+                                  ) : (
+                                    optionsWithWeight.map((option, optionIndex) => (
+                                      <div key={`${question.id}-${option.label}-${optionIndex}`} className="flex items-center space-x-2 rounded-md border px-3 py-2">
+                                        <Checkbox disabled id={`${question.id}-${option.label}-preview`} />
+                                        <Label htmlFor={`${question.id}-${option.label}-preview`} className="flex flex-col gap-1">
+                                          <span>{option.label}</span>
+                                          <span className="text-xs text-muted-foreground">Peso {option.weight ?? 1}</span>
+                                        </Label>
+                                      </div>
+                                    ))
+                                  )}
+                                </div>
+                              );
+                            case "attachment":
+                              return (
+                                <div className="space-y-2">
+                                  <div className="rounded-md border px-3 py-2 text-sm text-muted-foreground">Selecione ou arraste um arquivo.</div>
+                                  <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                                    {question.maxFileSizeMB && <Badge variant="outline">Até {question.maxFileSizeMB} MB</Badge>}
+                                    {(question.allowedFileTypes || []).length > 0 ? (
+                                      (question.allowedFileTypes || []).map((type) => (
+                                        <Badge key={type} variant="outline">{type}</Badge>
+                                      ))
+                                    ) : (
+                                      <Badge variant="outline" className="text-muted-foreground">Qualquer tipo</Badge>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            default:
+                              return null;
+                          }
+                        };
+
                         return (
-                          <div key={question.id} className="rounded-md border p-3 space-y-2">
+                          <div key={question.id} className="rounded-md border p-3 space-y-3">
                             <div className="flex items-start justify-between gap-2">
                               <div>
                                 <p className="text-sm font-semibold">
@@ -176,8 +302,22 @@ export function TemplatePreviewPanel({
                             <div className="flex flex-wrap items-center gap-2 text-xs">
                               <Badge variant={criticalityVariants[question.criticality]}>Criticidade: {question.criticality}</Badge>
                               {question.required && <Badge variant="secondary">Obrigatória</Badge>}
+                              {!hasScore && <Badge variant="outline">Não conta no score</Badge>}
                               {question.type === "attachment" && <Badge variant="outline">Evidência</Badge>}
                             </div>
+
+                            <div className="space-y-2">{renderFieldPreview()}</div>
+
+                            {validationMessages.length > 0 && (
+                              <div className="space-y-1">
+                                {validationMessages.map((message, index) => (
+                                  <p key={`${question.id}-validation-${index}`} className="text-xs text-destructive">
+                                    {message}
+                                  </p>
+                                ))}
+                              </div>
+                            )}
+
                             {question.regraOportunidade?.enabled && (
                               <div className="flex flex-wrap items-center gap-2 text-xs">
                                 <Badge>Gera oportunidade</Badge>

@@ -33,6 +33,12 @@ const isAnswered = (value: AnswerValue): boolean => {
   return true;
 };
 
+const getOptionsWithWeight = (question: TemplateQuestion) => {
+  if (question.optionsWithWeight?.length) return question.optionsWithWeight;
+  if (question.options?.length) return question.options.map((label) => ({ label, weight: 1 }));
+  return [] as { label: string; weight?: number | null }[];
+};
+
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
 const formatOpportunityCondition = (rule?: TemplateOpportunityRule): string | null => {
@@ -98,11 +104,15 @@ const normalizeAnswer = (question: TemplateQuestion, value: AnswerValue): number
       return clamp((numericValue - min) / (max - min), 0, 1);
     }
     case "multiple_choice": {
-      if (Array.isArray(value)) {
-        const totalOptions = question.options?.length || value.length || 1;
-        return totalOptions > 0 ? clamp(value.length / totalOptions, 0, 1) : 1;
-      }
-      return 1;
+      const options = getOptionsWithWeight(question);
+      if (!options.length) return null;
+      const selected = Array.isArray(value) ? value : typeof value === "string" ? [value] : [];
+      const totalWeight = options.reduce((sum, option) => sum + (option.weight ?? 1), 0) || options.length;
+      const selectedWeight = options.reduce(
+        (sum, option) => (selected.includes(option.label) ? sum + (option.weight ?? 1) : sum),
+        0
+      );
+      return totalWeight > 0 ? clamp(selectedWeight / totalWeight, 0, 1) : 1;
     }
     case "text":
       return typeof value === "string" && value.trim().length > 0 ? 1 : null;
@@ -166,6 +176,32 @@ const matchesOpportunityCondition = (question: TemplateQuestion, value: AnswerVa
     default:
       return false;
   }
+};
+
+const getValidationMessages = (question: TemplateQuestion, value: AnswerValue): string[] => {
+  const messages: string[] = [];
+
+  if (question.required && !isAnswered(value)) {
+    messages.push("Resposta obrigatória.");
+  }
+
+  if (question.type === "multiple_choice" && getOptionsWithWeight(question).length === 0) {
+    messages.push("Inclua opções para múltipla escolha.");
+  }
+
+  if (question.type === "scale" || question.type === "number") {
+    const hasMin = typeof question.minValue === "number";
+    const hasMax = typeof question.maxValue === "number";
+    if (hasMin && hasMax && (question.minValue as number) >= (question.maxValue as number)) {
+      messages.push("O valor mínimo deve ser menor que o máximo.");
+    }
+  }
+
+  if (question.type === "attachment" && question.allowedFileTypes?.length === 0) {
+    messages.push("Defina tipos de arquivo permitidos.");
+  }
+
+  return messages;
 };
 
 export default function TemplateDiagnosticPreview() {
@@ -402,6 +438,13 @@ export default function TemplateDiagnosticPreview() {
                     const currentValue = responses[question.id];
                     const triggerOpportunity = matchesOpportunityCondition(question, currentValue);
                     const normalized = normalizeAnswer(question, currentValue);
+                    const optionsWithWeight = getOptionsWithWeight(question);
+                    const validationMessages = getValidationMessages(question, currentValue);
+                    const scaleMin = question.minValue ?? 0;
+                    const scaleMax = question.maxValue ?? 10;
+                    const safeScaleMax = scaleMax > scaleMin ? scaleMax : scaleMin + 10;
+                    const sliderValue = typeof currentValue === "number" ? clamp(currentValue as number, scaleMin, safeScaleMax) : scaleMin;
+                    const hasScore = question.includeInScore !== false;
 
                     return (
                       <div key={question.id} className="rounded-md border p-4 space-y-3">
@@ -409,7 +452,7 @@ export default function TemplateDiagnosticPreview() {
                           <div>
                             <p className="text-sm font-semibold flex items-center gap-2">
                               {sectionIndex + 1}.{questionIndex + 1} {question.title}
-                              {question.includeInScore === false && (
+                              {!hasScore && (
                                 <Badge variant="outline" className="text-xs">Não conta no score</Badge>
                               )}
                             </p>
@@ -446,15 +489,15 @@ export default function TemplateDiagnosticPreview() {
                         {question.type === "scale" && (
                           <div className="space-y-2">
                             <Slider
-                              value={[typeof currentValue === "number" ? (currentValue as number) : question.minValue ?? 0]}
+                              value={[sliderValue]}
                               onValueChange={(value) => handleAnswerChange(question.id, value[0])}
-                              min={question.minValue ?? 0}
-                              max={question.maxValue ?? 10}
+                              min={scaleMin}
+                              max={safeScaleMax}
                               step={1}
                             />
                             <div className="flex items-center justify-between text-xs text-muted-foreground">
-                              <span>Min: {question.minValue ?? 0}</span>
-                              <span>Max: {question.maxValue ?? 10}</span>
+                              <span>Min: {scaleMin}</span>
+                              <span>Max: {safeScaleMax}</span>
                               {typeof currentValue === "number" && <span>Resposta: {currentValue}</span>}
                             </div>
                           </div>
@@ -464,30 +507,35 @@ export default function TemplateDiagnosticPreview() {
                           <Input
                             type="number"
                             value={typeof currentValue === "number" ? currentValue : ""}
+                            min={typeof question.minValue === "number" ? question.minValue : undefined}
+                            max={typeof question.maxValue === "number" ? question.maxValue : undefined}
                             onChange={(event) =>
                               handleAnswerChange(
                                 question.id,
                                 event.target.value === "" ? null : Number(event.target.value)
                               )
                             }
-                            placeholder="Digite um número"
+                            placeholder={question.placeholder || "Digite um número"}
                           />
                         )}
 
                         {question.type === "multiple_choice" && (
                           <div className="space-y-2">
-                            {(question.options || ["Opção A", "Opção B"]).map((option) => {
+                            {(optionsWithWeight.length ? optionsWithWeight : [{ label: "Opção A", weight: 1 }, { label: "Opção B", weight: 1 }]).map((option, optionIndex) => {
                               const isChecked = Array.isArray(currentValue)
-                                ? currentValue.includes(option)
+                                ? currentValue.includes(option.label)
                                 : false;
                               return (
-                                <div key={option} className="flex items-center space-x-2 rounded-md border px-3 py-2">
+                                <div key={`${option.label}-${optionIndex}`} className="flex items-center space-x-2 rounded-md border px-3 py-2">
                                   <Checkbox
-                                    id={`${question.id}-${option}`}
+                                    id={`${question.id}-${option.label}`}
                                     checked={isChecked}
-                                    onCheckedChange={(checked) => handleCheckboxChange(question.id, option, Boolean(checked))}
+                                    onCheckedChange={(checked) => handleCheckboxChange(question.id, option.label, Boolean(checked))}
                                   />
-                                  <Label htmlFor={`${question.id}-${option}`}>{option}</Label>
+                                  <Label htmlFor={`${question.id}-${option.label}`} className="flex flex-col gap-1">
+                                    <span>{option.label}</span>
+                                    <span className="text-xs text-muted-foreground">Peso {option.weight ?? 1}</span>
+                                  </Label>
                                 </div>
                               );
                             })}
@@ -498,24 +546,43 @@ export default function TemplateDiagnosticPreview() {
                           <Textarea
                             value={typeof currentValue === "string" ? currentValue : ""}
                             onChange={(event) => handleAnswerChange(question.id, event.target.value)}
-                            placeholder="Digite uma resposta"
+                            placeholder={question.placeholder || "Digite uma resposta"}
                           />
                         )}
 
                         {question.type === "attachment" && (
-                          <div className="flex flex-wrap items-center gap-3">
-                            <Button
-                              variant={isAnswered(currentValue) ? "secondary" : "outline"}
-                              onClick={() => handleAnswerChange(question.id, isAnswered(currentValue) ? null : "evidencia-mock.pdf")}
-                            >
-                              {isAnswered(currentValue) ? "Remover evidência mock" : "Simular upload"}
-                            </Button>
-                            {isAnswered(currentValue) && <span className="text-sm text-muted-foreground">evidencia-mock.pdf</span>}
+                          <div className="space-y-2">
+                            <div className="flex flex-wrap items-center gap-3">
+                              <Button
+                                variant={isAnswered(currentValue) ? "secondary" : "outline"}
+                                onClick={() => handleAnswerChange(question.id, isAnswered(currentValue) ? null : "evidencia-mock.pdf")}
+                              >
+                                {isAnswered(currentValue) ? "Remover evidência mock" : "Simular upload"}
+                              </Button>
+                              {isAnswered(currentValue) && <span className="text-sm text-muted-foreground">evidencia-mock.pdf</span>}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                              {question.maxFileSizeMB && <Badge variant="outline">Até {question.maxFileSizeMB} MB</Badge>}
+                              {(question.allowedFileTypes || []).length > 0 ? (
+                                (question.allowedFileTypes || []).map((type) => (
+                                  <Badge key={`${question.id}-${type}`} variant="outline">{type}</Badge>
+                                ))
+                              ) : (
+                                <Badge variant="outline" className="text-muted-foreground">Qualquer tipo</Badge>
+                              )}
+                            </div>
                           </div>
                         )}
 
-                        {(question.type === "yes_no" || question.type === "scale") && question.helperText && (
-                          <p className="text-xs text-muted-foreground">{question.helperText}</p>
+                        {validationMessages.length > 0 && (
+                          <div className="space-y-1">
+                            {validationMessages.map((message, index) => (
+                              <p key={`${question.id}-validation-${index}`} className="text-xs text-destructive flex items-center gap-1">
+                                <AlertCircle className="h-3 w-3" />
+                                <span>{message}</span>
+                              </p>
+                            ))}
+                          </div>
                         )}
 
                         <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">

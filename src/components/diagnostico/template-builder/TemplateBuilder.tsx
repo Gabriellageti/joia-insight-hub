@@ -27,6 +27,7 @@ import {
   DiagnosticTemplateStatus,
   Opportunity,
   OpportunityRuleCondition,
+  QuestionOption,
   TemplateOpportunityRule,
   TemplateQuestion,
   TemplateSection,
@@ -77,6 +78,10 @@ const createQuestion = (order: number): TemplateQuestion => ({
   helperText: "",
   description: "",
   options: [],
+  optionsWithWeight: [],
+  placeholder: "",
+  maxFileSizeMB: null,
+  allowedFileTypes: [],
 });
 
 const opportunityTypes: Opportunity["type"][] = [
@@ -132,6 +137,26 @@ const buildOpportunityRule = (
 });
 
 const parseNumericInput = (value: string) => (value === "" ? null : Number(value));
+
+const defaultOptionWeight = 1;
+
+const getOptionsWithWeight = (question: TemplateQuestion): QuestionOption[] => {
+  if (question.optionsWithWeight?.length) return question.optionsWithWeight;
+  if (question.options?.length)
+    return question.options.map((label) => ({ label, weight: defaultOptionWeight }));
+  return [];
+};
+
+const normalizeOptions = (options: QuestionOption[]) => ({
+  optionsWithWeight: options,
+  options: options.map((option) => option.label),
+});
+
+const sanitizeFileTypesInput = (value: string) =>
+  value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
 
 export function TemplateBuilder({ initialTemplate, onSubmit }: TemplateBuilderProps) {
   const { user } = useAuth();
@@ -242,6 +267,57 @@ export function TemplateBuilder({ initialTemplate, onSubmit }: TemplateBuilderPr
         };
       }),
     }));
+  };
+
+  const handleQuestionTypeChange = (
+    sectionId: string,
+    question: TemplateQuestion,
+    nextType: TemplateQuestion["type"]
+  ) => {
+    const typeSpecific: Partial<TemplateQuestion> = { type: nextType };
+
+    if (nextType === "scale") {
+      typeSpecific.minValue = question.minValue ?? 0;
+      typeSpecific.maxValue = question.maxValue ?? 10;
+    }
+
+    if (nextType === "number") {
+      typeSpecific.minValue = question.minValue ?? null;
+      typeSpecific.maxValue = question.maxValue ?? null;
+    }
+
+    if (nextType === "text") {
+      typeSpecific.placeholder = question.placeholder || "Digite sua resposta";
+    }
+
+    if (nextType === "multiple_choice") {
+      const options = getOptionsWithWeight(question);
+      const ensuredOptions = options.length
+        ? options
+        : [
+            { label: "Opção 1", weight: defaultOptionWeight },
+            { label: "Opção 2", weight: defaultOptionWeight },
+          ];
+      Object.assign(typeSpecific, normalizeOptions(ensuredOptions));
+    }
+
+    if (nextType === "attachment") {
+      typeSpecific.maxFileSizeMB = question.maxFileSizeMB ?? 25;
+      typeSpecific.allowedFileTypes = question.allowedFileTypes?.length
+        ? question.allowedFileTypes
+        : ["pdf", "jpg", "png"];
+    }
+
+    const nextRule = question.regraOportunidade
+      ? buildOpportunityRule({ ...question, type: nextType }, {
+          condition: syncConditionWithType(question.regraOportunidade.condition, nextType),
+        })
+      : undefined;
+
+    updateQuestion(sectionId, question.id, {
+      ...typeSpecific,
+      regraOportunidade: nextRule,
+    });
   };
 
   const updateQuestionRule = (
@@ -801,7 +877,10 @@ export function TemplateBuilder({ initialTemplate, onSubmit }: TemplateBuilderPr
                           }}
                           onDrop={() => handleQuestionDrop(section.id)}
                         >
-                          {section.questions.map((question, questionIndex) => (
+                          {section.questions.map((question, questionIndex) => {
+                            const optionsWithWeight = getOptionsWithWeight(question);
+
+                            return (
                             <div
                               key={question.id}
                               className={`rounded-md border p-3 space-y-3 ${
@@ -843,23 +922,13 @@ export function TemplateBuilder({ initialTemplate, onSubmit }: TemplateBuilderPr
                               </div>
                               <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-center">
                                 <div className="space-y-2">
-                                  <Label>Tipo</Label>
-                                  <Select
-                                    value={question.type}
-                                    onValueChange={(value) => {
-                                      const nextType = value as TemplateQuestion["type"];
-                                      const nextRule = question.regraOportunidade
-                                        ? buildOpportunityRule({ ...question, type: nextType }, {
-                                            condition: syncConditionWithType(question.regraOportunidade.condition, nextType),
-                                          })
-                                        : undefined;
-
-                                      updateQuestion(section.id, question.id, {
-                                        type: nextType,
-                                        regraOportunidade: nextRule,
-                                      });
-                                    }}
-                                  >
+                                <Label>Tipo</Label>
+                                <Select
+                                  value={question.type}
+                                  onValueChange={(value) =>
+                                    handleQuestionTypeChange(section.id, question, value as TemplateQuestion["type"])
+                                  }
+                                >
                                     <SelectTrigger>
                                       <SelectValue />
                                     </SelectTrigger>
@@ -942,25 +1011,198 @@ export function TemplateBuilder({ initialTemplate, onSubmit }: TemplateBuilderPr
                                   placeholder="Dica rápida para quem está respondendo"
                                 />
                               </div>
-                              {question.type === "multiple_choice" && (
+
+                              {question.type === "scale" && (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                  <div className="space-y-2">
+                                    <Label>Mínimo</Label>
+                                    <Input
+                                      type="number"
+                                      value={question.minValue ?? 0}
+                                      onChange={(event) =>
+                                        updateQuestion(section.id, question.id, {
+                                          minValue: parseNumericInput(event.target.value) ?? 0,
+                                        })
+                                      }
+                                    />
+                                    <p className="text-xs text-muted-foreground">Valor inicial da escala.</p>
+                                  </div>
+                                  <div className="space-y-2">
+                                    <Label>Máximo</Label>
+                                    <Input
+                                      type="number"
+                                      value={question.maxValue ?? 10}
+                                      onChange={(event) =>
+                                        updateQuestion(section.id, question.id, {
+                                          maxValue: parseNumericInput(event.target.value) ?? 10,
+                                        })
+                                      }
+                                    />
+                                    <p className="text-xs text-muted-foreground">Valor final exibido no slider.</p>
+                                  </div>
+                                </div>
+                              )}
+
+                              {question.type === "number" && (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                  <div className="space-y-2">
+                                    <Label>Valor mínimo (opcional)</Label>
+                                    <Input
+                                      type="number"
+                                      value={question.minValue ?? ""}
+                                      onChange={(event) =>
+                                        updateQuestion(section.id, question.id, {
+                                          minValue: parseNumericInput(event.target.value),
+                                        })
+                                      }
+                                      placeholder="Sem mínimo"
+                                    />
+                                  </div>
+                                  <div className="space-y-2">
+                                    <Label>Valor máximo (opcional)</Label>
+                                    <Input
+                                      type="number"
+                                      value={question.maxValue ?? ""}
+                                      onChange={(event) =>
+                                        updateQuestion(section.id, question.id, {
+                                          maxValue: parseNumericInput(event.target.value),
+                                        })
+                                      }
+                                      placeholder="Sem limite"
+                                    />
+                                  </div>
+                                </div>
+                              )}
+
+                              {question.type === "text" && (
                                 <div className="space-y-2">
-                                  <Label>Opções de resposta</Label>
-                                  <Textarea
-                                    value={(question.options || []).join("\n")}
+                                  <Label>Placeholder</Label>
+                                  <Input
+                                    value={question.placeholder || ""}
                                     onChange={(event) =>
-                                      updateQuestion(section.id, question.id, {
-                                        options: event.target.value
-                                          .split("\n")
-                                          .map((item) => item.trim())
-                                          .filter(Boolean),
-                                      })
+                                      updateQuestion(section.id, question.id, { placeholder: event.target.value })
                                     }
-                                    placeholder={"Uma opção por linha"}
-                                    rows={3}
+                                    placeholder="Digite sua resposta"
                                   />
+                                  <p className="text-xs text-muted-foreground">Texto exibido dentro do campo de resposta.</p>
+                                </div>
+                              )}
+
+                              {question.type === "multiple_choice" && (
+                                <div className="space-y-3">
+                                  <div className="flex items-center justify-between">
+                                    <Label className="text-sm font-medium">Opções de resposta</Label>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() =>
+                                        updateQuestion(section.id, question.id, {
+                                          ...normalizeOptions([
+                                            ...optionsWithWeight,
+                                            {
+                                              label: `Opção ${optionsWithWeight.length + 1}`,
+                                              weight: defaultOptionWeight,
+                                            },
+                                          ]),
+                                        })
+                                      }
+                                    >
+                                      <Plus className="h-4 w-4 mr-1" />
+                                      Adicionar opção
+                                    </Button>
+                                  </div>
+
+                                  <div className="space-y-2">
+                                    {optionsWithWeight.length === 0 && (
+                                      <p className="text-xs text-muted-foreground">Inclua pelo menos uma opção.</p>
+                                    )}
+                                    {optionsWithWeight.map((option, optionIndex) => (
+                                      <div key={`${question.id}-option-${optionIndex}`} className="grid grid-cols-1 md:grid-cols-[1fr,120px,40px] gap-2 items-center">
+                                        <Input
+                                          value={option.label}
+                                          onChange={(event) => {
+                                            const nextOptions = optionsWithWeight.map((current, currentIndex) =>
+                                              currentIndex === optionIndex
+                                                ? { ...current, label: event.target.value }
+                                                : current
+                                            );
+                                            updateQuestion(section.id, question.id, {
+                                              ...normalizeOptions(nextOptions),
+                                            });
+                                          }}
+                                          placeholder={`Opção ${optionIndex + 1}`}
+                                        />
+                                        <Input
+                                          type="number"
+                                          min={0}
+                                          value={option.weight ?? defaultOptionWeight}
+                                          onChange={(event) => {
+                                            const nextOptions = optionsWithWeight.map((current, currentIndex) =>
+                                              currentIndex === optionIndex
+                                                ? { ...current, weight: parseNumericInput(event.target.value) ?? defaultOptionWeight }
+                                                : current
+                                            );
+                                            updateQuestion(section.id, question.id, {
+                                              ...normalizeOptions(nextOptions),
+                                            });
+                                          }}
+                                        />
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="icon"
+                                          className="text-destructive"
+                                          onClick={() => {
+                                            const nextOptions = optionsWithWeight.filter((_, currentIndex) => currentIndex !== optionIndex);
+                                            updateQuestion(section.id, question.id, {
+                                              ...normalizeOptions(nextOptions),
+                                            });
+                                          }}
+                                          disabled={optionsWithWeight.length <= 1}
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                      </div>
+                                    ))}
+                                  </div>
+
                                   <p className="text-xs text-muted-foreground">
-                                    As opções listadas serão usadas no preview e na condição de oportunidade.
+                                    Use pesos para equilibrar opções e refletir impacto na nota ou nas regras de oportunidade.
                                   </p>
+                                </div>
+                              )}
+
+                              {question.type === "attachment" && (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                  <div className="space-y-2">
+                                    <Label>Tamanho máximo (MB)</Label>
+                                    <Input
+                                      type="number"
+                                      min={1}
+                                      value={question.maxFileSizeMB ?? ""}
+                                      onChange={(event) =>
+                                        updateQuestion(section.id, question.id, {
+                                          maxFileSizeMB: parseNumericInput(event.target.value),
+                                        })
+                                      }
+                                      placeholder="Ex.: 25"
+                                    />
+                                    <p className="text-xs text-muted-foreground">Limite por arquivo enviado.</p>
+                                  </div>
+                                  <div className="space-y-2">
+                                    <Label>Tipos permitidos</Label>
+                                    <Input
+                                      value={(question.allowedFileTypes || []).join(", ")}
+                                      onChange={(event) =>
+                                        updateQuestion(section.id, question.id, {
+                                          allowedFileTypes: sanitizeFileTypesInput(event.target.value),
+                                        })
+                                      }
+                                      placeholder="pdf, jpg, png"
+                                    />
+                                    <p className="text-xs text-muted-foreground">Separe por vírgula para limitar extensões.</p>
+                                  </div>
                                 </div>
                               )}
                               <div className="rounded-md border bg-muted/40 p-3 space-y-3">
@@ -1114,7 +1356,8 @@ export function TemplateBuilder({ initialTemplate, onSubmit }: TemplateBuilderPr
                                 )}
                               </div>
                             </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       ) : (
                         <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground text-center">
