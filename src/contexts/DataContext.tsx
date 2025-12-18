@@ -23,6 +23,7 @@ import {
   DEFAULT_PHASES,
   resolveProgressValue,
 } from "@/lib/projects/progress";
+import { buildStatusAuditMessage, resolveProjectStatus } from "@/lib/projects/status";
 
 interface DataContextType {
   // Clients
@@ -33,7 +34,7 @@ interface DataContextType {
 
   // Projects
   projects: Project[];
-  addProject: (project: Omit<Project, "id" | "createdAt" | "progress">) => void;
+  addProject: (project: Omit<Project, "id" | "createdAt" | "progress" | "status" | "statusReason" | "statusSource">) => void;
   updateProject: (id: string, project: Partial<Project>) => void;
   deleteProject: (id: string) => void;
 
@@ -196,6 +197,16 @@ const normalizeProject = (project: LegacyProject): Project => {
     typeof project.manualProgress === "number" ? project.manualProgress : project.progressOverrideEnabled ? 0 : null;
   const progressOverrideEnabled = project.progressOverrideEnabled ?? false;
   const progress = typeof project.progress === "number" ? project.progress : 0;
+  const statusOverrideEnabled = project.statusOverrideEnabled ?? false;
+  const statusOverrideValue =
+    typeof project.statusOverrideValue !== "undefined"
+      ? project.statusOverrideValue
+      : statusOverrideEnabled
+        ? project.status || "green"
+        : null;
+  const statusReason =
+    project.statusReason || (statusOverrideEnabled ? "Status forçado manualmente" : "Sem alertas críticos");
+  const statusSource = project.statusSource || (statusOverrideEnabled ? "manual" : "calculated");
   return {
     id: project.id || generateId(),
     name: project.name || "Projeto",
@@ -210,6 +221,13 @@ const normalizeProject = (project: LegacyProject): Project => {
     manualProgress,
     progressJustification: project.progressJustification?.trim() || "",
     status: project.status || "green",
+    statusReason,
+    statusSource,
+    statusOverrideEnabled,
+    statusOverrideValue: statusOverrideValue ?? null,
+    statusOverrideJustification: project.statusOverrideJustification?.trim() || "",
+    statusOverrideExpiresAt: project.statusOverrideExpiresAt || undefined,
+    statusOverrideAuthor: project.statusOverrideAuthor || "",
     responsible: project.responsible || "",
     startDate: project.startDate || "",
     endDate: project.endDate || "",
@@ -651,6 +669,23 @@ export function DataProvider({ children }: { children: ReactNode }) {
     (projectId: string) => deliverables.filter((deliverable) => deliverable.projectId === projectId),
     [deliverables]
   );
+  const projectMeetings = useCallback(
+    (projectId: string) => meetings.filter((meeting) => meeting.projectId === projectId),
+    [meetings]
+  );
+  const projectIndicators = useCallback(
+    (projectId: string) => indicators.filter((indicator) => indicator.projectId === projectId),
+    [indicators]
+  );
+  const projectDocuments = useCallback(
+    (projectId: string) => documents.filter((document) => document.projectId === projectId),
+    [documents]
+  );
+  const projectContracts = useCallback(
+    (projectId: string, clientId: string) =>
+      contracts.filter((contract) => contract.projectId === projectId || (!contract.projectId && contract.clientId === clientId)),
+    [contracts]
+  );
 
   const computeProgressValue = useCallback(
     (project: Project) => {
@@ -674,10 +709,55 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [projectDeliverables, projectTasks]
   );
 
-  const deriveAuditLog = (previous: Project | undefined, next: Project): ProjectAuditLogEntry | null => {
+  const computeProjectWithDerivedState = useCallback(
+    (project: Project) => {
+      const normalizedProject = normalizeProject(project);
+      const progressState = computeProgressValue(normalizedProject);
+      const statusState = resolveProjectStatus({
+        project: normalizedProject,
+        tasks: projectTasks(normalizedProject.id),
+        meetings: projectMeetings(normalizedProject.id),
+        indicators: projectIndicators(normalizedProject.id),
+        documents: projectDocuments(normalizedProject.id),
+        contracts: projectContracts(normalizedProject.id, normalizedProject.clientId),
+        client: clients.find((client) => client.id === normalizedProject.clientId),
+      });
+
+      const nextProject: Project = {
+        ...normalizedProject,
+        ...progressState,
+        status: statusState.status,
+        statusReason: statusState.reason,
+        statusSource: statusState.source,
+      };
+
+      if (statusState.overrideExpired && normalizedProject.statusOverrideEnabled) {
+        nextProject.statusOverrideEnabled = false;
+        nextProject.statusOverrideValue = null;
+        nextProject.statusOverrideExpiresAt = undefined;
+      }
+
+      return { project: nextProject, statusOverrideExpired: statusState.overrideExpired };
+    },
+    [
+      clients,
+      computeProgressValue,
+      projectContracts,
+      projectDocuments,
+      projectIndicators,
+      projectMeetings,
+      projectTasks,
+    ]
+  );
+
+  const deriveAuditLogs = useCallback((
+    previous: Project | undefined,
+    next: Project,
+    options?: { statusOverrideExpired?: boolean }
+  ): ProjectAuditLogEntry[] => {
+    const entries: ProjectAuditLogEntry[] = [];
     const overrideChanged = previous?.progressOverrideEnabled !== next.progressOverrideEnabled;
-    const manualChanged =
-      next.progressOverrideEnabled && previous && previous.manualProgress !== next.manualProgress;
+    const manualChanged = next.progressOverrideEnabled && previous && previous.manualProgress !== next.manualProgress;
     const justificationChanged =
       next.progressOverrideEnabled && previous && previous.progressJustification !== next.progressJustification;
 
@@ -688,32 +768,58 @@ export function DataProvider({ children }: { children: ReactNode }) {
         manualProgress: next.manualProgress,
         justification: next.progressJustification,
       });
-      return { id: generateId(), projectId: next.id, message, createdAt: getDate() };
+      entries.push({ id: generateId(), projectId: next.id, message, createdAt: getDate() });
+    } else if (overrideChanged || manualChanged || justificationChanged) {
+      const message = buildProgressAuditMessage({
+        projectName: next.name,
+        overrideEnabled: next.progressOverrideEnabled,
+        manualProgress: next.manualProgress,
+        justification: next.progressJustification,
+        previousManualProgress: previous?.manualProgress,
+        previousOverrideEnabled: previous?.progressOverrideEnabled,
+      });
+
+      if (message) {
+        entries.push({ id: generateId(), projectId: next.id, message, createdAt: getDate() });
+      }
     }
 
-    if (!overrideChanged && !manualChanged && !justificationChanged) return null;
-
-    const message = buildProgressAuditMessage({
+    const statusMessage = buildStatusAuditMessage({
       projectName: next.name,
-      overrideEnabled: next.progressOverrideEnabled,
-      manualProgress: next.manualProgress,
-      justification: next.progressJustification,
-      previousManualProgress: previous?.manualProgress,
-      previousOverrideEnabled: previous?.progressOverrideEnabled,
+      overrideEnabled: Boolean(next.statusOverrideEnabled),
+      overrideValue: next.statusOverrideValue || next.status,
+      justification: next.statusOverrideJustification,
+      expiresAt: next.statusOverrideExpiresAt,
+      previousOverrideEnabled: previous?.statusOverrideEnabled,
+      previousOverrideValue: previous?.statusOverrideValue,
+      expired: options?.statusOverrideExpired,
+      author: next.statusOverrideAuthor,
     });
 
-    return { id: generateId(), projectId: next.id, message, createdAt: getDate() };
-  };
+    if (statusMessage) {
+      entries.push({ id: generateId(), projectId: next.id, message: statusMessage, createdAt: getDate() });
+    }
+
+    return entries;
+  }, []);
 
   useEffect(() => {
+    const auditEntries: ProjectAuditLogEntry[] = [];
     setProjects((prev) =>
       prev.map((project) => {
-        const normalizedProject = normalizeProject(project);
-        const computed = computeProgressValue(normalizedProject);
-        return { ...normalizedProject, ...computed };
+        const { project: nextProject, statusOverrideExpired } = computeProjectWithDerivedState(project);
+        const derivedLogs = deriveAuditLogs(project, nextProject, { statusOverrideExpired });
+        if (derivedLogs.length) {
+          auditEntries.push(...derivedLogs);
+        }
+        return nextProject;
       })
     );
-  }, [computeProgressValue, setProjects]);
+
+    if (auditEntries.length > 0) {
+      setProjectAuditLogs((prev) => [...prev, ...auditEntries]);
+    }
+  }, [computeProjectWithDerivedState, deriveAuditLogs, setProjectAuditLogs, setProjects]);
 
   const value: DataContextType = {
     clients,
@@ -740,29 +846,27 @@ export function DataProvider({ children }: { children: ReactNode }) {
         id: projectId,
         createdAt: getDate(),
       });
-      const computed = computeProgressValue(baseProject);
-      const newProject = { ...baseProject, ...computed };
-      const auditLog = deriveAuditLog(undefined, newProject);
+      const { project: newProject, statusOverrideExpired } = computeProjectWithDerivedState(baseProject);
+      const auditLogs = deriveAuditLogs(undefined, newProject, { statusOverrideExpired });
 
       setProjects((prev) => [...prev, newProject]);
-      if (auditLog) {
-        setProjectAuditLogs((prev) => [...prev, auditLog]);
+      if (auditLogs.length) {
+        setProjectAuditLogs((prev) => [...prev, ...auditLogs]);
       }
     },
     updateProject: (id, project) => {
-      let auditLog: ProjectAuditLogEntry | null = null;
+      let auditLogs: ProjectAuditLogEntry[] = [];
       setProjects((prev) =>
         prev.map((p) => {
           if (p.id !== id) return p;
           const mergedProject = normalizeProject({ ...p, ...project });
-          const computed = computeProgressValue(mergedProject);
-          const nextProject = { ...mergedProject, ...computed };
-          auditLog = deriveAuditLog(p, nextProject);
+          const { project: nextProject, statusOverrideExpired } = computeProjectWithDerivedState(mergedProject);
+          auditLogs = deriveAuditLogs(p, nextProject, { statusOverrideExpired });
           return nextProject;
         })
       );
-      if (auditLog) {
-        setProjectAuditLogs((prev) => [...prev, auditLog!]);
+      if (auditLogs.length) {
+        setProjectAuditLogs((prev) => [...prev, ...auditLogs]);
       }
     },
     deleteProject: (id) => setProjects((prev) => prev.filter((p) => p.id !== id)),
