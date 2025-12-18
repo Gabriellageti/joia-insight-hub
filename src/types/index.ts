@@ -27,6 +27,9 @@ export interface Client {
   // Estrutura atual (padrão)
   razaoSocial: string;
   nomeFantasia?: string;
+  /** Compatibilidade com cadastros legados */
+  name?: string;
+  tradeName?: string;
   cnpj?: string;
   segmentoTags: string[];
   status: "ativo" | "inativo";
