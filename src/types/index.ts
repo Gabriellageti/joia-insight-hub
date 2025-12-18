@@ -8,6 +8,9 @@ export interface Client {
   segment: string;
   city: string;
   address?: string;
+  primaryContactName?: string;
+  primaryContactEmail?: string;
+  primaryContactPhone?: string;
   status: "ativo" | "inativo";
   projects: number;
   nps: number;
