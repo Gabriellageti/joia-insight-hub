@@ -1,20 +1,41 @@
 // Types for JoIA Ops
 
+export interface ClientContactInfo {
+  nome: string;
+  whatsapp?: string;
+  email?: string;
+}
+
+export interface ClientAddress {
+  cep?: string;
+  logradouro?: string;
+  numero?: string;
+  complemento?: string;
+  bairro?: string;
+  cidade?: string;
+  uf?: string;
+}
+
+export interface ClientRelationshipPreferences {
+  diaReuniao?: string;
+  frequencia?: "semanal" | "quinzenal" | "mensal";
+}
+
 export interface Client {
   id: string;
-  name: string;
-  tradeName?: string;
+  razaoSocial: string;
+  nomeFantasia?: string;
   cnpj?: string;
-  segment: string;
-  city: string;
-  address?: string;
+  segmentoTags: string[];
   status: "ativo" | "inativo";
+  contatoPrincipal: ClientContactInfo;
+  endereco: ClientAddress;
+  observacoesInternas?: string;
+  preferenciasRelacionamento: ClientRelationshipPreferences;
   projects: number;
   nps: number;
   risk: "low" | "medium" | "high";
   lastContact: string;
-  preferredMeetingDay?: string;
-  followUpFrequency?: "semanal" | "quinzenal" | "mensal";
   createdAt: string;
 }
 

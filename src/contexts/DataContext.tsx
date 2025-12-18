@@ -89,19 +89,135 @@ const DataContext = createContext<DataContextType | undefined>(undefined);
 const generateId = () => Math.random().toString(36).substring(2, 15);
 const getDate = () => new Date().toLocaleDateString('pt-BR');
 
+type LegacyClient = Partial<Client> & {
+  name?: string;
+  tradeName?: string;
+  segment?: string;
+  city?: string;
+  address?: string;
+  preferredMeetingDay?: string;
+  followUpFrequency?: "semanal" | "quinzenal" | "mensal";
+};
+
+const normalizeClient = (client: LegacyClient): Client => {
+  const segmentoTags = (client.segmentoTags && client.segmentoTags.length > 0
+    ? client.segmentoTags
+    : client.segment
+      ? [client.segment]
+      : []
+  ).map((tag) => tag.trim()).filter(Boolean);
+
+  return {
+    id: client.id || generateId(),
+    razaoSocial: client.razaoSocial || client.nomeFantasia || client.name || "Cliente sem razão social",
+    nomeFantasia: client.nomeFantasia || client.tradeName || "",
+    cnpj: client.cnpj || "",
+    segmentoTags,
+    status: client.status || "ativo",
+    contatoPrincipal: {
+      nome: client.contatoPrincipal?.nome || "",
+      whatsapp: client.contatoPrincipal?.whatsapp || "",
+      email: client.contatoPrincipal?.email || "",
+    },
+    endereco: {
+      cep: client.endereco?.cep || "",
+      logradouro: client.endereco?.logradouro || client.address || "",
+      numero: client.endereco?.numero || "",
+      complemento: client.endereco?.complemento || "",
+      bairro: client.endereco?.bairro || "",
+      cidade: client.endereco?.cidade || client.city || "",
+      uf: client.endereco?.uf || "",
+    },
+    observacoesInternas: client.observacoesInternas || "",
+    preferenciasRelacionamento: {
+      diaReuniao: client.preferenciasRelacionamento?.diaReuniao || client.preferredMeetingDay || "",
+      frequencia: client.preferenciasRelacionamento?.frequencia || client.followUpFrequency || "semanal",
+    },
+    projects: client.projects ?? 0,
+    nps: client.nps ?? 0,
+    risk: client.risk || "low",
+    lastContact: client.lastContact || getDate(),
+    createdAt: client.createdAt || getDate(),
+  };
+};
+
 // Initial mock data
 const initialClients: Client[] = [
-  { id: "1", name: "Empresa ABC Ltda", segment: "Indústria", city: "São Paulo", status: "ativo", projects: 2, nps: 9, risk: "low", lastContact: "15/12/2024", createdAt: "01/10/2024" },
-  { id: "2", name: "Indústria XYZ S.A.", segment: "Manufatura", city: "Campinas", status: "ativo", projects: 1, nps: 7, risk: "medium", lastContact: "10/12/2024", createdAt: "15/09/2024" },
-  { id: "3", name: "Comércio 123", segment: "Varejo", city: "Rio de Janeiro", status: "ativo", projects: 3, nps: 8, risk: "low", lastContact: "18/12/2024", createdAt: "01/08/2024" },
-  { id: "4", name: "Serviços JKL", segment: "Serviços", city: "Belo Horizonte", status: "inativo", projects: 0, nps: 6, risk: "high", lastContact: "01/11/2024", createdAt: "01/06/2024" },
+  {
+    id: "1",
+    razaoSocial: "Empresa ABC Ltda",
+    nomeFantasia: "ABC Indústrias",
+    cnpj: "12.345.678/0001-90",
+    segmentoTags: ["Indústria", "Manufatura"],
+    status: "ativo",
+    contatoPrincipal: { nome: "Paula Andrade", whatsapp: "+55 11 98888-1111", email: "paula.andrade@abc.com" },
+    endereco: { cep: "01000-000", logradouro: "Rua das Flores", numero: "123", complemento: "Conj. 12", bairro: "Centro", cidade: "São Paulo", uf: "SP" },
+    observacoesInternas: "Cliente estratégico focado em redução de custos e eficiência operacional.",
+    preferenciasRelacionamento: { diaReuniao: "Quarta", frequencia: "semanal" },
+    projects: 2,
+    nps: 9,
+    risk: "low",
+    lastContact: "15/12/2024",
+    createdAt: "01/10/2024"
+  },
+  {
+    id: "2",
+    razaoSocial: "Indústria XYZ S.A.",
+    nomeFantasia: "XYZ Manufatura",
+    cnpj: "98.765.432/0001-00",
+    segmentoTags: ["Manufatura"],
+    status: "ativo",
+    contatoPrincipal: { nome: "Rodrigo Lima", whatsapp: "+55 19 97777-2222", email: "rodrigo.lima@xyz.com" },
+    endereco: { cep: "13000-000", logradouro: "Avenida das Américas", numero: "500", bairro: "Jardim América", cidade: "Campinas", uf: "SP" },
+    observacoesInternas: "Equipe aberta a melhorias rápidas, priorizar quick wins.",
+    preferenciasRelacionamento: { diaReuniao: "Terça", frequencia: "quinzenal" },
+    projects: 1,
+    nps: 7,
+    risk: "medium",
+    lastContact: "10/12/2024",
+    createdAt: "15/09/2024"
+  },
+  {
+    id: "3",
+    razaoSocial: "Comércio 123 Ltda",
+    nomeFantasia: "Loja 123",
+    cnpj: "11.222.333/0001-44",
+    segmentoTags: ["Varejo", "E-commerce"],
+    status: "ativo",
+    contatoPrincipal: { nome: "Fernanda Souza", whatsapp: "+55 21 96666-3333", email: "fernanda@comercio123.com" },
+    endereco: { cep: "20000-000", logradouro: "Rua do Mercado", numero: "45", complemento: "Sala 2", bairro: "Centro", cidade: "Rio de Janeiro", uf: "RJ" },
+    observacoesInternas: "Foco em digitalização do estoque e canais online.",
+    preferenciasRelacionamento: { diaReuniao: "Quinta", frequencia: "mensal" },
+    projects: 3,
+    nps: 8,
+    risk: "low",
+    lastContact: "18/12/2024",
+    createdAt: "01/08/2024"
+  },
+  {
+    id: "4",
+    razaoSocial: "Serviços JKL ME",
+    nomeFantasia: "JKL Serviços",
+    cnpj: "22.333.444/0001-55",
+    segmentoTags: ["Serviços"],
+    status: "inativo",
+    contatoPrincipal: { nome: "Juliana Castro", whatsapp: "+55 31 95555-4444", email: "juliana@jklservicos.com" },
+    endereco: { cep: "30000-000", logradouro: "Rua Central", numero: "900", bairro: "Savassi", cidade: "Belo Horizonte", uf: "MG" },
+    observacoesInternas: "Retomar contato após revisão de proposta anual.",
+    preferenciasRelacionamento: { diaReuniao: "Segunda", frequencia: "mensal" },
+    projects: 0,
+    nps: 6,
+    risk: "high",
+    lastContact: "01/11/2024",
+    createdAt: "01/06/2024"
+  },
 ];
 
 const initialProjects: Project[] = [
-  { id: "1", name: "Otimização de Compras", clientId: "1", clientName: "Empresa ABC", phase: "Estruturação", progress: 75, status: "green", responsible: "Ana Silva", startDate: "01/10/2024", endDate: "31/01/2025", createdAt: "01/10/2024" },
-  { id: "2", name: "Gestão de Estoque", clientId: "2", clientName: "Indústria XYZ", phase: "Quick wins", progress: 45, status: "yellow", responsible: "Carlos Santos", startDate: "15/11/2024", endDate: "28/02/2025", createdAt: "15/11/2024" },
-  { id: "3", name: "Controle Financeiro", clientId: "3", clientName: "Comércio 123", phase: "Diagnóstico", progress: 20, status: "red", responsible: "Maria Oliveira", startDate: "01/12/2024", endDate: "31/03/2025", createdAt: "01/12/2024" },
-  { id: "4", name: "Processos de Vendas", clientId: "4", clientName: "Serviços JKL", phase: "Acompanhamento", progress: 90, status: "green", responsible: "João Costa", startDate: "01/08/2024", endDate: "31/12/2024", createdAt: "01/08/2024" },
+  { id: "1", name: "Otimização de Compras", clientId: "1", clientName: "ABC Indústrias", phase: "Estruturação", progress: 75, status: "green", responsible: "Ana Silva", startDate: "01/10/2024", endDate: "31/01/2025", createdAt: "01/10/2024" },
+  { id: "2", name: "Gestão de Estoque", clientId: "2", clientName: "XYZ Manufatura", phase: "Quick wins", progress: 45, status: "yellow", responsible: "Carlos Santos", startDate: "15/11/2024", endDate: "28/02/2025", createdAt: "15/11/2024" },
+  { id: "3", name: "Controle Financeiro", clientId: "3", clientName: "Loja 123", phase: "Diagnóstico", progress: 20, status: "red", responsible: "Maria Oliveira", startDate: "01/12/2024", endDate: "31/03/2025", createdAt: "01/12/2024" },
+  { id: "4", name: "Processos de Vendas", clientId: "4", clientName: "JKL Serviços", phase: "Acompanhamento", progress: 90, status: "green", responsible: "João Costa", startDate: "01/08/2024", endDate: "31/12/2024", createdAt: "01/08/2024" },
 ];
 
 const initialTasks: Task[] = [
@@ -188,10 +304,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [contracts, setContracts] = useLocalStorage<Contract[]>('joia_contracts', []);
   const [expenses, setExpenses] = useLocalStorage<Expense[]>('joia_expenses', []);
 
+  useEffect(() => {
+    setClients(prev => prev.map(normalizeClient));
+  }, [setClients]);
+
   const value: DataContextType = {
     clients,
-    addClient: (client) => setClients(prev => [...prev, { ...client, id: generateId(), createdAt: getDate() }]),
-    updateClient: (id, client) => setClients(prev => prev.map(c => c.id === id ? { ...c, ...client } : c)),
+    addClient: (client) => setClients(prev => [...prev, normalizeClient({ ...client, id: generateId(), createdAt: getDate(), lastContact: getDate() })]),
+    updateClient: (id, client) => setClients(prev => prev.map(c => c.id === id ? normalizeClient({ ...c, ...client }) : c)),
     deleteClient: (id) => setClients(prev => prev.filter(c => c.id !== id)),
 
     projects,
