@@ -499,7 +499,7 @@ export function ProjectDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-3xl overflow-hidden p-0 flex flex-col">
+      <DialogContent className="max-h-[90vh] max-w-3xl p-0 flex flex-col overflow-y-auto">
         <form onSubmit={handleSubmit} className="flex h-full flex-col">
           <DialogHeader className="px-6 pt-6">
             <DialogTitle>
@@ -507,7 +507,7 @@ export function ProjectDialog({
             </DialogTitle>
           </DialogHeader>
 
-          <ScrollArea className="flex-1 px-6 pb-6">
+          <ScrollArea className="flex-1 px-6 pb-6 max-h-[calc(90vh-72px)] overflow-y-auto">
             <div className="grid grid-cols-2 gap-4 py-4">
               <div className="space-y-2">
                 <Label htmlFor="name">Nome do Projeto *</Label>
