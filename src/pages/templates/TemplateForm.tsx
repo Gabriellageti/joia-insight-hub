@@ -44,6 +44,7 @@ const createQuestion = (order: number): TemplateQuestion => ({
   criticality: "media",
   required: true,
   order,
+  options: [],
 });
 
 export function TemplateForm({ initialTemplate, onSubmit, submitLabel }: TemplateFormProps) {
@@ -342,6 +343,7 @@ export function TemplateForm({ initialTemplate, onSubmit, submitLabel }: Templat
                                     <SelectItem value="scale">Escala</SelectItem>
                                     <SelectItem value="text">Texto</SelectItem>
                                     <SelectItem value="number">Número</SelectItem>
+                                    <SelectItem value="multiple_choice">Múltipla escolha</SelectItem>
                                     <SelectItem value="attachment">Evidência</SelectItem>
                                   </SelectContent>
                                 </Select>

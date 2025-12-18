@@ -8,7 +8,7 @@ import { TemplatePageHeader } from "./TemplatePageHeader";
 import { useData } from "@/contexts/DataContext";
 import { formatDatePtBR } from "@/lib/dates";
 import { toast } from "sonner";
-import { DiagnosticTemplate } from "@/types";
+import { DiagnosticTemplate, TemplateOpportunityRule } from "@/types";
 import { AlarmClock, BookOpenText, Copy, Layers } from "lucide-react";
 
 const statusLabels: Record<DiagnosticTemplate["status"], string> = {
@@ -22,8 +22,48 @@ const questionTypeLabels = {
   scale: "Escala",
   text: "Texto",
   number: "Número",
+  multiple_choice: "Múltipla escolha",
   attachment: "Evidência",
 } as const;
+
+const formatOpportunityCondition = (rule?: TemplateOpportunityRule): string | null => {
+  if (!rule?.enabled) return null;
+
+  const condition = rule.condition;
+  if (!condition) return "Condição manual";
+
+  switch (condition.type) {
+    case "yes_no":
+      return condition.expectedAnswer === "yes" ? "Quando a resposta for Sim" : "Quando a resposta for Não";
+    case "scale": {
+      const min = condition.minValue ?? "0";
+      const max = condition.maxValue ?? "10";
+      return `Escala entre ${min} e ${max}`;
+    }
+    case "number": {
+      const operators: Record<">" | ">=" | "<" | "<=" | "=", string> = {
+        ">": "Maior que",
+        ">=": "Maior ou igual a",
+        "<": "Menor que",
+        "<=": "Menor ou igual a",
+        "=": "Igual a",
+      };
+      const prefix = condition.unit === "moeda" ? "R$ " : "";
+      const suffix = condition.unit === "percentual" ? "%" : "";
+      const value = condition.value ?? 0;
+      return `${operators[condition.operator]} ${prefix}${value}${suffix}`;
+    }
+    case "multiple_choice": {
+      const options = (condition.matchingOptions || []).join(", ");
+      if (!options) return "Opções específicas";
+      return `${condition.matchStrategy === "all" ? "Todas" : "Qualquer"} das opções: ${options}`;
+    }
+    case "text":
+      return condition.keyword ? `Palavra-chave: ${condition.keyword}` : "Revisar texto manualmente";
+    default:
+      return "Gera oportunidade";
+  }
+};
 
 export default function TemplatePreview() {
   const { id } = useParams();
@@ -154,25 +194,39 @@ export default function TemplatePreview() {
                       Nenhuma pergunta cadastrada nesta seção.
                     </div>
                   ) : (
-                    section.questions.map((question, questionIndex) => (
-                      <div key={question.id} className="rounded-md border p-3">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div>
-                            <p className="text-sm font-semibold">
-                              {sectionIndex + 1}.{questionIndex + 1} {question.title}
-                            </p>
-                            {question.description && (
-                              <p className="text-sm text-muted-foreground">{question.description}</p>
-                            )}
+                    section.questions.map((question, questionIndex) => {
+                      const conditionLabel = formatOpportunityCondition(question.regraOportunidade);
+
+                      return (
+                        <div key={question.id} className="rounded-md border p-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                              <p className="text-sm font-semibold">
+                                {sectionIndex + 1}.{questionIndex + 1} {question.title}
+                              </p>
+                              {question.description && (
+                                <p className="text-sm text-muted-foreground">{question.description}</p>
+                              )}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                              <Badge variant="secondary">{questionTypeLabels[question.type]}</Badge>
+                              <Badge variant="outline">Criticidade: {question.criticality}</Badge>
+                              {question.required && <Badge variant="outline">Obrigatória</Badge>}
+                            </div>
                           </div>
-                          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                            <Badge variant="secondary">{questionTypeLabels[question.type]}</Badge>
-                            <Badge variant="outline">Criticidade: {question.criticality}</Badge>
-                            {question.required && <Badge variant="outline">Obrigatória</Badge>}
-                          </div>
+                          {question.regraOportunidade?.enabled && (
+                            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                              <Badge>Gera oportunidade</Badge>
+                              <Badge variant="outline">{question.regraOportunidade.type}</Badge>
+                              <Badge variant={question.regraOportunidade.autoGenerate ? "secondary" : "outline"}>
+                                {question.regraOportunidade.autoGenerate ? "Automática" : "Revisar"}
+                              </Badge>
+                              {conditionLabel && <Badge variant="outline">{conditionLabel}</Badge>}
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
                 <Separator />
