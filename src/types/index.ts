@@ -1,5 +1,15 @@
 // Types for JoIA Ops
 
+export interface ClientAddress {
+  cep?: string;
+  logradouro?: string;
+  numero?: string;
+  complemento?: string;
+  bairro?: string;
+  cidade?: string;
+  uf?: string;
+}
+
 export interface Client {
   id: string;
   name: string;
@@ -7,7 +17,7 @@ export interface Client {
   cnpj?: string;
   segment: string;
   city: string;
-  address?: string;
+  address?: ClientAddress;
   status: "ativo" | "inativo";
   projects: number;
   nps: number;

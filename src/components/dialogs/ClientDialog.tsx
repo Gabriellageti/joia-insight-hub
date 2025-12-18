@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,6 +8,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useData } from "@/contexts/DataContext";
 import { Client } from "@/types";
 import { toast } from "sonner";
+
+const emptyAddress = {
+  cep: "",
+  logradouro: "",
+  numero: "",
+  complemento: "",
+  bairro: "",
+  cidade: "",
+  uf: "",
+};
 
 interface ClientDialogProps {
   open: boolean;
@@ -22,27 +33,36 @@ export function ClientDialog({ open, onOpenChange, client }: ClientDialogProps) 
     cnpj: "",
     segment: "",
     city: "",
-    address: "",
+    address: emptyAddress,
     status: "ativo" as "ativo" | "inativo",
     risk: "low" as "low" | "medium" | "high",
     preferredMeetingDay: "",
     followUpFrequency: "semanal" as "semanal" | "quinzenal" | "mensal",
   });
+  const [isFetchingCep, setIsFetchingCep] = useState(false);
+  const [isAddressLocked, setIsAddressLocked] = useState(false);
 
   useEffect(() => {
     if (client) {
+      const clientAddress = client.address || emptyAddress;
       setFormData({
         name: client.name,
         tradeName: client.tradeName || "",
         cnpj: client.cnpj || "",
         segment: client.segment,
-        city: client.city,
-        address: client.address || "",
+        city: client.city || clientAddress.cidade || "",
+        address: {
+          ...emptyAddress,
+          ...clientAddress,
+          cidade: clientAddress.cidade || client.city || "",
+        },
         status: client.status,
         risk: client.risk,
         preferredMeetingDay: client.preferredMeetingDay || "",
         followUpFrequency: client.followUpFrequency || "semanal",
       });
+      setIsAddressLocked(false);
+      setIsFetchingCep(false);
     } else {
       setFormData({
         name: "",
@@ -50,14 +70,64 @@ export function ClientDialog({ open, onOpenChange, client }: ClientDialogProps) 
         cnpj: "",
         segment: "",
         city: "",
-        address: "",
+        address: emptyAddress,
         status: "ativo",
         risk: "low",
         preferredMeetingDay: "",
         followUpFrequency: "semanal",
       });
+      setIsAddressLocked(false);
+      setIsFetchingCep(false);
     }
   }, [client, open]);
+
+  useEffect(() => {
+    const cep = formData.address.cep;
+    if (!cep || cep.length !== 8) {
+      setIsAddressLocked(false);
+      setIsFetchingCep(false);
+      return;
+    }
+
+    setIsFetchingCep(true);
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`, { signal: controller.signal });
+        if (!response.ok) {
+          throw new Error("Erro ao buscar CEP");
+        }
+        const data = await response.json();
+        if (data.erro) {
+          throw new Error("CEP não encontrado");
+        }
+
+        setFormData((prev) => ({
+          ...prev,
+          city: data.localidade || prev.city,
+          address: {
+            ...prev.address,
+            logradouro: data.logradouro || "",
+            complemento: data.complemento || "",
+            bairro: data.bairro || "",
+            cidade: data.localidade || "",
+            uf: data.uf || "",
+          },
+        }));
+        setIsAddressLocked(true);
+      } catch {
+        setIsAddressLocked(false);
+        toast.error("Não foi possível buscar o CEP. Preencha o endereço manualmente.");
+      } finally {
+        setIsFetchingCep(false);
+      }
+    }, 500);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [formData.address.cep]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,6 +139,7 @@ export function ClientDialog({ open, onOpenChange, client }: ClientDialogProps) 
 
     const clientData = {
       ...formData,
+      city: formData.address.cidade || formData.city || "",
       projects: client?.projects || 0,
       nps: client?.nps || 0,
       lastContact: new Date().toLocaleDateString('pt-BR'),
@@ -136,21 +207,82 @@ export function ClientDialog({ open, onOpenChange, client }: ClientDialogProps) 
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="city">Cidade</Label>
+              <Label htmlFor="cep">CEP</Label>
+              <div className="relative">
+                <Input
+                  id="cep"
+                  inputMode="numeric"
+                  value={formData.address.cep}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, "");
+                    setFormData({ ...formData, address: { ...formData.address, cep: value.slice(0, 8) } });
+                    if (!value) {
+                      setIsAddressLocked(false);
+                    }
+                  }}
+                  placeholder="00000000"
+                  maxLength={8}
+                />
+                {isFetchingCep && <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="logradouro">Logradouro</Label>
               <Input
-                id="city"
-                value={formData.city}
-                onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                id="logradouro"
+                value={formData.address.logradouro}
+                readOnly={isAddressLocked}
+                onChange={(e) => setFormData({ ...formData, address: { ...formData.address, logradouro: e.target.value } })}
+                placeholder="Rua, avenida..."
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="numero">Número</Label>
+              <Input
+                id="numero"
+                value={formData.address.numero}
+                onChange={(e) => setFormData({ ...formData, address: { ...formData.address, numero: e.target.value } })}
+                placeholder="Número"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="complemento">Complemento</Label>
+              <Input
+                id="complemento"
+                value={formData.address.complemento}
+                onChange={(e) => setFormData({ ...formData, address: { ...formData.address, complemento: e.target.value } })}
+                placeholder="Apartamento, bloco, etc."
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="bairro">Bairro</Label>
+              <Input
+                id="bairro"
+                value={formData.address.bairro}
+                readOnly={isAddressLocked}
+                onChange={(e) => setFormData({ ...formData, address: { ...formData.address, bairro: e.target.value } })}
+                placeholder="Bairro"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="cidade">Cidade</Label>
+              <Input
+                id="cidade"
+                value={formData.address.cidade}
+                readOnly={isAddressLocked}
+                onChange={(e) => setFormData({ ...formData, city: e.target.value, address: { ...formData.address, cidade: e.target.value } })}
                 placeholder="Cidade"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="address">Endereço</Label>
+              <Label htmlFor="uf">UF</Label>
               <Input
-                id="address"
-                value={formData.address}
-                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                placeholder="Endereço completo"
+                id="uf"
+                value={formData.address.uf}
+                readOnly={isAddressLocked}
+                onChange={(e) => setFormData({ ...formData, address: { ...formData.address, uf: e.target.value.toUpperCase().slice(0, 2) } })}
+                placeholder="UF"
+                maxLength={2}
               />
             </div>
             <div className="space-y-2">
