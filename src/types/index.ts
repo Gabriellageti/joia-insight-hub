@@ -207,6 +207,11 @@ export type OpportunityRuleCondition =
   | { type: "text"; keyword?: string }
   | { type: "always" };
 
+export interface QuestionOption {
+  label: string;
+  weight?: number | null;
+}
+
 export interface TemplateOpportunityRule {
   id: string;
   name: string;
@@ -236,7 +241,10 @@ export interface TemplateQuestion {
   minValue?: number | null;
   maxValue?: number | null;
   options?: string[];
+  optionsWithWeight?: QuestionOption[];
   regraOportunidade?: TemplateOpportunityRule;
+  maxFileSizeMB?: number | null;
+  allowedFileTypes?: string[];
   audit?: AuditMetadata;
 
   // Compatibilidade com contratos legados
