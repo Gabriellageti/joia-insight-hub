@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, ReactNode, useState } from "react";
+import React, { createContext, useContext, useEffect, ReactNode, useState, useCallback } from "react";
 import {
   Client,
   Project,
@@ -14,7 +14,15 @@ import {
   ContentItem,
   Diagnostic,
   ClientContact,
+  ProjectDeliverable,
+  ProjectAuditLogEntry,
 } from "@/types";
+import {
+  buildProgressAuditMessage,
+  calculateWeightedProgress,
+  DEFAULT_PHASES,
+  resolveProgressValue,
+} from "@/lib/projects/progress";
 
 interface DataContextType {
   // Clients
@@ -25,7 +33,7 @@ interface DataContextType {
 
   // Projects
   projects: Project[];
-  addProject: (project: Omit<Project, "id" | "createdAt">) => void;
+  addProject: (project: Omit<Project, "id" | "createdAt" | "progress">) => void;
   updateProject: (id: string, project: Partial<Project>) => void;
   deleteProject: (id: string) => void;
 
@@ -34,6 +42,12 @@ interface DataContextType {
   addTask: (task: Omit<Task, "id" | "createdAt">) => void;
   updateTask: (id: string, task: Partial<Task>) => void;
   deleteTask: (id: string) => void;
+
+  // Deliverables
+  deliverables: ProjectDeliverable[];
+  addDeliverable: (deliverable: Omit<ProjectDeliverable, "id" | "createdAt">) => void;
+  updateDeliverable: (id: string, deliverable: Partial<ProjectDeliverable>) => void;
+  deleteDeliverable: (id: string) => void;
 
   // Meetings
   meetings: Meeting[];
@@ -94,6 +108,10 @@ interface DataContextType {
   addExpense: (expense: Omit<Expense, "id" | "createdAt">) => void;
   updateExpense: (id: string, expense: Partial<Expense>) => void;
   deleteExpense: (id: string) => void;
+
+  // Project audit log
+  projectAuditLogs: ProjectAuditLogEntry[];
+  addProjectAuditLog: (entry: Omit<ProjectAuditLogEntry, "id" | "createdAt">) => ProjectAuditLogEntry;
 
   // Client contacts
   clientContacts: ClientContact[];
@@ -171,6 +189,35 @@ const normalizeClient = (client: LegacyClient): Client => {
   };
 };
 
+type LegacyProject = Partial<Project>;
+
+const normalizeProject = (project: LegacyProject): Project => {
+  const manualProgress =
+    typeof project.manualProgress === "number" ? project.manualProgress : project.progressOverrideEnabled ? 0 : null;
+  const progressOverrideEnabled = project.progressOverrideEnabled ?? false;
+  const progress = typeof project.progress === "number" ? project.progress : 0;
+  return {
+    id: project.id || generateId(),
+    name: project.name || "Projeto",
+    clientId: project.clientId || "",
+    clientName: project.clientName || "",
+    objective: project.objective || "",
+    scope: project.scope || "",
+    phase: project.phase || "Diagnóstico",
+    progress,
+    progressSource: project.progressSource || (progressOverrideEnabled ? "manual" : "calculated"),
+    progressOverrideEnabled,
+    manualProgress,
+    progressJustification: project.progressJustification?.trim() || "",
+    status: project.status || "green",
+    responsible: project.responsible || "",
+    startDate: project.startDate || "",
+    endDate: project.endDate || "",
+    moneyHypothesis: project.moneyHypothesis || "",
+    createdAt: project.createdAt || getDate(),
+  };
+};
+
 const initialClients: Client[] = [
   normalizeClient({
     id: "client-1",
@@ -220,6 +267,9 @@ const initialProjects: Project[] = [
     scope: "Integração de CRM, ERP e suporte em um único painel",
     phase: "Diagnóstico",
     progress: 35,
+    progressSource: "calculated",
+    progressOverrideEnabled: false,
+    manualProgress: null,
     status: "green",
     responsible: "João Mendes",
     startDate: "10/01/2025",
@@ -236,6 +286,9 @@ const initialProjects: Project[] = [
     scope: "Processos, treinamentos e métricas",
     phase: "Quick wins",
     progress: 60,
+    progressSource: "calculated",
+    progressOverrideEnabled: false,
+    manualProgress: null,
     status: "yellow",
     responsible: "Bruna Lira",
     startDate: "20/12/2024",
@@ -251,6 +304,9 @@ const initialProjects: Project[] = [
     scope: "KPIs, reuniões semanais e plano de ação",
     phase: "Estruturação",
     progress: 45,
+    progressSource: "calculated",
+    progressOverrideEnabled: false,
+    manualProgress: null,
     status: "green",
     responsible: "Marcos Vieira",
     startDate: "05/01/2025",
@@ -307,6 +363,33 @@ const initialTasks: Task[] = [
     status: "validation",
     evidenceRequired: true,
     createdAt: "25/01/2025",
+  },
+];
+
+const initialDeliverables: ProjectDeliverable[] = [
+  {
+    id: "deliverable-1",
+    projectId: "project-1",
+    title: "Protótipo de dashboard",
+    status: "in_progress",
+    dueDate: "15/03/2025",
+    createdAt: "01/02/2025",
+  },
+  {
+    id: "deliverable-2",
+    projectId: "project-2",
+    title: "Playbook CS v1",
+    status: "pending",
+    dueDate: "28/02/2025",
+    createdAt: "18/01/2025",
+  },
+  {
+    id: "deliverable-3",
+    projectId: "project-3",
+    title: "Kit de KPIs logísticos",
+    status: "done",
+    dueDate: "10/02/2025",
+    createdAt: "05/01/2025",
   },
 ];
 
@@ -495,6 +578,8 @@ const initialContentItems: ContentItem[] = [
   },
 ];
 
+const initialProjectAuditLogs: ProjectAuditLogEntry[] = [];
+
 const initialClientContacts: ClientContact[] = [
   { id: "contact-1", clientId: "client-1", name: "Fernanda Alves", role: "COO", area: "Diretoria", phone: "(11) 98888-1212", email: "fernanda@alfatech.com", hasPortalAccess: true },
   { id: "contact-2", clientId: "client-2", name: "Carlos Menezes", role: "Head Operações", area: "Diretoria", phone: "(21) 97777-4545", email: "carlos.menezes@betalog.com", hasPortalAccess: false },
@@ -525,6 +610,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [clients, setClients] = useLocalStorage<Client[]>("joia_clients", initialClients);
   const [projects, setProjects] = useLocalStorage<Project[]>("joia_projects", initialProjects);
   const [tasks, setTasks] = useLocalStorage<Task[]>("joia_tasks", initialTasks);
+  const [deliverables, setDeliverables] = useLocalStorage<ProjectDeliverable[]>(
+    "joia_deliverables",
+    initialDeliverables
+  );
   const [meetings, setMeetings] = useLocalStorage<Meeting[]>("joia_meetings", initialMeetings);
   const [indicators, setIndicators] = useLocalStorage<Indicator[]>("joia_indicators", initialIndicators);
   const [documents, setDocuments] = useLocalStorage<Document[]>("joia_documents", []);
@@ -535,6 +624,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [contentItems, setContentItems] = useLocalStorage<ContentItem[]>("joia_content", initialContentItems);
   const [contracts, setContracts] = useLocalStorage<Contract[]>("joia_contracts", []);
   const [expenses, setExpenses] = useLocalStorage<Expense[]>("joia_expenses", []);
+  const [projectAuditLogs, setProjectAuditLogs] = useLocalStorage<ProjectAuditLogEntry[]>(
+    "joia_project_audit_logs",
+    initialProjectAuditLogs
+  );
   const [clientContacts, setClientContacts] = useLocalStorage<ClientContact[]>(
     "joia_client_contacts",
     initialClientContacts
@@ -544,6 +637,83 @@ export function DataProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     setClients((prev) => prev.map(normalizeClient));
   }, [setClients]);
+
+  // Normaliza projetos legados para novos campos de progresso
+  useEffect(() => {
+    setProjects((prev) => prev.map(normalizeProject));
+  }, [setProjects]);
+
+  const projectTasks = useCallback(
+    (projectId: string) => tasks.filter((task) => task.projectId === projectId),
+    [tasks]
+  );
+  const projectDeliverables = useCallback(
+    (projectId: string) => deliverables.filter((deliverable) => deliverable.projectId === projectId),
+    [deliverables]
+  );
+
+  const computeProgressValue = useCallback(
+    (project: Project) => {
+      const calculatedProgress = calculateWeightedProgress({
+        tasks: projectTasks(project.id),
+        deliverables: projectDeliverables(project.id),
+        currentPhase: project.phase,
+        phaseSequence: DEFAULT_PHASES,
+      });
+      const resolvedProgress = resolveProgressValue({
+        computedProgress: calculatedProgress,
+        overrideEnabled: project.progressOverrideEnabled,
+        manualProgress: project.manualProgress,
+      });
+
+      return {
+        progress: resolvedProgress,
+        progressSource: project.progressOverrideEnabled ? ("manual" as const) : ("calculated" as const),
+      };
+    },
+    [projectDeliverables, projectTasks]
+  );
+
+  const deriveAuditLog = (previous: Project | undefined, next: Project): ProjectAuditLogEntry | null => {
+    const overrideChanged = previous?.progressOverrideEnabled !== next.progressOverrideEnabled;
+    const manualChanged =
+      next.progressOverrideEnabled && previous && previous.manualProgress !== next.manualProgress;
+    const justificationChanged =
+      next.progressOverrideEnabled && previous && previous.progressJustification !== next.progressJustification;
+
+    if (!previous && next.progressOverrideEnabled) {
+      const message = buildProgressAuditMessage({
+        projectName: next.name,
+        overrideEnabled: true,
+        manualProgress: next.manualProgress,
+        justification: next.progressJustification,
+      });
+      return { id: generateId(), projectId: next.id, message, createdAt: getDate() };
+    }
+
+    if (!overrideChanged && !manualChanged && !justificationChanged) return null;
+
+    const message = buildProgressAuditMessage({
+      projectName: next.name,
+      overrideEnabled: next.progressOverrideEnabled,
+      manualProgress: next.manualProgress,
+      justification: next.progressJustification,
+      previousManualProgress: previous?.manualProgress,
+      previousOverrideEnabled: previous?.progressOverrideEnabled,
+    });
+
+    return { id: generateId(), projectId: next.id, message, createdAt: getDate() };
+  };
+
+  useEffect(() => {
+    setProjects((prev) =>
+      prev.map((project) => {
+        const normalizedProject = normalizeProject(project);
+        const computed = computeProgressValue(normalizedProject);
+        return { ...normalizedProject, ...computed };
+      })
+    );
+  }, [computeProgressValue, setProjects]);
 
   const value: DataContextType = {
     clients,
@@ -563,16 +733,51 @@ export function DataProvider({ children }: { children: ReactNode }) {
     deleteClient: (id) => setClients((prev) => prev.filter((c) => c.id !== id)),
 
     projects,
-    addProject: (project) =>
-      setProjects((prev) => [...prev, { ...project, id: generateId(), createdAt: getDate() }]),
-    updateProject: (id, project) =>
-      setProjects((prev) => prev.map((p) => (p.id === id ? { ...p, ...project } : p))),
+    addProject: (project) => {
+      const projectId = generateId();
+      const baseProject = normalizeProject({
+        ...project,
+        id: projectId,
+        createdAt: getDate(),
+      });
+      const computed = computeProgressValue(baseProject);
+      const newProject = { ...baseProject, ...computed };
+      const auditLog = deriveAuditLog(undefined, newProject);
+
+      setProjects((prev) => [...prev, newProject]);
+      if (auditLog) {
+        setProjectAuditLogs((prev) => [...prev, auditLog]);
+      }
+    },
+    updateProject: (id, project) => {
+      let auditLog: ProjectAuditLogEntry | null = null;
+      setProjects((prev) =>
+        prev.map((p) => {
+          if (p.id !== id) return p;
+          const mergedProject = normalizeProject({ ...p, ...project });
+          const computed = computeProgressValue(mergedProject);
+          const nextProject = { ...mergedProject, ...computed };
+          auditLog = deriveAuditLog(p, nextProject);
+          return nextProject;
+        })
+      );
+      if (auditLog) {
+        setProjectAuditLogs((prev) => [...prev, auditLog!]);
+      }
+    },
     deleteProject: (id) => setProjects((prev) => prev.filter((p) => p.id !== id)),
 
     tasks,
     addTask: (task) => setTasks((prev) => [...prev, { ...task, id: generateId(), createdAt: getDate() }]),
     updateTask: (id, task) => setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...task } : t))),
     deleteTask: (id) => setTasks((prev) => prev.filter((t) => t.id !== id)),
+
+    deliverables,
+    addDeliverable: (deliverable) =>
+      setDeliverables((prev) => [...prev, { ...deliverable, id: generateId(), createdAt: getDate() }]),
+    updateDeliverable: (id, deliverable) =>
+      setDeliverables((prev) => prev.map((d) => (d.id === id ? { ...d, ...deliverable } : d))),
+    deleteDeliverable: (id) => setDeliverables((prev) => prev.filter((d) => d.id !== id)),
 
     meetings,
     addMeeting: (meeting) =>
@@ -644,6 +849,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
     updateExpense: (id, expense) =>
       setExpenses((prev) => prev.map((e) => (e.id === id ? { ...e, ...expense } : e))),
     deleteExpense: (id) => setExpenses((prev) => prev.filter((e) => e.id !== id)),
+
+    projectAuditLogs,
+    addProjectAuditLog: (entry) => {
+      const newEntry = { ...entry, id: generateId(), createdAt: getDate() };
+      setProjectAuditLogs((prev) => [...prev, newEntry]);
+      return newEntry;
+    },
 
     clientContacts,
     addClientContact: (contact) => {

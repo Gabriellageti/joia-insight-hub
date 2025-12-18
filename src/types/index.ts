@@ -77,11 +77,31 @@ export interface Project {
   scope?: string;
   phase: string;
   progress: number;
+  progressSource?: "calculated" | "manual";
+  progressOverrideEnabled: boolean;
+  manualProgress: number | null;
+  progressJustification?: string;
   status: "green" | "yellow" | "red";
   responsible: string;
   startDate: string;
   endDate: string;
   moneyHypothesis?: string;
+  createdAt: string;
+}
+
+export interface ProjectDeliverable {
+  id: string;
+  projectId: string;
+  title: string;
+  status: "pending" | "in_progress" | "done";
+  dueDate?: string;
+  createdAt: string;
+}
+
+export interface ProjectAuditLogEntry {
+  id: string;
+  projectId: string;
+  message: string;
   createdAt: string;
 }
 

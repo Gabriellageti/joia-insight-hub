@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useData } from "@/contexts/DataContext";
 import { Project } from "@/types";
 import { toast } from "sonner";
+import { Switch } from "@/components/ui/switch";
 
 interface ProjectDialogProps {
   open: boolean;
@@ -24,7 +25,9 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
     objective: "",
     scope: "",
     phase: "Diagnóstico",
-    progress: 0,
+    progressOverrideEnabled: false,
+    manualProgress: null as number | null,
+    progressJustification: "",
     status: "green" as "green" | "yellow" | "red",
     responsible: "",
     startDate: "",
@@ -41,7 +44,9 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
         objective: project.objective || "",
         scope: project.scope || "",
         phase: project.phase,
-        progress: project.progress,
+        progressOverrideEnabled: project.progressOverrideEnabled || false,
+        manualProgress: project.manualProgress ?? null,
+        progressJustification: project.progressJustification || "",
         status: project.status,
         responsible: project.responsible,
         startDate: project.startDate,
@@ -56,7 +61,9 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
         objective: "",
         scope: "",
         phase: "Diagnóstico",
-        progress: 0,
+        progressOverrideEnabled: false,
+        manualProgress: null,
+        progressJustification: "",
         status: "green",
         responsible: "",
         startDate: "",
@@ -87,12 +94,34 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
       toast.error("Selecione um cliente");
       return;
     }
+    if (formData.progressOverrideEnabled) {
+      if (formData.manualProgress === null || Number.isNaN(Number(formData.manualProgress))) {
+        toast.error("Informe um progresso manual válido entre 0 e 100");
+        return;
+      }
+      if (formData.manualProgress < 0 || formData.manualProgress > 100) {
+        toast.error("Progresso manual deve estar entre 0 e 100");
+        return;
+      }
+      if (!formData.progressJustification.trim()) {
+        toast.error("Justifique o motivo do progresso manual");
+        return;
+      }
+    }
 
     if (project) {
-      updateProject(project.id, formData);
+      updateProject(project.id, {
+        ...formData,
+        manualProgress: formData.progressOverrideEnabled ? Number(formData.manualProgress) : null,
+        progressJustification: formData.progressOverrideEnabled ? formData.progressJustification.trim() : "",
+      });
       toast.success("Projeto atualizado com sucesso");
     } else {
-      addProject(formData);
+      addProject({
+        ...formData,
+        manualProgress: formData.progressOverrideEnabled ? Number(formData.manualProgress) : null,
+        progressJustification: formData.progressOverrideEnabled ? formData.progressJustification.trim() : "",
+      });
       toast.success("Projeto criado com sucesso");
     }
     onOpenChange(false);
@@ -186,17 +215,6 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="progress">Progresso (%)</Label>
-              <Input
-                id="progress"
-                type="number"
-                min="0"
-                max="100"
-                value={formData.progress}
-                onChange={(e) => setFormData({ ...formData, progress: Number(e.target.value) })}
-              />
-            </div>
-            <div className="space-y-2">
               <Label htmlFor="startDate">Data Início</Label>
               <Input
                 id="startDate"
@@ -213,6 +231,64 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
                 onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
                 placeholder="dd/mm/aaaa"
               />
+            </div>
+            <div className="col-span-2 space-y-4 rounded-lg border border-border p-4">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-foreground">Detalhes Avançados</p>
+                  <p className="text-xs text-muted-foreground">
+                    Ajuste a forma de calcular o progresso e registre justificativas de override.
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Switch
+                    id="progressOverride"
+                    checked={formData.progressOverrideEnabled}
+                    onCheckedChange={(checked) =>
+                      setFormData({
+                        ...formData,
+                        progressOverrideEnabled: checked,
+                        manualProgress: checked ? formData.manualProgress ?? 0 : null,
+                        progressJustification: checked ? formData.progressJustification : "",
+                      })
+                    }
+                  />
+                  <Label htmlFor="progressOverride" className="text-sm font-medium">
+                    Sobrescrever progresso
+                  </Label>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="manualProgress">Progresso manual (%)</Label>
+                  <Input
+                    id="manualProgress"
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={formData.manualProgress ?? ""}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        manualProgress: e.target.value === "" ? null : Number(e.target.value),
+                      })
+                    }
+                    placeholder="Informe o percentual"
+                    disabled={!formData.progressOverrideEnabled}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="progressJustification">Justificativa</Label>
+                  <Textarea
+                    id="progressJustification"
+                    value={formData.progressJustification}
+                    onChange={(e) => setFormData({ ...formData, progressJustification: e.target.value })}
+                    placeholder="Explique o motivo do valor manual"
+                    disabled={!formData.progressOverrideEnabled}
+                    rows={formData.progressOverrideEnabled ? 3 : 2}
+                  />
+                </div>
+              </div>
             </div>
             <div className="col-span-2 space-y-2">
               <Label htmlFor="moneyHypothesis">Hipótese de Dinheiro na Mesa</Label>

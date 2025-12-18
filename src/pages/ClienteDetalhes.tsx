@@ -7,6 +7,8 @@ import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Progress } from "@/components/ui/progress";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ArrowLeft, Building2, MapPin, PhoneCall, Shield } from "lucide-react";
 
 const riskColors = { low: "bg-green-500/10 text-green-700", medium: "bg-yellow-500/10 text-yellow-700", high: "bg-red-500/10 text-red-700" };
@@ -179,6 +181,22 @@ export default function ClienteDetalhes() {
                     <Badge variant="outline">{project.phase}</Badge>
                   </div>
                   <p className="text-sm text-muted-foreground">{project.responsible}</p>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="space-y-1 cursor-help">
+                          <div className="flex items-center justify-between text-xs text-muted-foreground">
+                            <span>Progresso</span>
+                            <span className="font-semibold text-foreground">{Math.round(project.progress)}%</span>
+                          </div>
+                          <Progress value={project.progress} className="h-1.5" />
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Calculado por tarefas, entregáveis e fases</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                   <p className="text-xs text-muted-foreground">
                     {project.startDate} → {project.endDate}
                   </p>
