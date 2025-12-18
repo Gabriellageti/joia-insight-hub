@@ -187,25 +187,82 @@ export interface Diagnostic {
   dueDate?: string;
 }
 
+export interface AuditMetadata {
+  createdAt?: string;
+  updatedAt?: string;
+  createdBy?: string;
+  updatedBy?: string;
+}
+
+export type DiagnosticTemplateStatus = "draft" | "published" | "archived";
+
+export type DiagnosticQuestionType = "yes_no" | "scale" | "text" | "number" | "attachment";
+export type QuestionCriticality = "baixa" | "media" | "alta";
+
+export interface TemplateOpportunityRule {
+  id: string;
+  name: string;
+  description?: string;
+  type: Opportunity["type"];
+  estimatedValue?: number | null;
+  confidence?: Opportunity["confidence"];
+  evidenceType?: Opportunity["evidenceType"];
+  enabled: boolean;
+  autoGenerate: boolean;
+  audit?: AuditMetadata;
+}
+
+export interface TemplateQuestion {
+  id: string;
+  title: string;
+  description?: string;
+  type: DiagnosticQuestionType;
+  weight: number;
+  criticality: QuestionCriticality;
+  required: boolean;
+  helperText?: string;
+  placeholder?: string;
+  order: number;
+  minValue?: number | null;
+  maxValue?: number | null;
+  options?: string[];
+  regraOportunidade?: TemplateOpportunityRule;
+  audit?: AuditMetadata;
+
+  // Compatibilidade com contratos legados
+  text?: string;
+  critical?: boolean;
+}
+
+export interface TemplateSection {
+  id: string;
+  title: string;
+  description?: string;
+  order: number;
+  weight: number;
+  questions: TemplateQuestion[];
+  audit?: AuditMetadata;
+}
+
 export interface DiagnosticTemplate {
   id: string;
   name: string;
+  description?: string;
   tags: string[];
-  sections: { id: string; name: string; questions: DiagnosticQuestion[] }[];
+  status: DiagnosticTemplateStatus;
+  version?: string;
+  revision?: number;
+  sections: TemplateSection[];
   questionCount?: number;
   sectionsCount?: number;
   estimatedTimeMinutes?: number | null;
-  version?: string;
   updatedAt?: string;
+  createdAt?: string;
+  audit?: AuditMetadata;
 }
 
-export interface DiagnosticQuestion {
-  id: string;
-  text: string;
-  type: "yes_no" | "scale" | "text" | "number" | "attachment";
-  weight: number;
-  critical: boolean;
-}
+// Compatibilidade com importações existentes
+export type DiagnosticQuestion = TemplateQuestion;
 
 export interface Meeting {
   id: string;
