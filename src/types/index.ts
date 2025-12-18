@@ -266,6 +266,7 @@ export interface DiagnosticTemplate {
   questionCount?: number;
   sectionsCount?: number;
   estimatedTimeMinutes?: number | null;
+  lastPublishedAt?: string;
   updatedAt?: string;
   createdAt?: string;
   audit?: AuditMetadata;

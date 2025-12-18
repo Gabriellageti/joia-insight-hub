@@ -425,19 +425,24 @@ const normalizeTemplateSection = (section: Partial<TemplateSection>, index: numb
 const normalizeTemplate = (template: Partial<DiagnosticTemplate>): DiagnosticTemplate => {
   const sections = (template.sections || []).map((section, sectionIndex) => normalizeTemplateSection(section, sectionIndex));
   const questionCountFromSections = sections.reduce((count, section) => count + (section.questions?.length || 0), 0);
+  const status = template.status || "published";
+  const lastPublishedAt =
+    template.lastPublishedAt ||
+    (status === "published" ? template.updatedAt || template.createdAt || getDate() : template.lastPublishedAt);
 
   return {
     id: template.id || generateId(),
     name: template.name || "Template",
     description: template.description || "",
     tags: template.tags || [],
-    status: template.status || "published",
+    status,
     version: template.version || "v1.0",
     revision: typeof template.revision === "number" ? template.revision : 1,
     sections,
     questionCount: typeof template.questionCount === "number" ? template.questionCount : questionCountFromSections,
     sectionsCount: template.sectionsCount ?? sections.length,
     estimatedTimeMinutes: typeof template.estimatedTimeMinutes === "number" ? template.estimatedTimeMinutes : null,
+    lastPublishedAt,
     updatedAt: template.updatedAt || template.createdAt || getDate(),
     createdAt: template.createdAt || getDate(),
     audit: normalizeAudit(template.audit),

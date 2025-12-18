@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertCircle,
   BadgeCheck,
@@ -34,6 +35,8 @@ import { toast } from "sonner";
 import { formatDatePtBR } from "@/lib/dates";
 import { TemplatePreviewPanel } from "./TemplatePreviewPanel";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { calculateNextTemplateVersion } from "@/lib/diagnostics";
+import { useAuth } from "@/contexts/AuthContext";
 
 export type TemplateBuilderAction = "draft" | "publish" | "preview" | "duplicate";
 
@@ -50,6 +53,7 @@ type TemplateFormState = {
   version: string;
   estimatedTimeMinutes: number | null;
   sections: TemplateSection[];
+  lastPublishedAt?: string;
 };
 
 const createSection = (order: number): TemplateSection => ({
@@ -130,6 +134,9 @@ const buildOpportunityRule = (
 const parseNumericInput = (value: string) => (value === "" ? null : Number(value));
 
 export function TemplateBuilder({ initialTemplate, onSubmit }: TemplateBuilderProps) {
+  const { user } = useAuth();
+  const userRole = (user?.user_metadata as Record<string, string | undefined> | undefined)?.role;
+  const canArchive = Boolean(userRole && (userRole.toLowerCase().includes("admin") || userRole.toLowerCase().includes("gestor")));
   const [formState, setFormState] = useState<TemplateFormState>({
     name: initialTemplate?.name || "",
     description: initialTemplate?.description || "",
@@ -138,11 +145,14 @@ export function TemplateBuilder({ initialTemplate, onSubmit }: TemplateBuilderPr
     version: initialTemplate?.version || "v1.0",
     estimatedTimeMinutes: initialTemplate?.estimatedTimeMinutes ?? 30,
     sections: initialTemplate?.sections || [],
+    lastPublishedAt: initialTemplate?.lastPublishedAt,
   });
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [draggingSectionId, setDraggingSectionId] = useState<string | null>(null);
   const [draggingQuestion, setDraggingQuestion] = useState<{ sectionId: string; questionId: string } | null>(null);
   const [questionDropTargets, setQuestionDropTargets] = useState<Record<string, string | null>>({});
+  const [publishDialogOpen, setPublishDialogOpen] = useState(false);
+  const [publishChangeType, setPublishChangeType] = useState<"minor" | "major">("minor");
 
   const questionCount = useMemo(
     () => formState.sections.reduce((total, section) => total + (section.questions?.length || 0), 0),
@@ -179,6 +189,7 @@ export function TemplateBuilder({ initialTemplate, onSubmit }: TemplateBuilderPr
       sectionsCount: normalizedSections.length,
       questionCount,
       estimatedTimeMinutes: formState.estimatedTimeMinutes ?? undefined,
+      lastPublishedAt: formState.lastPublishedAt,
       updatedAt: formatDatePtBR(new Date()),
       createdAt: initialTemplate?.createdAt || formatDatePtBR(new Date()),
       audit: initialTemplate?.audit,
@@ -553,6 +564,9 @@ export function TemplateBuilder({ initialTemplate, onSubmit }: TemplateBuilderPr
       if (emptySections.length) {
         errors.push("Cada seção precisa ter pelo menos uma pergunta para publicar.");
       }
+      if (questionCount === 0) {
+        errors.push("Inclua ao menos uma pergunta antes de publicar.");
+      }
     }
 
     if (errors.length) {
@@ -567,10 +581,33 @@ export function TemplateBuilder({ initialTemplate, onSubmit }: TemplateBuilderPr
 
   const handleAction = (action: TemplateBuilderAction) => {
     if (!validateBeforeAction(action)) return;
-    const status: DiagnosticTemplateStatus =
-      action === "publish" ? "published" : action === "draft" ? "draft" : formState.status || "draft";
+
+    if (action === "publish") {
+      setPublishDialogOpen(true);
+      return;
+    }
+
+    const status: DiagnosticTemplateStatus = action === "draft" ? "draft" : formState.status || "draft";
     const payload = buildPayload(status);
     onSubmit(payload, action);
+  };
+
+  const handlePublishConfirm = () => {
+    const payload = buildPayload("published");
+    const nextVersion = calculateNextTemplateVersion(payload.version, publishChangeType);
+    const publishedAt = formatDatePtBR(new Date());
+
+    const publishedPayload = {
+      ...payload,
+      status: "published" as DiagnosticTemplateStatus,
+      version: nextVersion,
+      lastPublishedAt: publishedAt,
+      updatedAt: publishedAt,
+    };
+
+    setFormState((prev) => ({ ...prev, status: "published", version: nextVersion, lastPublishedAt: publishedAt }));
+    onSubmit(publishedPayload, "publish");
+    setPublishDialogOpen(false);
   };
 
   return (
@@ -604,7 +641,9 @@ export function TemplateBuilder({ initialTemplate, onSubmit }: TemplateBuilderPr
                   <SelectContent>
                     <SelectItem value="draft">Rascunho</SelectItem>
                     <SelectItem value="published">Publicado</SelectItem>
-                    <SelectItem value="archived">Arquivado</SelectItem>
+                    <SelectItem value="archived" disabled={!canArchive}>
+                      Arquivado
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1144,9 +1183,9 @@ export function TemplateBuilder({ initialTemplate, onSubmit }: TemplateBuilderPr
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-              <BadgeCheck className="h-4 w-4" />
-              Preview rápido
-            </CardTitle>
+          <BadgeCheck className="h-4 w-4" />
+          Preview rápido
+        </CardTitle>
             <CardDescription>Visualize como as seções e perguntas ficam para o respondente.</CardDescription>
           </CardHeader>
           <CardContent>
@@ -1167,6 +1206,48 @@ export function TemplateBuilder({ initialTemplate, onSubmit }: TemplateBuilderPr
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={publishDialogOpen} onOpenChange={setPublishDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Tipo de publicação</DialogTitle>
+            <DialogDescription>Confirme se a atualização é pequena (incremental) ou grande (quebra de versão).</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Label>Qual o tipo da mudança?</Label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Button
+                type="button"
+                variant={publishChangeType === "minor" ? "default" : "outline"}
+                className="justify-start"
+                onClick={() => setPublishChangeType("minor")}
+              >
+                <div className="text-left">
+                  <p className="font-medium">Pequena</p>
+                  <p className="text-xs text-muted-foreground">Ajustes incrementais. Nova versão: {calculateNextTemplateVersion(formState.version, "minor")}</p>
+                </div>
+              </Button>
+              <Button
+                type="button"
+                variant={publishChangeType === "major" ? "default" : "outline"}
+                className="justify-start"
+                onClick={() => setPublishChangeType("major")}
+              >
+                <div className="text-left">
+                  <p className="font-medium">Grande</p>
+                  <p className="text-xs text-muted-foreground">Mudanças estruturais. Nova versão: {calculateNextTemplateVersion(formState.version, "major")}</p>
+                </div>
+              </Button>
+            </div>
+            <DialogFooter className="mt-2">
+              <Button variant="outline" onClick={() => setPublishDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={handlePublishConfirm}>Publicar template</Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

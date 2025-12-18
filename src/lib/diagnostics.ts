@@ -483,8 +483,51 @@ export const createTemplateMock = (name?: string): DiagnosticTemplate => {
     sectionsCount: 1,
     estimatedTimeMinutes: 15,
     version: "v1.0",
+    lastPublishedAt: undefined,
     updatedAt: format(new Date(), "dd/MM/yyyy", { locale: ptBR }),
     createdAt: format(new Date(), "dd/MM/yyyy", { locale: ptBR }),
+  };
+};
+
+const parseVersion = (version?: string) => {
+  const match = version?.match(/v?(\d+)(?:\.(\d+))?/i);
+  const major = match?.[1] ? Number(match[1]) : 1;
+  const minor = match?.[2] ? Number(match[2]) : 0;
+  return { major: Number.isNaN(major) ? 1 : major, minor: Number.isNaN(minor) ? 0 : minor };
+};
+
+export const calculateNextTemplateVersion = (
+  currentVersion: string | undefined,
+  changeType: "minor" | "major"
+): string => {
+  const { major, minor } = parseVersion(currentVersion);
+  if (changeType === "major") {
+    return `v${major + 1}.0`;
+  }
+  return `v${major}.${minor + 1}`;
+};
+
+const normalizeCopyName = (name?: string) => {
+  if (!name) return "Template (Cópia)";
+  const cleaned = name.replace(/\s+\(C[oó]pia\)$/i, "");
+  return `${cleaned} (Cópia)`;
+};
+
+export const buildDuplicatedTemplateDraft = (
+  template: DiagnosticTemplate | (Omit<DiagnosticTemplate, "id"> & { id?: string })
+): Omit<DiagnosticTemplate, "id"> & { id?: string } => {
+  const today = formatDatePtBR(new Date());
+
+  return {
+    ...template,
+    id: undefined,
+    name: normalizeCopyName(template.name),
+    status: "draft",
+    version: "v1.0",
+    revision: 1,
+    lastPublishedAt: undefined,
+    updatedAt: today,
+    createdAt: today,
   };
 };
 

@@ -14,7 +14,7 @@ import { CardDiagnostico } from "@/components/diagnostico/CardDiagnostico";
 import { CardTemplate } from "@/components/diagnostico/CardTemplate";
 import { Diagnostic, DiagnosticTemplate } from "@/types";
 import { formatDatePtBR, parseDatePtBR } from "@/lib/dates";
-import { createTemplateMock } from "@/lib/diagnostics";
+import { buildDuplicatedTemplateDraft, createTemplateMock } from "@/lib/diagnostics";
 import { toast } from "sonner";
 
 interface DiagnosticFilters {
@@ -217,9 +217,9 @@ export default function Diagnostico() {
 
   const filteredTemplates = useMemo(() => {
     const search = templateSearch.toLowerCase();
-    return templates.filter((template) =>
-      [template.name, template.tags?.join(" ")].some((field) => field?.toLowerCase().includes(search))
-    );
+    return templates
+      .filter((template) => template.status !== "archived")
+      .filter((template) => [template.name, template.tags?.join(" ")].some((field) => field?.toLowerCase().includes(search)));
   }, [templateSearch, templates]);
 
   const pageSize = 6;
@@ -437,12 +437,7 @@ export default function Diagnostico() {
                     onApply={handleApplyTemplate}
                     onEdit={() => toast.message("Edição de template em breve")}
                     onDuplicate={(t) => {
-                      const duplicated = addTemplate({
-                        ...t,
-                        id: undefined,
-                        name: `${t.name} (cópia)`,
-                        updatedAt: formatDatePtBR(new Date()),
-                      });
+                      const duplicated = addTemplate(buildDuplicatedTemplateDraft(t));
                       toast.success(`Template ${duplicated.name} duplicado`);
                     }}
                     onDelete={(t) => {

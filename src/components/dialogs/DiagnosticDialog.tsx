@@ -124,12 +124,14 @@ export function DiagnosticDialog({ open, onOpenChange, diagnostic, defaultTempla
 
   const templateOptions = useMemo<SelectOption[]>(
     () =>
-      templates.map((template) => ({
-        value: template.id,
-        label: template.name,
-        description: template.tags?.join(", ") || undefined,
-      })),
-    [templates]
+      templates
+        .filter((template) => template.status !== "archived" || template.id === formData.templateId)
+        .map((template) => ({
+          value: template.id,
+          label: template.name,
+          description: template.tags?.join(", ") || undefined,
+        })),
+    [formData.templateId, templates]
   );
 
   useEffect(() => {
