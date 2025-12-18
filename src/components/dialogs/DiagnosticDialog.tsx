@@ -254,9 +254,7 @@ export function DiagnosticDialog({ open, onOpenChange, diagnostic, defaultTempla
       });
       addProjectAuditLog({
         projectId: diagnostic.projectId,
-        projectName: diagnostic.projectName,
         message: `Diagnóstico atualizado (status: ${formData.status}, responsável: ${formData.responsibleName})`,
-        type: "update",
       });
       toast.success("Diagnóstico atualizado");
       onOpenChange(false);

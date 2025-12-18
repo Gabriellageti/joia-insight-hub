@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, ReactNode, useState, useCa
 import { User } from "@supabase/supabase-js";
 import {
   Client,
+  ClientAddress,
   Project,
   Task,
   Meeting,
@@ -175,12 +176,12 @@ const resolveUserName = (user?: User | null) => {
   return metadata.full_name || metadata.name || metadata.name_full || user?.email || "Usuário";
 };
 
-type LegacyClient = Partial<Client> & {
+type LegacyClient = Partial<Omit<Client, "address">> & {
   name?: string;
   tradeName?: string;
   segment?: string;
   city?: string;
-  address?: string;
+  address?: string | ClientAddress;
   preferredMeetingDay?: string;
   followUpFrequency?: "semanal" | "quinzenal" | "mensal";
 };
@@ -196,9 +197,10 @@ const normalizeClient = (client: LegacyClient): Client => {
     .map((tag) => tag.trim())
     .filter(Boolean);
 
+  const addressString = typeof client.address === "string" ? client.address : client.address?.logradouro || "";
   const endereco = {
     cep: client.endereco?.cep || "",
-    logradouro: client.endereco?.logradouro || client.address || "",
+    logradouro: client.endereco?.logradouro || addressString || "",
     numero: client.endereco?.numero || "",
     complemento: client.endereco?.complemento || "",
     bairro: client.endereco?.bairro || "",
@@ -212,7 +214,7 @@ const normalizeClient = (client: LegacyClient): Client => {
     tradeName: client.tradeName || client.nomeFantasia || "",
     segment: client.segment || segmentoTags[0] || "",
     city: client.city || endereco.cidade || "",
-    address: client.address || endereco.logradouro || "",
+    address: addressString || endereco.logradouro || "",
     preferredMeetingDay: client.preferredMeetingDay || client.preferenciasRelacionamento?.diaReuniao || "",
     followUpFrequency: client.followUpFrequency || client.preferenciasRelacionamento?.frequencia || "semanal",
     razaoSocial: client.razaoSocial || client.nomeFantasia || client.name || "Cliente sem razão social",
@@ -1416,8 +1418,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
             projectId,
             clientId: newProject.clientId,
             status: opportunity.status || "Identificado",
-            createdAt: opportunity.createdAt || getDate(),
-            source: opportunity.source || "manual",
+            createdAt: getDate(),
+            source: "manual" as const,
           })
         );
         setOpportunities((prev) => [...prev, ...prepared]);
