@@ -8,11 +8,16 @@ import { formatDatePtBR } from "@/lib/dates";
 import { TemplateBuilder, TemplateBuilderAction } from "@/components/diagnostico/template-builder";
 import { buildDuplicatedTemplateDraft } from "@/lib/diagnostics";
 import { DiagnosticTemplate } from "@/types";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function TemplateEdit() {
   const navigate = useNavigate();
   const { id } = useParams();
   const { templates, updateTemplate, addTemplate } = useData();
+  const { user } = useAuth();
+
+  const userRole = (user?.user_metadata as Record<string, string | undefined> | undefined)?.role;
+  const isAnalyst = (userRole || "").toLowerCase().includes("analista");
 
   const template = useMemo(() => templates.find((item) => item.id === id), [id, templates]);
 
@@ -31,6 +36,11 @@ export default function TemplateEdit() {
   }
 
   const handleSubmit = (payload: Parameters<typeof updateTemplate>[1], action: TemplateBuilderAction) => {
+    if (isAnalyst) {
+      toast.error("Analistas não podem criar, editar ou publicar templates.");
+      return;
+    }
+
     if (action === "duplicate") {
       const duplicated = addTemplate(buildDuplicatedTemplateDraft(payload as DiagnosticTemplate));
       toast.success(`Template "${duplicated.name}" duplicado`);

@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, ReactNode, useState, useCallback } from "react";
+import { User } from "@supabase/supabase-js";
 import {
   Client,
   Project,
@@ -25,6 +26,7 @@ import {
   QuestionCriticality,
   OpportunityRuleCondition,
 } from "@/types";
+import { useAuth } from "./AuthContext";
 import {
   buildProgressAuditMessage,
   calculateWeightedProgress,
@@ -167,6 +169,11 @@ const DataContext = createContext<DataContextType | undefined>(undefined);
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
 const getDate = () => new Date().toLocaleDateString("pt-BR");
+
+const resolveUserName = (user?: User | null) => {
+  const metadata = (user?.user_metadata ?? {}) as Record<string, string | undefined>;
+  return metadata.full_name || metadata.name || metadata.name_full || user?.email || "Usuário";
+};
 
 type LegacyClient = Partial<Client> & {
   name?: string;
@@ -1034,6 +1041,8 @@ function useLocalStorage<T>(key: string, initialValue: T): [T, React.Dispatch<Re
 }
 
 export function DataProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  const currentUserName = resolveUserName(user);
   const [clients, setClients] = useLocalStorage<Client[]>("joia_clients", initialClients);
   const [projects, setProjects] = useLocalStorage<Project[]>("joia_projects", initialProjects);
   const [tasks, setTasks] = useLocalStorage<Task[]>("joia_tasks", initialTasks);
@@ -1502,12 +1511,43 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
     templates,
     addTemplate: (template) => {
-      const normalized = normalizeTemplate({ ...template, id: template.id || generateId() });
+      const now = getDate();
+      const normalized = normalizeTemplate({
+        ...template,
+        id: template.id || generateId(),
+        createdAt: template.createdAt || now,
+        updatedAt: template.updatedAt || now,
+        audit: {
+          createdAt: template.audit?.createdAt || now,
+          updatedAt: template.audit?.updatedAt || now,
+          createdBy: template.audit?.createdBy || currentUserName,
+          updatedBy: template.audit?.updatedBy || currentUserName,
+        },
+      });
       setTemplates((prev) => [...prev, normalized]);
       return normalized;
     },
     updateTemplate: (id, template) =>
-      setTemplates((prev) => prev.map((t) => (t.id === id ? normalizeTemplate({ ...t, ...template }) : t))),
+      setTemplates((prev) =>
+        prev.map((t) => {
+          if (t.id !== id) return t;
+
+          const now = getDate();
+          const updatedAt = template.updatedAt || now;
+
+          return normalizeTemplate({
+            ...t,
+            ...template,
+            updatedAt,
+            audit: {
+              createdAt: template.audit?.createdAt || t.audit?.createdAt || t.createdAt || getDate(),
+              updatedAt: template.audit?.updatedAt || updatedAt,
+              createdBy: template.audit?.createdBy || t.audit?.createdBy || currentUserName,
+              updatedBy: template.audit?.updatedBy || currentUserName,
+            },
+          });
+        })
+      ),
     deleteTemplate: (id) => setTemplates((prev) => prev.filter((t) => t.id !== id)),
 
     diagnostics,

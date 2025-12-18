@@ -13,8 +13,10 @@ import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import { TemplatePageHeader } from "./TemplatePageHeader";
 import { useData } from "@/contexts/DataContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { DiagnosticTemplate, TemplateOpportunityRule, TemplateQuestion } from "@/types";
 import { AlertCircle, ArrowLeft, Brain, CheckCircle2, RefreshCw, Sparkles } from "lucide-react";
+import { toast } from "sonner";
 
 const statusLabels: Record<DiagnosticTemplate["status"], string> = {
   draft: "Rascunho",
@@ -170,7 +172,11 @@ export default function TemplateDiagnosticPreview() {
   const { templateId } = useParams();
   const navigate = useNavigate();
   const { templates } = useData();
+  const { user } = useAuth();
   const [responses, setResponses] = useState<Record<string, AnswerValue>>({});
+
+  const userRole = (user?.user_metadata as Record<string, string | undefined> | undefined)?.role;
+  const isAnalyst = (userRole || "").toLowerCase().includes("analista");
 
   const template = useMemo(() => templates.find((item) => item.id === templateId), [templateId, templates]);
 
@@ -261,6 +267,15 @@ export default function TemplateDiagnosticPreview() {
 
   const resetResponses = () => setResponses({});
 
+  const handleBackToEdit = () => {
+    if (isAnalyst) {
+      toast.error("Analistas não podem editar templates.");
+      return;
+    }
+    if (!template) return;
+    navigate(`/templates/${template.id}/editar`);
+  };
+
   if (!template) {
     return (
       <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
@@ -285,7 +300,7 @@ export default function TemplateDiagnosticPreview() {
               <ArrowLeft className="h-4 w-4 mr-2" />
               Voltar
             </Button>
-            <Button variant="secondary" onClick={() => navigate(`/templates/${template.id}/editar`)}>
+            <Button variant="secondary" onClick={handleBackToEdit}>
               Voltar para edição
             </Button>
             <Button variant="outline" onClick={resetResponses} className="gap-2">

@@ -20,7 +20,8 @@ export default function TemplatesList() {
   const [search, setSearch] = useState("");
 
   const userRole = (user?.user_metadata as Record<string, string | undefined> | undefined)?.role;
-  const canArchive = Boolean(userRole && (userRole.toLowerCase().includes("admin") || userRole.toLowerCase().includes("gestor")));
+  const isAnalyst = (userRole || "").toLowerCase().includes("analista");
+  const canArchive = !isAnalyst && Boolean(userRole && (userRole.toLowerCase().includes("admin") || userRole.toLowerCase().includes("gestor")));
 
   const filteredTemplates = useMemo(() => {
     const query = search.toLowerCase();
@@ -32,6 +33,10 @@ export default function TemplatesList() {
   }, [search, templates]);
 
   const handleDuplicate = (template: DiagnosticTemplate) => {
+    if (isAnalyst) {
+      toast.error("Analistas não podem criar ou duplicar templates.");
+      return;
+    }
     const duplicated = addTemplate(buildDuplicatedTemplateDraft(template));
     toast.success(`Template "${duplicated.name}" duplicado`);
   };
@@ -50,10 +55,26 @@ export default function TemplatesList() {
     }
     navigate(`/templates-diagnostico/${template.id}/preview`);
   };
-  const handleEdit = (template: DiagnosticTemplate) => navigate(`/templates/${template.id}/editar`);
-  const goToCreate = () => navigate("/templates/novo");
+  const handleEdit = (template: DiagnosticTemplate) => {
+    if (isAnalyst) {
+      toast.error("Analistas não podem editar templates.");
+      return;
+    }
+    navigate(`/templates/${template.id}/editar`);
+  };
+  const goToCreate = () => {
+    if (isAnalyst) {
+      toast.error("Analistas não podem criar templates.");
+      return;
+    }
+    navigate("/templates/novo");
+  };
 
   const handleArchive = (template: DiagnosticTemplate) => {
+    if (isAnalyst) {
+      toast.error("Analistas não podem arquivar templates.");
+      return;
+    }
     if (!canArchive) {
       toast.error("Somente Admin ou Gestor podem arquivar templates.");
       return;

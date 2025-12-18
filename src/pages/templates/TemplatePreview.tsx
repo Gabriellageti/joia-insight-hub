@@ -10,6 +10,7 @@ import { formatDatePtBR } from "@/lib/dates";
 import { toast } from "sonner";
 import { DiagnosticTemplate, TemplateOpportunityRule } from "@/types";
 import { AlarmClock, BookOpenText, Copy, Layers } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 const statusLabels: Record<DiagnosticTemplate["status"], string> = {
   draft: "Rascunho",
@@ -69,6 +70,10 @@ export default function TemplatePreview() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { templates, addTemplate } = useData();
+  const { user } = useAuth();
+
+  const userRole = (user?.user_metadata as Record<string, string | undefined> | undefined)?.role;
+  const isAnalyst = (userRole || "").toLowerCase().includes("analista");
 
   const template = useMemo(() => templates.find((item) => item.id === id), [id, templates]);
 
@@ -81,6 +86,10 @@ export default function TemplatePreview() {
   );
 
   const handleDuplicate = () => {
+    if (isAnalyst) {
+      toast.error("Analistas não podem criar ou duplicar templates.");
+      return;
+    }
     if (!template) return;
     const duplicated = addTemplate({
       ...template,
@@ -91,6 +100,15 @@ export default function TemplatePreview() {
     });
     toast.success(`Template "${duplicated.name}" duplicado`);
     navigate(`/templates/${duplicated.id}/editar`);
+  };
+
+  const handleEdit = () => {
+    if (isAnalyst) {
+      toast.error("Analistas não podem editar templates.");
+      return;
+    }
+    if (!template) return;
+    navigate(`/templates/${template.id}/editar`);
   };
 
   if (!template) {
@@ -118,7 +136,7 @@ export default function TemplatePreview() {
             <Button variant="outline" onClick={() => navigate(-1)}>
               Voltar
             </Button>
-            <Button variant="secondary" onClick={() => navigate(`/templates/${template.id}/editar`)}>
+            <Button variant="secondary" onClick={handleEdit}>
               Editar
             </Button>
             <Button onClick={handleDuplicate} className="gap-2">
@@ -244,7 +262,7 @@ export default function TemplatePreview() {
           <Button variant="outline" onClick={() => navigate("/templates")}>
             Voltar para lista
           </Button>
-          <Button variant="secondary" onClick={() => navigate(`/templates/${template.id}/editar`)}>
+          <Button variant="secondary" onClick={handleEdit}>
             Editar
           </Button>
           <Button onClick={handleDuplicate} className="gap-2">
