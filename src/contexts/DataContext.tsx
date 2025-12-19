@@ -1099,6 +1099,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
     setTemplates((prev) => prev.map(normalizeTemplate));
   }, [setTemplates]);
 
+  // Recarrega templates do seed se estiver vazio (ex: usuário deletou todos)
+  useEffect(() => {
+    if (templates.length === 0 && initialTemplates.length > 0) {
+      setTemplates(initialTemplates);
+    }
+  }, [templates.length, setTemplates]);
+
   // Migra hipóteses antigas para oportunidades estruturadas
   useEffect(() => {
     const projectsWithLegacyHypothesis = projects.filter(
