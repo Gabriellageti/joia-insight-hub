@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Plus, Search, SlidersHorizontal, Sparkles, Filter } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -16,7 +17,6 @@ import { Diagnostic, DiagnosticTemplate } from "@/types";
 import { formatDatePtBR, parseDatePtBR } from "@/lib/dates";
 import { buildDuplicatedTemplateDraft, createTemplateMock } from "@/lib/diagnostics";
 import { toast } from "sonner";
-
 interface DiagnosticFilters {
   client: string;
   project: string;
@@ -151,6 +151,7 @@ function FilterContent({
 }
 
 export default function Diagnostico() {
+  const navigate = useNavigate();
   const { diagnostics, templates, deleteDiagnostic, addTemplate, duplicateDiagnostic, deleteTemplate } = useData();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingDiagnostic, setEditingDiagnostic] = useState<Diagnostic | null>(null);
@@ -435,7 +436,7 @@ export default function Diagnostico() {
                     key={template.id}
                     template={template}
                     onApply={handleApplyTemplate}
-                    onEdit={() => toast.message("Edição de template em breve")}
+                    onEdit={(t) => navigate(`/templates/${t.id}/editar`)}
                     onDuplicate={(t) => {
                       const duplicated = addTemplate(buildDuplicatedTemplateDraft(t));
                       toast.success(`Template ${duplicated.name} duplicado`);
