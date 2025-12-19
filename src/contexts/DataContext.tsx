@@ -1099,12 +1099,39 @@ export function DataProvider({ children }: { children: ReactNode }) {
     setTemplates((prev) => prev.map(normalizeTemplate));
   }, [setTemplates]);
 
-  // Recarrega templates do seed se estiver vazio (ex: usuário deletou todos)
+  // Sincroniza templates do seed: atualiza templates existentes com dados mais completos do seed
   useEffect(() => {
     if (templates.length === 0 && initialTemplates.length > 0) {
       setTemplates(initialTemplates);
+      return;
     }
-  }, [templates.length, setTemplates]);
+    
+    // Verifica se algum template do seed tem mais conteúdo que o armazenado
+    const updatedTemplates = templates.map((localTemplate) => {
+      const seedTemplate = initialTemplates.find((t) => t.id === localTemplate.id);
+      if (!seedTemplate) return localTemplate;
+      
+      // Se o seed tem mais seções ou perguntas, usa o seed
+      const localQuestions = localTemplate.questionCount ?? localTemplate.sections?.reduce((c, s) => c + (s.questions?.length || 0), 0) ?? 0;
+      const seedQuestions = seedTemplate.questionCount ?? seedTemplate.sections?.reduce((c, s) => c + (s.questions?.length || 0), 0) ?? 0;
+      
+      if (seedQuestions > localQuestions) {
+        return { ...seedTemplate, updatedAt: seedTemplate.updatedAt };
+      }
+      return localTemplate;
+    });
+    
+    // Adiciona templates do seed que não existem localmente
+    const localIds = new Set(templates.map((t) => t.id));
+    const newTemplates = initialTemplates.filter((t) => !localIds.has(t.id));
+    
+    const finalTemplates = [...updatedTemplates, ...newTemplates];
+    
+    // Só atualiza se houver diferença
+    if (JSON.stringify(finalTemplates) !== JSON.stringify(templates)) {
+      setTemplates(finalTemplates);
+    }
+  }, []);
 
   // Migra hipóteses antigas para oportunidades estruturadas
   useEffect(() => {
