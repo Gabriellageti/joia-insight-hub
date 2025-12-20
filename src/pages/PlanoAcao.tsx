@@ -19,9 +19,22 @@ const columns = [
 const priorityColors = { low: "bg-blue-100 text-blue-700", medium: "bg-yellow-100 text-yellow-700", high: "bg-red-100 text-red-700" };
 const priorityLabels = { low: "Baixa", medium: "Média", high: "Alta" };
 
-function TaskCard({ task, onClick }: { task: Task; onClick: () => void }) {
+interface TaskCardProps {
+  task: Task;
+  onClick: () => void;
+  onDragStart: () => void;
+  onDragEnd: () => void;
+}
+
+function TaskCard({ task, onClick, onDragStart, onDragEnd }: TaskCardProps) {
   return (
-    <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={onClick}>
+    <Card
+      draggable
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      className="cursor-pointer hover:shadow-md transition-shadow"
+      onClick={onClick}
+    >
       <CardContent className="p-4 space-y-3">
         <div className="flex items-start justify-between"><h4 className="font-medium text-sm">{task.title}</h4><Badge className={priorityColors[task.priority]} variant="outline">{priorityLabels[task.priority]}</Badge></div>
         <div className="text-xs text-muted-foreground"><p>{task.projectName}</p><p>{task.clientName}</p></div>
@@ -37,6 +50,20 @@ export default function PlanoAcao() {
   const [view, setView] = useState<"kanban" | "list">("kanban");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
+  const [activeColumn, setActiveColumn] = useState<string | null>(null);
+
+  const handleDrop = (columnId: string) => {
+    if (!draggingTaskId) return;
+
+    const task = tasks.find((t) => t.id === draggingTaskId);
+    if (task && task.status !== columnId) {
+      updateTask(task.id, { status: columnId });
+    }
+
+    setDraggingTaskId(null);
+    setActiveColumn(null);
+  };
 
   const tasksByColumn = columns.reduce((acc, col) => {
     acc[col.id] = tasks.filter(t => t.status === col.id);
@@ -56,11 +83,31 @@ export default function PlanoAcao() {
         <div className="flex gap-4 overflow-x-auto pb-4">
           {columns.map((column) => (
             <div key={column.id} className="flex-shrink-0 w-72">
-              <Card className="bg-muted/30">
+              <Card
+                className={`bg-muted/30 transition-colors ${activeColumn === column.id ? "ring-2 ring-accent/60 bg-accent/5" : ""}`}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  setActiveColumn(column.id);
+                }}
+                onDragLeave={() => setActiveColumn((current) => (current === column.id ? null : current))}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  handleDrop(column.id);
+                }}
+              >
                 <CardHeader className="pb-2"><CardTitle className="text-sm font-medium flex items-center justify-between">{column.title}<Badge variant="outline">{tasksByColumn[column.id]?.length || 0}</Badge></CardTitle></CardHeader>
                 <CardContent className="space-y-3 min-h-[200px]">
                   {tasksByColumn[column.id]?.map((task) => (
-                    <TaskCard key={task.id} task={task} onClick={() => { setEditingTask(task); setDialogOpen(true); }} />
+                    <TaskCard
+                      key={task.id}
+                      task={task}
+                      onClick={() => { setEditingTask(task); setDialogOpen(true); }}
+                      onDragStart={() => setDraggingTaskId(task.id)}
+                      onDragEnd={() => {
+                        setDraggingTaskId(null);
+                        setActiveColumn(null);
+                      }}
+                    />
                   ))}
                 </CardContent>
               </Card>
