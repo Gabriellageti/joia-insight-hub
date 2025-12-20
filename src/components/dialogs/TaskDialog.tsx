@@ -173,7 +173,7 @@ export function TaskDialog({ open, onOpenChange, task }: TaskDialogProps) {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="processo">Processo</SelectItem>
-                  <SelectItem value="financeiro">Financeiro</SelectItem>
+                  <SelectItem value="financeiro">Financeiro (Diagnóstico JoIA)</SelectItem>
                   <SelectItem value="tecnologia">Tecnologia</SelectItem>
                   <SelectItem value="treinamento">Treinamento</SelectItem>
                   <SelectItem value="compras">Compras</SelectItem>
