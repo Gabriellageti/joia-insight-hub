@@ -163,6 +163,28 @@ export interface Task {
   createdAt: string;
 }
 
+export type ActionPriority = "alta" | "media" | "baixa";
+export type ActionImpact = "alto" | "medio" | "baixo";
+
+export interface ActionRecommendation {
+  id: string;
+  title: string;
+  description: string;
+  priority: ActionPriority;
+  impact: ActionImpact;
+  responsible: string;
+  dueDate: string;
+  relatedQuestionId?: string;
+  rationale?: string;
+}
+
+export interface ActionPlan {
+  title: string;
+  description: string;
+  generatedAt: string;
+  actions: ActionRecommendation[];
+}
+
 export interface Diagnostic {
   id: string;
   name: string;
@@ -185,6 +207,7 @@ export interface Diagnostic {
   responsibleId?: string;
   hasResponses?: boolean;
   dueDate?: string;
+  actionPlan?: ActionPlan;
 }
 
 export interface AuditMetadata {

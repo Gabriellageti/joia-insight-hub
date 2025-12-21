@@ -491,6 +491,7 @@ const normalizeDiagnostic = (diagnostic: Partial<Diagnostic>): Diagnostic => {
     responsibleId: diagnostic.responsibleId,
     hasResponses: diagnostic.hasResponses ?? answeredQuestions > 0,
     dueDate: diagnostic.dueDate,
+    actionPlan: diagnostic.actionPlan,
   };
 };
 

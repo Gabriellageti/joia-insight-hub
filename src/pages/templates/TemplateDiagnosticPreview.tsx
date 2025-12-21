@@ -17,14 +17,13 @@ import { useAuth } from "@/contexts/AuthContext";
 import { DiagnosticTemplate, TemplateOpportunityRule, TemplateQuestion } from "@/types";
 import { AlertCircle, ArrowLeft, Brain, CheckCircle2, RefreshCw, Sparkles } from "lucide-react";
 import { toast } from "sonner";
+import { AnswerValue, calculateDiagnosticScore, normalizeAnswerForScore } from "@/lib/diagnostic-evaluation";
 
 const statusLabels: Record<DiagnosticTemplate["status"], string> = {
   draft: "Rascunho",
   published: "Publicado",
   archived: "Arquivado",
 };
-
-type AnswerValue = string | number | string[] | null;
 
 const isAnswered = (value: AnswerValue): boolean => {
   if (value === null || value === undefined) return false;
@@ -38,8 +37,6 @@ const getOptionsWithWeight = (question: TemplateQuestion) => {
   if (question.options?.length) return question.options.map((label) => ({ label, weight: 1 }));
   return [] as { label: string; weight?: number | null }[];
 };
-
-const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
 const formatOpportunityCondition = (rule?: TemplateOpportunityRule): string | null => {
   if (!rule?.enabled) return null;
@@ -80,48 +77,8 @@ const formatOpportunityCondition = (rule?: TemplateOpportunityRule): string | nu
   }
 };
 
-const normalizeAnswer = (question: TemplateQuestion, value: AnswerValue): number | null => {
-  if (!isAnswered(value) || question.includeInScore === false) return null;
-
-  switch (question.type) {
-    case "yes_no":
-      return value === "yes" ? 1 : 0;
-    case "scale": {
-      const numericValue = typeof value === "number" ? value : Number(value);
-      if (Number.isNaN(numericValue)) return null;
-      const min = question.minValue ?? 0;
-      const max = question.maxValue ?? 10;
-      if (max === min) return 0;
-      return clamp((numericValue - min) / (max - min), 0, 1);
-    }
-    case "number": {
-      const numericValue = typeof value === "number" ? value : Number(value);
-      if (Number.isNaN(numericValue)) return null;
-      const min = question.minValue ?? 0;
-      const fallbackMax = Math.max(min + 1, Math.abs(numericValue));
-      const max = question.maxValue ?? fallbackMax;
-      if (max === min) return 0;
-      return clamp((numericValue - min) / (max - min), 0, 1);
-    }
-    case "multiple_choice": {
-      const options = getOptionsWithWeight(question);
-      if (!options.length) return null;
-      const selected = Array.isArray(value) ? value : typeof value === "string" ? [value] : [];
-      const totalWeight = options.reduce((sum, option) => sum + (option.weight ?? 1), 0) || options.length;
-      const selectedWeight = options.reduce(
-        (sum, option) => (selected.includes(option.label) ? sum + (option.weight ?? 1) : sum),
-        0
-      );
-      return totalWeight > 0 ? clamp(selectedWeight / totalWeight, 0, 1) : 1;
-    }
-    case "text":
-      return typeof value === "string" && value.trim().length > 0 ? 1 : null;
-    case "attachment":
-      return isAnswered(value) ? 1 : null;
-    default:
-      return null;
-  }
-};
+const normalizeAnswer = (question: TemplateQuestion, value: AnswerValue): number | null =>
+  normalizeAnswerForScore(question, value);
 
 const matchesOpportunityCondition = (question: TemplateQuestion, value: AnswerValue): boolean => {
   const rule = question.regraOportunidade;
@@ -234,27 +191,8 @@ export default function TemplateDiagnosticPreview() {
   const progress = totalQuestions ? Math.round((answeredQuestions / totalQuestions) * 100) : 0;
 
   const scoreSummary = useMemo(() => {
-    if (!template) return { score: 0, answeredWeight: 0, totalWeight: 0 };
-
-    let weightedSum = 0;
-    let answeredWeight = 0;
-    let totalWeight = 0;
-
-    template.sections.forEach((section) => {
-      section.questions?.forEach((question) => {
-        const weight = question.weight || 1;
-        if (question.includeInScore === false) return;
-        totalWeight += weight;
-        const normalized = normalizeAnswer(question, responses[question.id]);
-        if (normalized !== null) {
-          weightedSum += normalized * weight;
-          answeredWeight += weight;
-        }
-      });
-    });
-
-    const score = answeredWeight > 0 ? Math.round((weightedSum / answeredWeight) * 100) : 0;
-    return { score, answeredWeight, totalWeight };
+    if (!template) return { score: 0, answeredWeight: 0, totalWeight: 0, coverage: 0 };
+    return calculateDiagnosticScore(template, responses);
   }, [responses, template]);
 
   const opportunities = useMemo(() => {

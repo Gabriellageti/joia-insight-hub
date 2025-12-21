@@ -10,6 +10,8 @@ import { DiagnosticExecution } from "@/components/diagnostico/execution";
 import { DiagnosticAnswer } from "@/types/diagnostic-execution";
 import { toast } from "sonner";
 import { Play, FileBarChart2, ArrowLeft } from "lucide-react";
+import { calculateDiagnosticScore, resolveAnswerValue } from "@/lib/diagnostic-evaluation";
+import { buildActionPlan, generateRecommendations } from "@/lib/recommendations";
 
 export default function DiagnosticoDetalhe() {
   const { id } = useParams();
@@ -53,13 +55,32 @@ export default function DiagnosticoDetalhe() {
   };
 
   const handleComplete = async (answers: Record<string, DiagnosticAnswer>) => {
+    if (!template) return;
+
     const answeredCount = Object.keys(answers).length;
+    const answerValues = Object.fromEntries(
+      Object.entries(answers).map(([id, answer]) => [id, resolveAnswerValue(answer)])
+    );
+    const scoreSummary = calculateDiagnosticScore(template, answerValues);
+    const recommendations = generateRecommendations({
+      template,
+      answers: answerValues,
+      score: scoreSummary.score,
+      responsibleName: diagnostic.responsibleName,
+    });
+    const actionPlan = buildActionPlan({
+      diagnostic,
+      recommendations,
+      score: scoreSummary.score,
+    });
+
     updateDiagnostic(diagnostic.id, {
       progress: 100,
       answeredQuestions: answeredCount,
       status: "completed",
       hasResponses: true,
-      score: Math.round(Math.random() * 30 + 70), // Mock score
+      score: scoreSummary.score,
+      actionPlan,
     });
     toast.success("Diagnóstico concluído!");
     setIsExecuting(false);
@@ -157,6 +178,56 @@ export default function DiagnosticoDetalhe() {
           </div>
         </CardContent>
       </Card>
+
+      {diagnostic.actionPlan ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Plano de ação</CardTitle>
+            <CardDescription>{diagnostic.actionPlan.description}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span>Gerado em {diagnostic.actionPlan.generatedAt}</span>
+              <span className="h-1 w-1 rounded-full bg-border" />
+              <span>{diagnostic.actionPlan.actions.length} ações priorizadas</span>
+            </div>
+
+            <div className="space-y-3">
+              {diagnostic.actionPlan.actions.map((action) => (
+                <div key={action.id} className="rounded-lg border p-4 space-y-2">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Prioridade {action.priority}</p>
+                      <h4 className="text-base font-semibold leading-tight">{action.title}</h4>
+                    </div>
+                    <div className="flex flex-wrap gap-2 justify-end">
+                      <Badge variant="outline">Impacto {action.impact}</Badge>
+                      <Badge variant="outline">Prazo sugerido: {action.dueDate}</Badge>
+                    </div>
+                  </div>
+                  <p className="text-sm text-muted-foreground">{action.description}</p>
+                  <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                    <span>Responsável: {action.responsible}</span>
+                    {action.rationale && (
+                      <>
+                        <span className="h-1 w-1 rounded-full bg-border" />
+                        <span>{action.rationale}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle>Plano de ação</CardTitle>
+            <CardDescription>Finalize o diagnóstico para gerar recomendações automáticas.</CardDescription>
+          </CardHeader>
+        </Card>
+      )}
     </div>
   );
 }
