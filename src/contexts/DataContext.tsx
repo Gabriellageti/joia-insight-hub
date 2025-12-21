@@ -1279,6 +1279,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
             createdAt: getDate(),
             sourceDiagnosticId: diagnostic.id,
             sourceActionId: action.id,
+            what: action.what || action.title,
+            why: action.why || action.positiveImpact?.expectedBenefit,
+            where: action.where || diagnostic.projectName,
+            when: action.when || action.dueDate,
+            who: action.who || action.responsible,
+            how: action.how || action.description,
+            howMuch:
+              action.howMuch ||
+              action.positiveImpact?.estimatedCostOrTime ||
+              action.negativeImpact?.estimatedCostOrTime,
           } as Task;
         });
 

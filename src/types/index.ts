@@ -184,6 +184,13 @@ export interface ActionRecommendation {
   negativeImpact: ImpactProjection;
   responsible: string;
   dueDate: string;
+  what?: string;
+  why?: string;
+  where?: string;
+  when?: string;
+  who?: string;
+  how?: string;
+  howMuch?: string;
   relatedQuestionId?: string;
   rationale?: string;
 }

@@ -91,6 +91,27 @@ const suggestDueDate = (priority: ActionPriority): string => {
   return formatDatePtBR(addDays(new Date(), offset));
 };
 
+const enrichActionWith5w2h = (
+  diagnostic: Diagnostic,
+  action: ActionRecommendation
+): ActionRecommendation => {
+  const defaultWhy = action.positiveImpact?.expectedBenefit || action.description;
+  const defaultHowMuch =
+    action.positiveImpact?.estimatedCostOrTime || action.negativeImpact?.estimatedCostOrTime;
+  const location = `${diagnostic.projectName} • ${diagnostic.clientName}`;
+
+  return {
+    ...action,
+    what: action.what || action.title,
+    why: action.why || defaultWhy,
+    where: action.where || location,
+    when: action.when || action.dueDate,
+    who: action.who || action.responsible,
+    how: action.how || action.description,
+    howMuch: action.howMuch || defaultHowMuch,
+  };
+};
+
 const aggregateImpactProjection = (
   diagnostic: Diagnostic,
   actions: ActionRecommendation[],
@@ -290,6 +311,7 @@ export const buildActionPlan = ({
   score: number;
 }): ActionPlan => {
   const planImpact = aggregateImpactProjection(diagnostic, recommendations, score);
+  const enrichedActions = recommendations.map((action) => enrichActionWith5w2h(diagnostic, action));
 
   return {
     title: `Plano de ação • ${diagnostic.projectName}`,
@@ -297,6 +319,6 @@ export const buildActionPlan = ({
     generatedAt: formatDatePtBR(new Date()),
     positiveImpact: planImpact.positiveImpact,
     negativeImpact: planImpact.negativeImpact,
-    actions: recommendations,
+    actions: enrichedActions,
   };
 };
