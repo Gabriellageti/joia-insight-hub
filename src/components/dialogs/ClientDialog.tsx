@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { ChevronDown, Loader2 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ChevronDown, Info, Loader2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -30,6 +30,8 @@ import { Client } from "@/types";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
+import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 type Address = {
   cep: string;
@@ -49,6 +51,14 @@ const emptyAddress: Address = {
   bairro: "",
   cidade: "",
   uf: "",
+};
+
+const emptyAutoFilledFields = {
+  logradouro: false,
+  bairro: false,
+  cidade: false,
+  uf: false,
+  complemento: false,
 };
 
 interface ClientDialogProps {
@@ -122,6 +132,12 @@ export function ClientDialog({
   const [isFetchingCep, setIsFetchingCep] = useState(false);
   const [isAddressLocked, setIsAddressLocked] = useState(false);
   const [isFetchingCnpj, setIsFetchingCnpj] = useState(false);
+  const [autoFilledFields, setAutoFilledFields] = useState({ ...emptyAutoFilledFields });
+  const [shouldFocusNumber, setShouldFocusNumber] = useState(false);
+  const [highlightNumber, setHighlightNumber] = useState(false);
+
+  const autoFilledFieldsRef = useRef({ ...emptyAutoFilledFields });
+  const numeroInputRef = useRef<HTMLInputElement | null>(null);
 
   const [formData, setFormData] = useState({
     razaoSocial: "",
@@ -155,6 +171,28 @@ export function ClientDialog({
     });
   };
 
+  const clearAutoFilledValues = useCallback(() => {
+    const fields = autoFilledFieldsRef.current;
+    if (!Object.values(fields).some(Boolean)) return;
+
+    setFormData((prev) => ({
+      ...prev,
+      endereco: {
+        ...prev.endereco,
+        logradouro: fields.logradouro ? "" : prev.endereco.logradouro,
+        complemento: fields.complemento ? "" : prev.endereco.complemento,
+        bairro: fields.bairro ? "" : prev.endereco.bairro,
+        cidade: fields.cidade ? "" : prev.endereco.cidade,
+        uf: fields.uf ? "" : prev.endereco.uf,
+      },
+    }));
+    setAutoFilledFields({ ...emptyAutoFilledFields });
+  }, []);
+
+  useEffect(() => {
+    autoFilledFieldsRef.current = autoFilledFields;
+  }, [autoFilledFields]);
+
   const validateForm = () => {
     const validationErrors: Record<string, string> = {};
 
@@ -168,6 +206,11 @@ export function ClientDialog({
 
     const cnpj = formData.cnpj.trim();
     if (cnpj && !isValidCnpj(cnpj)) validationErrors.cnpj = "CNPJ inválido.";
+
+    const cep = sanitizeNumbers(formData.endereco.cep);
+    if (cep.length === 8 && !formData.endereco.numero.trim()) {
+      validationErrors.numero = "Informe o número do endereço para completar o CEP.";
+    }
 
     setErrors(validationErrors);
     return Object.keys(validationErrors).length === 0;
@@ -234,6 +277,9 @@ export function ClientDialog({
       setIsFetchingCep(false);
     }
 
+    setAutoFilledFields({ ...emptyAutoFilledFields });
+    setHighlightNumber(false);
+    setShouldFocusNumber(false);
     setErrors({});
     setIsSubmitting(false);
   }, [client, open]);
@@ -259,6 +305,14 @@ export function ClientDialog({
         const data = await response.json();
         if (data?.erro) throw new Error("CEP não encontrado");
 
+        const nextAutoFilled = {
+          logradouro: Boolean(data.logradouro),
+          bairro: Boolean(data.bairro),
+          cidade: Boolean(data.localidade),
+          uf: Boolean(data.uf),
+          complemento: Boolean(data.complemento),
+        };
+
         setFormData((prev) => ({
           ...prev,
           endereco: {
@@ -272,9 +326,12 @@ export function ClientDialog({
           },
         }));
 
+        setAutoFilledFields(nextAutoFilled);
         setIsAddressLocked(true);
+        setShouldFocusNumber(true);
       } catch {
         setIsAddressLocked(false);
+        clearAutoFilledValues();
         toast.error("Não foi possível buscar o CEP. Preencha o endereço manualmente.");
       } finally {
         setIsFetchingCep(false);
@@ -285,7 +342,25 @@ export function ClientDialog({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [formData.endereco.cep]);
+  }, [clearAutoFilledValues, formData.endereco.cep]);
+
+  useEffect(() => {
+    const cep = sanitizeNumbers(formData.endereco.cep);
+    if (cep.length === 8 || !Object.values(autoFilledFields).some(Boolean)) return;
+
+    clearAutoFilledValues();
+  }, [autoFilledFields, clearAutoFilledValues, formData.endereco.cep]);
+
+  useEffect(() => {
+    if (!shouldFocusNumber) return;
+
+    numeroInputRef.current?.focus();
+    setHighlightNumber(true);
+    setShouldFocusNumber(false);
+
+    const timer = setTimeout(() => setHighlightNumber(false), 1800);
+    return () => clearTimeout(timer);
+  }, [shouldFocusNumber]);
 
   const handleCnpjLookup = async () => {
     const normalizedCnpj = sanitizeNumbers(formData.cnpj);
@@ -553,7 +628,7 @@ export function ClientDialog({
             </div>
           </section>
 
-          <section className="rounded-lg border p-4">
+        <section className="rounded-lg border p-4">
             <div className="space-y-1">
               <p className="text-sm font-medium text-foreground">Endereço inteligente</p>
               <p className="text-sm text-muted-foreground">Preencha o CEP e deixe o resto se comportar.</p>
@@ -582,75 +657,134 @@ export function ClientDialog({
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="uf">UF</Label>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="uf">UF</Label>
+                  {autoFilledFields.uf && <Badge variant="secondary">Preenchido pelo CEP</Badge>}
+                </div>
                 <Input
                   id="uf"
                   value={formData.endereco.uf}
                   readOnly={isAddressLocked}
-                  onChange={(e) =>
+                  onChange={(e) => {
                     setFormData((p) => ({
                       ...p,
                       endereco: { ...p.endereco, uf: e.target.value.toUpperCase().slice(0, 2) },
-                    }))
-                  }
+                    }));
+                    if (autoFilledFields.uf) setAutoFilledFields((prev) => ({ ...prev, uf: false }));
+                  }}
                   placeholder="UF"
                   maxLength={2}
                 />
               </div>
 
               <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="logradouro">Logradouro</Label>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="logradouro">Logradouro</Label>
+                  {autoFilledFields.logradouro && <Badge variant="secondary">Preenchido pelo CEP</Badge>}
+                </div>
                 <Input
                   id="logradouro"
                   value={formData.endereco.logradouro}
                   readOnly={isAddressLocked}
-                  onChange={(e) =>
-                    setFormData((p) => ({ ...p, endereco: { ...p.endereco, logradouro: e.target.value } }))
-                  }
+                  onChange={(e) => {
+                    setFormData((p) => ({ ...p, endereco: { ...p.endereco, logradouro: e.target.value } }));
+                    if (autoFilledFields.logradouro)
+                      setAutoFilledFields((prev) => ({ ...prev, logradouro: false }));
+                  }}
                   placeholder="Rua, avenida..."
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="numero">Número</Label>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="numero" className="flex items-center gap-1">
+                    Número{sanitizeNumbers(formData.endereco.cep).length === 8 && (
+                      <span className="text-destructive">*</span>
+                    )}
+                  </Label>
+                  {isAddressLocked && (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-xs">
+                          <p>Informe o número manualmente: a API do CEP não retorna essa informação.</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
+                </div>
                 <Input
                   id="numero"
+                  ref={numeroInputRef}
                   value={formData.endereco.numero}
-                  onChange={(e) => setFormData((p) => ({ ...p, endereco: { ...p.endereco, numero: e.target.value } }))}
+                  onChange={(e) => {
+                    setFormData((p) => ({ ...p, endereco: { ...p.endereco, numero: e.target.value } }));
+                    if (errors.numero) clearFieldError("numero");
+                  }}
                   placeholder="Número"
+                  className={cn(
+                    errors.numero && "border-destructive focus-visible:ring-destructive",
+                    highlightNumber && "ring-2 ring-offset-2 ring-primary/60",
+                  )}
+                  aria-describedby={isAddressLocked ? "numero-hint" : undefined}
                 />
+                {isAddressLocked && (
+                  <p id="numero-hint" className="text-xs text-muted-foreground">
+                    Apenas número e complemento precisam ser informados manualmente.
+                  </p>
+                )}
+                {errors.numero && <p className="text-sm text-destructive">{errors.numero}</p>}
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="complemento">Complemento</Label>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="complemento">Complemento</Label>
+                  {autoFilledFields.complemento && <Badge variant="secondary">Preenchido pelo CEP</Badge>}
+                </div>
                 <Input
                   id="complemento"
                   value={formData.endereco.complemento}
-                  onChange={(e) =>
-                    setFormData((p) => ({ ...p, endereco: { ...p.endereco, complemento: e.target.value } }))
-                  }
+                  onChange={(e) => {
+                    setFormData((p) => ({ ...p, endereco: { ...p.endereco, complemento: e.target.value } }));
+                    if (autoFilledFields.complemento)
+                      setAutoFilledFields((prev) => ({ ...prev, complemento: false }));
+                  }}
                   placeholder="Apto, bloco, etc."
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="bairro">Bairro</Label>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="bairro">Bairro</Label>
+                  {autoFilledFields.bairro && <Badge variant="secondary">Preenchido pelo CEP</Badge>}
+                </div>
                 <Input
                   id="bairro"
                   value={formData.endereco.bairro}
                   readOnly={isAddressLocked}
-                  onChange={(e) => setFormData((p) => ({ ...p, endereco: { ...p.endereco, bairro: e.target.value } }))}
+                  onChange={(e) => {
+                    setFormData((p) => ({ ...p, endereco: { ...p.endereco, bairro: e.target.value } }));
+                    if (autoFilledFields.bairro) setAutoFilledFields((prev) => ({ ...prev, bairro: false }));
+                  }}
                   placeholder="Bairro"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="cidade">Cidade</Label>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="cidade">Cidade</Label>
+                  {autoFilledFields.cidade && <Badge variant="secondary">Preenchido pelo CEP</Badge>}
+                </div>
                 <Input
                   id="cidade"
                   value={formData.endereco.cidade}
                   readOnly={isAddressLocked}
-                  onChange={(e) => setFormData((p) => ({ ...p, endereco: { ...p.endereco, cidade: e.target.value } }))}
+                  onChange={(e) => {
+                    setFormData((p) => ({ ...p, endereco: { ...p.endereco, cidade: e.target.value } }));
+                    if (autoFilledFields.cidade) setAutoFilledFields((prev) => ({ ...prev, cidade: false }));
+                  }}
                   placeholder="Cidade"
                 />
               </div>
