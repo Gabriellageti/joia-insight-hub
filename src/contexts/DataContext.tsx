@@ -1199,6 +1199,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
       if (!isSupabaseConfigured) {
         setClientsError(SUPABASE_CLIENTS_DISABLED_MESSAGE);
+        toast({
+          title: "Integração com Supabase desativada",
+          description: SUPABASE_CLIENTS_DISABLED_MESSAGE,
+        });
         setClientsLoading(false);
         return;
       }
@@ -1604,7 +1608,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
           description: message,
           variant: "destructive",
         });
-        throw error;
+        return Promise.reject(new Error(message));
       }
     },
     updateClient: async (id, client) => {
@@ -1639,7 +1643,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
           description: message,
           variant: "destructive",
         });
-        throw error;
+        return Promise.reject(new Error(message));
       }
     },
     deleteClient: async (id) => {
@@ -1662,7 +1666,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
           description: message,
           variant: "destructive",
         });
-        throw error;
+        return Promise.reject(new Error(message));
       }
     },
 
