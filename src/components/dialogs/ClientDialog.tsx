@@ -137,6 +137,13 @@ const isValidWhatsapp = (value: string) => sanitizeNumbers(value).length === 11;
 const isValidEmail = (value: string) =>
   /^(?!.*\.\.)([\w+-]+\.)*[\w+-]+@([\w-]+\.)+[A-Za-z]{2,}$/.test(value.trim());
 
+const formatCep = (value: string) => {
+  const digits = sanitizeNumbers(value).slice(0, 8);
+  if (!digits) return "";
+  if (digits.length > 5) return `${digits.slice(0, 5)}-${digits.slice(5)}`;
+  return digits;
+};
+
 const mapSegmentFromCnae = (description?: string) => {
   if (!description) return "";
   const normalized = description.toLowerCase();
@@ -167,6 +174,10 @@ export function ClientDialog({
   const [autoFilledFields, setAutoFilledFields] = useState({ ...emptyAutoFilledFields });
   const [shouldFocusNumber, setShouldFocusNumber] = useState(false);
   const [highlightNumber, setHighlightNumber] = useState(false);
+
+  const cepDigitsLength = sanitizeNumbers(formData.endereco.cep).length;
+  const isCepReadyForLookup = cepDigitsLength === 8;
+  const isCepIncomplete = cepDigitsLength > 0 && cepDigitsLength < 8;
 
   const autoFilledFieldsRef = useRef({ ...emptyAutoFilledFields });
   const numeroInputRef = useRef<HTMLInputElement | null>(null);
@@ -723,22 +734,31 @@ export function ClientDialog({
                   <Input
                     id="cep"
                     inputMode="numeric"
-                    value={formData.endereco.cep}
+                    value={formatCep(formData.endereco.cep)}
                     onChange={(e) => {
                       const value = e.target.value.replace(/\D/g, "").slice(0, 8);
                       setFormData((p) => ({ ...p, endereco: { ...p.endereco, cep: value } }));
                       if (!value) setIsAddressLocked(false);
                       if (errors.cep) clearFieldError("cep");
                     }}
-                    placeholder="00000000"
-                    maxLength={8}
+                    placeholder="00000-000"
+                    maxLength={9}
                     aria-invalid={Boolean(errors.cep)}
                     className={cn(errors.cep && "border-destructive focus-visible:ring-destructive")}
                   />
-                  {isFetchingCep && (
+                  {isFetchingCep && isCepReadyForLookup && (
                     <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
                   )}
-                  {errors.cep && <p className="mt-1 text-sm text-destructive">{errors.cep}</p>}
+                  <div className="mt-1 space-y-1">
+                    <p className="text-sm text-muted-foreground">
+                      O preenchimento automático dispara ao completar 8 dígitos. O indicador de busca aparece apenas
+                      durante esse processo.
+                    </p>
+                    {isCepIncomplete && !errors.cep && (
+                      <p className="text-sm text-amber-600">Digite os 8 dígitos para liberar o salvamento.</p>
+                    )}
+                    {errors.cep && <p className="text-sm text-destructive">{errors.cep}</p>}
+                  </div>
                 </div>
               </div>
 
@@ -986,20 +1006,26 @@ export function ClientDialog({
                   />
                 </div>
               </div>
-            </CollapsibleContent>
-          </Collapsible>
+          </CollapsibleContent>
+        </Collapsible>
 
-          <DialogFooter className="flex flex-col gap-2 sm:flex-row">
-            <Button type="button" variant="outline" className="flex-1" onClick={() => onOpenChange(false)}>
-              Cancelar
-            </Button>
-            <Button
-              type="submit"
-              className="flex-1 bg-accent text-accent-foreground hover:bg-accent/90"
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? (
-                <>
+        {isCepIncomplete && (
+          <p className="text-sm text-amber-600">
+            Complete o CEP com 8 dígitos para habilitar o salvamento ou limpe para preencher manualmente.
+          </p>
+        )}
+
+        <DialogFooter className="flex flex-col gap-2 sm:flex-row">
+          <Button type="button" variant="outline" className="flex-1" onClick={() => onOpenChange(false)}>
+            Cancelar
+          </Button>
+          <Button
+            type="submit"
+            className="flex-1 bg-accent text-accent-foreground hover:bg-accent/90"
+            disabled={isSubmitting || isCepIncomplete}
+          >
+            {isSubmitting ? (
+              <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Processando...
                 </>
