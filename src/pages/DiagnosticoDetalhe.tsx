@@ -9,7 +9,7 @@ import { formatRelativeUpdate, resolveStatusLabel } from "@/lib/diagnostics";
 import { DiagnosticExecution } from "@/components/diagnostico/execution";
 import { DiagnosticAnswer } from "@/types/diagnostic-execution";
 import { toast } from "sonner";
-import { Play, FileBarChart2, ArrowLeft } from "lucide-react";
+import { Play, FileBarChart2, ArrowLeft, Download, ExternalLink } from "lucide-react";
 import { calculateDiagnosticScore, resolveAnswerValue } from "@/lib/diagnostic-evaluation";
 import { buildActionPlan, generateRecommendations } from "@/lib/recommendations";
 
@@ -95,6 +95,85 @@ export default function DiagnosticoDetalhe() {
     setIsExecuting(false);
   };
 
+  const handleExportReport = (format: "html" | "pdf") => {
+    const generatedAt = new Date().toLocaleString("pt-BR");
+    const actionPlanStatus = diagnostic.actionPlan
+      ? `Gerado em ${diagnostic.actionPlan.generatedAt}`
+      : "Não gerado";
+
+    const recommendations = diagnostic.actionPlan?.actions || [];
+
+    const htmlContent = `<!DOCTYPE html>
+      <html lang="pt-BR">
+        <head>
+          <meta charset="UTF-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <title>Relatório do diagnóstico - ${diagnostic.name}</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 0 auto; padding: 24px; color: #0f172a; max-width: 960px; }
+            h1 { font-size: 24px; margin-bottom: 4px; }
+            h2 { font-size: 18px; margin-top: 24px; margin-bottom: 8px; }
+            p { margin: 6px 0; line-height: 1.5; }
+            .meta { display: flex; flex-wrap: wrap; gap: 12px; font-size: 14px; color: #475569; }
+            .badge { display: inline-block; padding: 6px 10px; border-radius: 8px; background: #ecfdf3; color: #047857; font-weight: 600; }
+            .card { border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin-top: 12px; }
+            .list { padding-left: 18px; }
+            .muted { color: #475569; }
+          </style>
+        </head>
+        <body>
+          <h1>Relatório do diagnóstico</h1>
+          <p class="muted">${generatedAt}</p>
+          <div class="card">
+            <h2>Metadados</h2>
+            <p><strong>Diagnóstico:</strong> ${diagnostic.name}</p>
+            <p><strong>Projeto:</strong> ${diagnostic.projectName} (${diagnostic.clientName})</p>
+            <p><strong>Autor:</strong> ${diagnostic.responsibleName || "Equipe JoIA"}</p>
+            <p><strong>Data:</strong> ${diagnostic.updatedAt}</p>
+            <p><strong>Score:</strong> ${diagnostic.score ?? "N/A"}</p>
+            <p><strong>Status do plano de ação:</strong> ${actionPlanStatus}</p>
+          </div>
+          <div class="card">
+            <h2>Recomendações prioritárias</h2>
+            ${
+              recommendations.length
+                ? `<ol class="list">${recommendations
+                    .map((rec) => `<li><strong>${rec.title}</strong> — ${rec.description} (Impacto ${rec.impact}, Responsável: ${rec.responsible}, Prazo: ${rec.dueDate})</li>`)
+                    .join("" )}</ol>`
+                : "<p class=\"muted\">Nenhuma recomendação registrada.</p>"
+            }
+          </div>
+          <div class="card">
+            <h2>Impacto</h2>
+            <p><strong>Executar plano:</strong> Melhora a maturidade operacional e reduz riscos ao cumprir ${recommendations.length} ações priorizadas.</p>
+            <p><strong>Não executar:</strong> Mantém os gaps identificados e pode comprometer os objetivos de ${diagnostic.projectName}.</p>
+          </div>
+        </body>
+      </html>`;
+
+    if (format === "html") {
+      const blob = new Blob([htmlContent], { type: "text/html" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `diagnostico-${diagnostic.id}-relatorio.html`;
+      link.click();
+      URL.revokeObjectURL(url);
+      return;
+    }
+
+    const reportWindow = window.open("", "_blank");
+    if (!reportWindow) {
+      toast.error("Não foi possível abrir o relatório. Verifique o bloqueador de pop-up.");
+      return;
+    }
+
+    reportWindow.document.write(htmlContent);
+    reportWindow.document.close();
+    reportWindow.focus();
+    reportWindow.print();
+  };
+
   // If in execution mode, show the wizard
   if (isExecuting && template) {
     return (
@@ -109,11 +188,14 @@ export default function DiagnosticoDetalhe() {
   }
 
   // Summary view
-  const ctaLabel = diagnostic.status === "draft" 
-    ? "Iniciar diagnóstico" 
-    : diagnostic.status === "in_progress" 
-      ? "Continuar diagnóstico" 
+  const ctaLabel = diagnostic.status === "draft"
+    ? "Iniciar diagnóstico"
+    : diagnostic.status === "in_progress"
+      ? "Continuar diagnóstico"
       : "Ver respostas";
+
+  const isCompleted = diagnostic.status === "completed";
+  const recommendations = diagnostic.actionPlan?.actions || [];
 
   return (
     <div className="space-y-6">
@@ -132,18 +214,35 @@ export default function DiagnosticoDetalhe() {
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Resumo</CardTitle>
-          <CardDescription>
-            Template: {diagnostic.templateName}
-            {template?.estimatedTimeMinutes && ` • Tempo estimado: ~${template.estimatedTimeMinutes} min`}
-          </CardDescription>
+        <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <CardTitle>Resumo</CardTitle>
+            <CardDescription>
+              Template: {diagnostic.templateName}
+              {template?.estimatedTimeMinutes && ` • Tempo estimado: ~${template.estimatedTimeMinutes} min`}
+            </CardDescription>
+          </div>
+          {isCompleted && (
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" onClick={() => handleExportReport("html")}>Exportar HTML</Button>
+              <Button className="bg-accent text-accent-foreground hover:bg-accent/90" onClick={() => handleExportReport("pdf")}>
+                <Download className="h-4 w-4 mr-2" />
+                Salvar relatório
+              </Button>
+            </div>
+          )}
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
             <span>Responsável: {diagnostic.responsibleName || "Não definido"}</span>
             <span className="h-1 w-1 rounded-full bg-border" />
             <span>{formatRelativeUpdate(diagnostic)}</span>
+            {isCompleted && diagnostic.score !== undefined && (
+              <>
+                <span className="h-1 w-1 rounded-full bg-border" />
+                <span>Score final: {diagnostic.score}</span>
+              </>
+            )}
           </div>
           
           <div className="space-y-2">
@@ -173,7 +272,7 @@ export default function DiagnosticoDetalhe() {
           </div>
 
           <div className="pt-4 border-t">
-            <Button 
+            <Button
               className="bg-accent text-accent-foreground hover:bg-accent/90"
               onClick={handleStartExecution}
             >
@@ -183,6 +282,96 @@ export default function DiagnosticoDetalhe() {
           </div>
         </CardContent>
       </Card>
+
+      {isCompleted && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Entrega final</CardTitle>
+            <CardDescription>
+              Consolidado do diagnóstico com plano de ação, recomendações e impactos.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="rounded-lg border p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium text-muted-foreground">Score final</p>
+                  <Badge className="bg-emerald-100 text-emerald-700" variant="outline">
+                    {diagnostic.score ?? "N/A"}
+                  </Badge>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Avaliação consolidada para {diagnostic.projectName}. Última atualização em {diagnostic.updatedAt}.
+                </p>
+              </div>
+              <div className="rounded-lg border p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium text-muted-foreground">Plano de ação</p>
+                  <Badge variant="outline">{diagnostic.actionPlan?.actions.length || 0} ações</Badge>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Status: {diagnostic.actionPlan ? `Gerado em ${diagnostic.actionPlan.generatedAt}` : "Não gerado"}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" size="sm" asChild>
+                    <a href={`/plano-acao?diagnostico=${diagnostic.id}`} target="_blank" rel="noreferrer">
+                      <ExternalLink className="h-4 w-4 mr-2" />Abrir Kanban
+                    </a>
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => handleExportReport("pdf")}>
+                    <Download className="h-4 w-4 mr-2" />Exportar relatório
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-muted-foreground">Recomendações priorizadas</p>
+                <Badge variant="outline">{recommendations.length} itens</Badge>
+              </div>
+              {recommendations.length ? (
+                <div className="grid gap-3 md:grid-cols-2">
+                  {recommendations.slice(0, 4).map((rec) => (
+                    <div key={rec.id} className="rounded-lg border p-4 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-xs uppercase text-muted-foreground">Prioridade {rec.priority}</p>
+                          <h4 className="text-base font-semibold leading-tight">{rec.title}</h4>
+                        </div>
+                        <Badge variant="outline">Impacto {rec.impact}</Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground">{rec.description}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Responsável: {rec.responsible} • Prazo: {rec.dueDate}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">Nenhuma recomendação registrada.</p>
+              )}
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="rounded-lg border p-4 space-y-2 bg-emerald-50">
+                <p className="text-sm font-semibold text-emerald-900">Impacto de executar</p>
+                <p className="text-sm text-emerald-800">
+                  Implementar o plano reduz riscos, aumenta a eficiência e aproveita as {recommendations.length} ações
+                  priorizadas para elevar o score do projeto.
+                </p>
+              </div>
+              <div className="rounded-lg border p-4 space-y-2 bg-amber-50">
+                <p className="text-sm font-semibold text-amber-900">Impacto de não executar</p>
+                <p className="text-sm text-amber-800">
+                  A ausência de ação mantém os gaps identificados, pode atrasar o roadmap e limitar o ganho de maturidade
+                  organizacional.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {diagnostic.actionPlan ? (
         <Card>
