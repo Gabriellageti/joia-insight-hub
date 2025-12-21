@@ -58,7 +58,6 @@ import {
   updateClient as updateSupabaseClient,
   type ClientRow,
 } from "@/integrations/supabase/clients";
-import { isSupabaseConfigured } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 
 interface DataContextType {
@@ -1101,9 +1100,6 @@ const initialLeads: Lead[] = [
 
 const initialDiagnostics: Diagnostic[] = getDiagnosticsSeed();
 
-const SUPABASE_CLIENTS_DISABLED_MESSAGE =
-  "Integração com Supabase desativada. Configure VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY para sincronizar clientes ou continue usando os dados locais.";
-
 const initialContentItems: ContentItem[] = [
   {
     id: "content-1",
@@ -1196,12 +1192,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
     const fetchClients = async () => {
       setClientsLoading(true);
       setClientsError(null);
-
-      if (!isSupabaseConfigured) {
-        setClientsError(SUPABASE_CLIENTS_DISABLED_MESSAGE);
-        setClientsLoading(false);
-        return;
-      }
 
       try {
         const data = await listClients();
@@ -1581,15 +1571,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
     clientsLoading,
     clientsError,
     addClient: async (client) => {
-      if (!isSupabaseConfigured) {
-        toast({
-          title: "Integração com Supabase desativada",
-          description: SUPABASE_CLIENTS_DISABLED_MESSAGE,
-        });
-        setClientsError(SUPABASE_CLIENTS_DISABLED_MESSAGE);
-        return Promise.reject(new Error(SUPABASE_CLIENTS_DISABLED_MESSAGE));
-      }
-
       const payload = buildSupabaseClientInsert(client);
 
       try {
@@ -1608,15 +1589,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
       }
     },
     updateClient: async (id, client) => {
-      if (!isSupabaseConfigured) {
-        toast({
-          title: "Integração com Supabase desativada",
-          description: SUPABASE_CLIENTS_DISABLED_MESSAGE,
-        });
-        setClientsError(SUPABASE_CLIENTS_DISABLED_MESSAGE);
-        return Promise.reject(new Error(SUPABASE_CLIENTS_DISABLED_MESSAGE));
-      }
-
       const payload = buildSupabaseClientUpdate(client);
 
       try {
@@ -1643,15 +1615,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
       }
     },
     deleteClient: async (id) => {
-      if (!isSupabaseConfigured) {
-        toast({
-          title: "Integração com Supabase desativada",
-          description: SUPABASE_CLIENTS_DISABLED_MESSAGE,
-        });
-        setClientsError(SUPABASE_CLIENTS_DISABLED_MESSAGE);
-        return Promise.reject(new Error(SUPABASE_CLIENTS_DISABLED_MESSAGE));
-      }
-
       try {
         await deleteSupabaseClient(id);
         setClients((prev) => prev.filter((c) => c.id !== id));

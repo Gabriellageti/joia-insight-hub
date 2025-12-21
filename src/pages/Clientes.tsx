@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { AlertCircle, Filter, Pencil, Plus, Search, Trash } from "lucide-react";
+import { Filter, Pencil, Plus, Search, Trash } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,8 +8,6 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ClientDialog } from "@/components/dialogs/ClientDialog";
 import { useData } from "@/contexts/DataContext";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { isSupabaseConfigured } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 const followUpLabels = {
@@ -18,17 +16,11 @@ const followUpLabels = {
   mensal: "Mensal",
 };
 
-const SUPABASE_CLIENTS_DISABLED_MESSAGE =
-  "Integração com Supabase desativada. Configure VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY para sincronizar clientes ou continue usando os dados locais.";
-
 export default function Clientes() {
-  const { clients, deleteClient, clientsError } = useData();
+  const { clients, deleteClient } = useData();
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState<typeof clients[number] | null>(null);
-
-  const supabaseDisabled = !isSupabaseConfigured;
-  const displayError = supabaseDisabled ? SUPABASE_CLIENTS_DISABLED_MESSAGE : clientsError;
 
   const handleEdit = (clientId: string) => {
     const client = clients.find((item) => item.id === clientId) || null;
@@ -85,17 +77,6 @@ export default function Clientes() {
       </div>
 
       <Card>
-        {(supabaseDisabled || clientsError) && (
-          <div className="px-6 pt-6">
-            <Alert className="bg-muted/60">
-              <AlertCircle className="h-4 w-4" />
-              <AlertTitle>
-                {supabaseDisabled ? "Integração com Supabase desativada" : "Erro ao carregar clientes"}
-              </AlertTitle>
-              {displayError && <AlertDescription>{displayError}</AlertDescription>}
-            </Alert>
-          </div>
-        )}
         <CardHeader className="flex flex-col gap-4">
           <div className="flex items-center gap-3">
             <div className="relative flex-1 max-w-md">
