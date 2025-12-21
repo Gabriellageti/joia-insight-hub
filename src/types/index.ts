@@ -161,6 +161,8 @@ export interface Task {
   how?: string;
   howMuch?: string;
   createdAt: string;
+  sourceDiagnosticId?: string;
+  sourceActionId?: string;
 }
 
 export type ActionPriority = "alta" | "media" | "baixa";

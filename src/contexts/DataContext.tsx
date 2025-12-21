@@ -26,6 +26,8 @@ import {
   TemplateOpportunityRule,
   QuestionCriticality,
   OpportunityRuleCondition,
+  ActionPlan,
+  ActionPriority,
 } from "@/types";
 import { useAuth } from "./AuthContext";
 import {
@@ -130,6 +132,7 @@ interface DataContextType {
     diagnostic: Diagnostic,
     target: { projectId: string; projectName: string; clientId: string; clientName: string }
   ) => Promise<Diagnostic>;
+  createActionPlan: (input: { diagnostic: Diagnostic; actionPlan: ActionPlan }) => Task[];
 
   // Content
   contentItems: ContentItem[];
@@ -589,6 +592,20 @@ const buildSeedTasks = ({
     } as Task;
   });
 };
+
+const mapActionPriorityToTask = (priority: ActionPriority): Task["priority"] => {
+  switch (priority) {
+    case "alta":
+      return "high";
+    case "media":
+      return "medium";
+    default:
+      return "low";
+  }
+};
+
+const initialStatusFromPriority = (priority: Task["priority"]): Task["status"] =>
+  priority === "high" ? "next" : "backlog";
 
 const initialClients: Client[] = [
   normalizeClient({
@@ -1228,6 +1245,52 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [setDiagnostics]
   );
 
+  const createActionPlan = useCallback(
+    ({ diagnostic, actionPlan }: { diagnostic: Diagnostic; actionPlan: ActionPlan }) => {
+      const existingActionIds = new Set(
+        tasks
+          .filter(
+            (task) =>
+              task.sourceDiagnosticId === diagnostic.id && typeof task.sourceActionId === "string"
+          )
+          .map((task) => task.sourceActionId as string)
+      );
+
+      const newTasks = actionPlan.actions
+        .filter((action) => !existingActionIds.has(action.id))
+        .map((action) => {
+          const priority = mapActionPriorityToTask(action.priority);
+          return {
+            id: generateId(),
+            title: action.title,
+            description: action.description,
+            projectId: diagnostic.projectId,
+            projectName: diagnostic.projectName,
+            clientId: diagnostic.clientId,
+            clientName: diagnostic.clientName,
+            type: "processo",
+            responsible: action.responsible || diagnostic.responsibleName || currentUserName,
+            priority,
+            dueDate: action.dueDate,
+            impact: `Impacto ${action.impact}`,
+            status: initialStatusFromPriority(priority),
+            checklist: [],
+            evidenceRequired: false,
+            createdAt: getDate(),
+            sourceDiagnosticId: diagnostic.id,
+            sourceActionId: action.id,
+          } as Task;
+        });
+
+      if (newTasks.length) {
+        setTasks((prev) => [...prev, ...newTasks]);
+      }
+
+      return newTasks;
+    },
+    [currentUserName, tasks]
+  );
+
   const projectTasks = useCallback(
     (projectId: string) => tasks.filter((task) => task.projectId === projectId),
     [tasks]
@@ -1606,6 +1669,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     refreshTemplates,
     applyDiagnostic: handleApplyDiagnostic,
     duplicateDiagnostic: handleDuplicateDiagnostic,
+    createActionPlan,
 
     contentItems,
     addContentItem: (item) =>
