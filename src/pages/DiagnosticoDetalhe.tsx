@@ -1,6 +1,12 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -9,10 +15,19 @@ import { formatRelativeUpdate, resolveStatusLabel } from "@/lib/diagnostics";
 import { DiagnosticExecution } from "@/components/diagnostico/execution";
 import { DiagnosticAnswer } from "@/types/diagnostic-execution";
 import { toast } from "sonner";
-import { Play, FileBarChart2, ArrowLeft, Download, ExternalLink } from "lucide-react";
-import { calculateDiagnosticScore, resolveAnswerValue } from "@/lib/diagnostic-evaluation";
+import {
+  Play,
+  FileBarChart2,
+  ArrowLeft,
+  Download,
+  ExternalLink,
+} from "lucide-react";
+import {
+  calculateDiagnosticScore,
+  resolveAnswerValue,
+} from "@/lib/diagnostic-evaluation";
 import { buildActionPlan, generateRecommendations } from "@/lib/recommendations";
-import { DiagnosticReportPayload } from "@/types";
+import { DiagnosticReportPayload, ImpactProjection } from "@/types";
 
 export default function DiagnosticoDetalhe() {
   const { id } = useParams();
@@ -20,7 +35,11 @@ export default function DiagnosticoDetalhe() {
   const { diagnostics, templates, updateDiagnostic, createActionPlan } = useData();
   const [isExecuting, setIsExecuting] = useState(false);
 
-  const diagnostic = useMemo(() => diagnostics.find((item) => item.id === id), [diagnostics, id]);
+  const diagnostic = useMemo(
+    () => diagnostics.find((item) => item.id === id),
+    [diagnostics, id]
+  );
+
   const template = useMemo(
     () => (diagnostic ? templates.find((t) => t.id === diagnostic.templateId) : null),
     [diagnostic, templates]
@@ -45,7 +64,10 @@ export default function DiagnosticoDetalhe() {
     setIsExecuting(true);
   };
 
-  const handleSaveProgress = async (answers: Record<string, DiagnosticAnswer>, progress: number) => {
+  const handleSaveProgress = async (
+    answers: Record<string, DiagnosticAnswer>,
+    progress: number
+  ) => {
     const answeredCount = Object.keys(answers).length;
     updateDiagnostic(diagnostic.id, {
       progress,
@@ -71,6 +93,7 @@ export default function DiagnosticoDetalhe() {
         score: scoreSummary.score,
         responsibleName: diagnostic.responsibleName,
       });
+
       const actionPlan = buildActionPlan({
         diagnostic,
         recommendations,
@@ -128,9 +151,7 @@ export default function DiagnosticoDetalhe() {
         ? "Relatório disponível, mas não foi possível enviar as ações para o Kanban. Tente novamente mais tarde."
         : undefined;
 
-      toast.success(toastMessage, {
-        description: toastDescription,
-      });
+      toast.success(toastMessage, { description: toastDescription });
     } finally {
       setIsExecuting(false);
     }
@@ -142,16 +163,40 @@ export default function DiagnosticoDetalhe() {
 
   const handleExportReport = (format: "html" | "pdf") => {
     const payload = diagnostic.reportPayload;
+
     const generatedAt = payload
       ? new Date(payload.generatedAt).toLocaleString("pt-BR")
       : new Date().toLocaleString("pt-BR");
+
     const actionPlanStatus = diagnostic.actionPlan
       ? `Gerado em ${diagnostic.actionPlan.generatedAt}`
       : payload?.actionPlanSummary
         ? `Pendente no Kanban (${payload.actionPlanSummary.actions} ações)`
         : "Não gerado";
 
+    // Preferir payload (mais fiel ao momento de geração), com fallback para actionPlan
     const recommendations = payload?.recommendations || diagnostic.actionPlan?.actions || [];
+
+    const planPositiveImpact = diagnostic.actionPlan?.positiveImpact;
+    const planNegativeImpact = diagnostic.actionPlan?.negativeImpact;
+
+    const formatImpact = (label: string, impact?: ImpactProjection) =>
+      impact
+        ? `<p><strong>${label} - Benefício:</strong> ${impact.expectedBenefit}</p>
+            <p class="muted"><strong>${label} - Risco evitado:</strong> ${impact.avoidedRisk}</p>
+            ${
+              impact.estimatedCostOrTime
+                ? `<p class="muted"><strong>${label} - Custo/tempo:</strong> ${impact.estimatedCostOrTime}</p>`
+                : ""
+            }`
+        : `<p class="muted">${label}: impacto não informado.</p>`;
+
+    const formatRecommendationImpact = (impact?: ImpactProjection) =>
+      impact
+        ? `${impact.expectedBenefit} <span class="muted">${impact.avoidedRisk}${
+            impact.estimatedCostOrTime ? ` • ${impact.estimatedCostOrTime}` : ""
+          }</span>`
+        : "Impacto não informado.";
 
     const htmlContent = `<!DOCTYPE html>
       <html lang="pt-BR">
@@ -188,15 +233,24 @@ export default function DiagnosticoDetalhe() {
             ${
               recommendations.length
                 ? `<ol class="list">${recommendations
-                    .map((rec) => `<li><strong>${rec.title}</strong> — ${rec.description} (Impacto ${rec.impact}, Responsável: ${rec.responsible}, Prazo: ${rec.dueDate})</li>`)
-                    .join("" )}</ol>`
-                : "<p class=\"muted\">Nenhuma recomendação registrada.</p>"
+                    .map(
+                      (rec) => `<li><strong>${rec.title}</strong> — ${rec.description} (Impacto ${rec.impact}, Responsável: ${rec.responsible}, Prazo: ${rec.dueDate})
+                        <div style="margin-top:4px">
+                          <em>Executar:</em> ${formatRecommendationImpact(rec.positiveImpact)}
+                        </div>
+                        <div>
+                          <em>Não executar:</em> ${formatRecommendationImpact(rec.negativeImpact)}
+                        </div>
+                      </li>`
+                    )
+                    .join("")}</ol>`
+                : '<p class="muted">Nenhuma recomendação registrada.</p>'
             }
           </div>
           <div class="card">
             <h2>Impacto</h2>
-            <p><strong>Executar plano:</strong> Melhora a maturidade operacional e reduz riscos ao cumprir ${recommendations.length} ações priorizadas.</p>
-            <p><strong>Não executar:</strong> Mantém os gaps identificados e pode comprometer os objetivos de ${diagnostic.projectName}.</p>
+            ${formatImpact("Executar plano", planPositiveImpact)}
+            ${formatImpact("Não executar", planNegativeImpact)}
           </div>
         </body>
       </html>`;
@@ -238,14 +292,33 @@ export default function DiagnosticoDetalhe() {
   }
 
   // Summary view
-  const ctaLabel = diagnostic.status === "draft"
-    ? "Iniciar diagnóstico"
-    : diagnostic.status === "in_progress"
-      ? "Continuar diagnóstico"
-      : "Ver respostas";
+  const ctaLabel =
+    diagnostic.status === "draft"
+      ? "Iniciar diagnóstico"
+      : diagnostic.status === "in_progress"
+        ? "Continuar diagnóstico"
+        : "Ver respostas";
 
   const isCompleted = diagnostic.status === "completed";
   const recommendations = diagnostic.actionPlan?.actions || [];
+  const planPositiveImpact = diagnostic.actionPlan?.positiveImpact;
+  const planNegativeImpact = diagnostic.actionPlan?.negativeImpact;
+
+  const renderImpactList = (impact?: ImpactProjection) => (
+    <ul className="text-sm text-muted-foreground space-y-1">
+      <li>
+        <strong>Benefício esperado:</strong> {impact?.expectedBenefit || "Não informado."}
+      </li>
+      <li>
+        <strong>Risco evitado:</strong> {impact?.avoidedRisk || "Não informado."}
+      </li>
+      {impact?.estimatedCostOrTime && (
+        <li>
+          <strong>Custo/tempo:</strong> {impact.estimatedCostOrTime}
+        </li>
+      )}
+    </ul>
+  );
 
   return (
     <div className="space-y-6">
@@ -257,7 +330,9 @@ export default function DiagnosticoDetalhe() {
           <div>
             <p className="text-sm text-muted-foreground">Diagnóstico</p>
             <h1 className="text-2xl font-semibold">{diagnostic.name}</h1>
-            <p className="text-muted-foreground">{diagnostic.projectName} • {diagnostic.clientName}</p>
+            <p className="text-muted-foreground">
+              {diagnostic.projectName} • {diagnostic.clientName}
+            </p>
           </div>
         </div>
         <Badge variant="outline">{resolveStatusLabel(diagnostic.status)}</Badge>
@@ -274,14 +349,20 @@ export default function DiagnosticoDetalhe() {
           </div>
           {isCompleted && (
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" onClick={() => handleExportReport("html")}>Exportar HTML</Button>
-              <Button className="bg-accent text-accent-foreground hover:bg-accent/90" onClick={() => handleExportReport("pdf")}>
+              <Button variant="outline" onClick={() => handleExportReport("html")}>
+                Exportar HTML
+              </Button>
+              <Button
+                className="bg-accent text-accent-foreground hover:bg-accent/90"
+                onClick={() => handleExportReport("pdf")}
+              >
                 <Download className="h-4 w-4 mr-2" />
                 Salvar relatório
               </Button>
             </div>
           )}
         </CardHeader>
+
         <CardContent className="space-y-6">
           <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
             <span>Responsável: {diagnostic.responsibleName || "Não definido"}</span>
@@ -294,7 +375,7 @@ export default function DiagnosticoDetalhe() {
               </>
             )}
           </div>
-          
+
           <div className="space-y-2">
             <div className="flex items-center justify-between text-sm">
               <span>Progresso</span>
@@ -303,7 +384,9 @@ export default function DiagnosticoDetalhe() {
             <Progress value={diagnostic.progress} className="h-3" />
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <FileBarChart2 className="h-4 w-4" />
-              <span>{diagnostic.answeredQuestions}/{diagnostic.totalQuestions} perguntas respondidas</span>
+              <span>
+                {diagnostic.answeredQuestions}/{diagnostic.totalQuestions} perguntas respondidas
+              </span>
             </div>
           </div>
 
@@ -315,9 +398,7 @@ export default function DiagnosticoDetalhe() {
               </Badge>
             )}
             {diagnostic.score !== undefined && diagnostic.status === "completed" && (
-              <Badge className="bg-emerald-100 text-emerald-700">
-                Score: {diagnostic.score}
-              </Badge>
+              <Badge className="bg-emerald-100 text-emerald-700">Score: {diagnostic.score}</Badge>
             )}
           </div>
 
@@ -351,25 +432,34 @@ export default function DiagnosticoDetalhe() {
                   </Badge>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Avaliação consolidada para {diagnostic.projectName}. Última atualização em {diagnostic.updatedAt}.
+                  Avaliação consolidada para {diagnostic.projectName}. Última atualização em{" "}
+                  {diagnostic.updatedAt}.
                 </p>
               </div>
+
               <div className="rounded-lg border p-4 space-y-2">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-medium text-muted-foreground">Plano de ação</p>
                   <Badge variant="outline">{diagnostic.actionPlan?.actions.length || 0} ações</Badge>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Status: {diagnostic.actionPlan ? `Gerado em ${diagnostic.actionPlan.generatedAt}` : "Não gerado"}
+                  Status:{" "}
+                  {diagnostic.actionPlan ? `Gerado em ${diagnostic.actionPlan.generatedAt}` : "Não gerado"}
                 </p>
                 <div className="flex flex-wrap gap-2">
                   <Button variant="outline" size="sm" asChild>
-                    <a href={`/plano-acao?diagnostico=${diagnostic.id}`} target="_blank" rel="noreferrer">
-                      <ExternalLink className="h-4 w-4 mr-2" />Abrir Kanban
+                    <a
+                      href={`/plano-acao?diagnostico=${diagnostic.id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      <ExternalLink className="h-4 w-4 mr-2" />
+                      Abrir Kanban
                     </a>
                   </Button>
                   <Button variant="ghost" size="sm" onClick={() => handleExportReport("pdf")}>
-                    <Download className="h-4 w-4 mr-2" />Exportar relatório
+                    <Download className="h-4 w-4 mr-2" />
+                    Exportar relatório
                   </Button>
                 </div>
               </div>
@@ -380,18 +470,46 @@ export default function DiagnosticoDetalhe() {
                 <p className="text-sm font-medium text-muted-foreground">Recomendações priorizadas</p>
                 <Badge variant="outline">{recommendations.length} itens</Badge>
               </div>
+
               {recommendations.length ? (
                 <div className="grid gap-3 md:grid-cols-2">
                   {recommendations.slice(0, 4).map((rec) => (
                     <div key={rec.id} className="rounded-lg border p-4 space-y-2">
                       <div className="flex items-start justify-between gap-2">
                         <div>
-                          <p className="text-xs uppercase text-muted-foreground">Prioridade {rec.priority}</p>
+                          <p className="text-xs uppercase text-muted-foreground">
+                            Prioridade {rec.priority}
+                          </p>
                           <h4 className="text-base font-semibold leading-tight">{rec.title}</h4>
                         </div>
                         <Badge variant="outline">Impacto {rec.impact}</Badge>
                       </div>
+
                       <p className="text-sm text-muted-foreground">{rec.description}</p>
+
+                      <div className="space-y-1 text-xs text-muted-foreground">
+                        <p>
+                          <strong>Executar:</strong>{" "}
+                          {rec.positiveImpact?.expectedBenefit || "Impacto não informado."}
+                        </p>
+                        <p className="text-[11px]">
+                          Risco evitado: {rec.positiveImpact?.avoidedRisk || "Não informado."}
+                          {rec.positiveImpact?.estimatedCostOrTime
+                            ? ` • ${rec.positiveImpact.estimatedCostOrTime}`
+                            : ""}
+                        </p>
+                        <p>
+                          <strong>Não executar:</strong>{" "}
+                          {rec.negativeImpact?.expectedBenefit || "Impacto não informado."}
+                        </p>
+                        <p className="text-[11px]">
+                          Risco: {rec.negativeImpact?.avoidedRisk || "Não informado."}
+                          {rec.negativeImpact?.estimatedCostOrTime
+                            ? ` • ${rec.negativeImpact.estimatedCostOrTime}`
+                            : ""}
+                        </p>
+                      </div>
+
                       <p className="text-xs text-muted-foreground">
                         Responsável: {rec.responsible} • Prazo: {rec.dueDate}
                       </p>
@@ -406,17 +524,11 @@ export default function DiagnosticoDetalhe() {
             <div className="grid gap-4 md:grid-cols-2">
               <div className="rounded-lg border p-4 space-y-2 bg-emerald-50">
                 <p className="text-sm font-semibold text-emerald-900">Impacto de executar</p>
-                <p className="text-sm text-emerald-800">
-                  Implementar o plano reduz riscos, aumenta a eficiência e aproveita as {recommendations.length} ações
-                  priorizadas para elevar o score do projeto.
-                </p>
+                <div className="text-emerald-800">{renderImpactList(planPositiveImpact)}</div>
               </div>
               <div className="rounded-lg border p-4 space-y-2 bg-amber-50">
                 <p className="text-sm font-semibold text-amber-900">Impacto de não executar</p>
-                <p className="text-sm text-amber-800">
-                  A ausência de ação mantém os gaps identificados, pode atrasar o roadmap e limitar o ganho de maturidade
-                  organizacional.
-                </p>
+                <div className="text-amber-800">{renderImpactList(planNegativeImpact)}</div>
               </div>
             </div>
           </CardContent>
@@ -449,7 +561,32 @@ export default function DiagnosticoDetalhe() {
                       <Badge variant="outline">Prazo sugerido: {action.dueDate}</Badge>
                     </div>
                   </div>
+
                   <p className="text-sm text-muted-foreground">{action.description}</p>
+
+                  <div className="space-y-1 text-xs text-muted-foreground">
+                    <p>
+                      <strong>Executar:</strong>{" "}
+                      {action.positiveImpact?.expectedBenefit || "Impacto não informado."}
+                    </p>
+                    <p className="text-[11px]">
+                      Risco evitado: {action.positiveImpact?.avoidedRisk || "Não informado."}
+                      {action.positiveImpact?.estimatedCostOrTime
+                        ? ` • ${action.positiveImpact.estimatedCostOrTime}`
+                        : ""}
+                    </p>
+                    <p>
+                      <strong>Não executar:</strong>{" "}
+                      {action.negativeImpact?.expectedBenefit || "Impacto não informado."}
+                    </p>
+                    <p className="text-[11px]">
+                      Risco: {action.negativeImpact?.avoidedRisk || "Não informado."}
+                      {action.negativeImpact?.estimatedCostOrTime
+                        ? ` • ${action.negativeImpact.estimatedCostOrTime}`
+                        : ""}
+                    </p>
+                  </div>
+
                   <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
                     <span>Responsável: {action.responsible}</span>
                     {action.rationale && (

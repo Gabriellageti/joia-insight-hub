@@ -168,12 +168,20 @@ export interface Task {
 export type ActionPriority = "alta" | "media" | "baixa";
 export type ActionImpact = "alto" | "medio" | "baixo";
 
+export interface ImpactProjection {
+  expectedBenefit: string;
+  avoidedRisk: string;
+  estimatedCostOrTime?: string;
+}
+
 export interface ActionRecommendation {
   id: string;
   title: string;
   description: string;
   priority: ActionPriority;
   impact: ActionImpact;
+  positiveImpact: ImpactProjection;
+  negativeImpact: ImpactProjection;
   responsible: string;
   dueDate: string;
   relatedQuestionId?: string;
@@ -184,6 +192,8 @@ export interface ActionPlan {
   title: string;
   description: string;
   generatedAt: string;
+  positiveImpact: ImpactProjection;
+  negativeImpact: ImpactProjection;
   actions: ActionRecommendation[];
 }
 
