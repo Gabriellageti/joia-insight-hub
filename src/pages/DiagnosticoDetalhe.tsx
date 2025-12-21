@@ -16,7 +16,7 @@ import { buildActionPlan, generateRecommendations } from "@/lib/recommendations"
 export default function DiagnosticoDetalhe() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { diagnostics, templates, updateDiagnostic } = useData();
+  const { diagnostics, templates, updateDiagnostic, createActionPlan } = useData();
   const [isExecuting, setIsExecuting] = useState(false);
 
   const diagnostic = useMemo(() => diagnostics.find((item) => item.id === id), [diagnostics, id]);
@@ -74,6 +74,8 @@ export default function DiagnosticoDetalhe() {
       score: scoreSummary.score,
     });
 
+    const createdTasks = createActionPlan({ diagnostic, actionPlan });
+
     updateDiagnostic(diagnostic.id, {
       progress: 100,
       answeredQuestions: answeredCount,
@@ -82,7 +84,10 @@ export default function DiagnosticoDetalhe() {
       score: scoreSummary.score,
       actionPlan,
     });
-    toast.success("Diagnóstico concluído!");
+    const toastMessage = createdTasks.length
+      ? `Diagnóstico concluído! ${createdTasks.length} ações foram enviadas para o Kanban.`
+      : "Diagnóstico concluído!";
+    toast.success(toastMessage);
     setIsExecuting(false);
   };
 
