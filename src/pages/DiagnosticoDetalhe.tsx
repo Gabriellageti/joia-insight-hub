@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { Play, FileBarChart2, ArrowLeft, Download, ExternalLink } from "lucide-react";
 import { calculateDiagnosticScore, resolveAnswerValue } from "@/lib/diagnostic-evaluation";
 import { buildActionPlan, generateRecommendations } from "@/lib/recommendations";
+import { DiagnosticReportPayload } from "@/types";
 
 export default function DiagnosticoDetalhe() {
   const { id } = useParams();
@@ -61,34 +62,78 @@ export default function DiagnosticoDetalhe() {
     const answerValues = Object.fromEntries(
       Object.entries(answers).map(([id, answer]) => [id, resolveAnswerValue(answer)])
     );
-    const scoreSummary = calculateDiagnosticScore(template, answerValues);
-    const recommendations = generateRecommendations({
-      template,
-      answers: answerValues,
-      score: scoreSummary.score,
-      responsibleName: diagnostic.responsibleName,
-    });
-    const actionPlan = buildActionPlan({
-      diagnostic,
-      recommendations,
-      score: scoreSummary.score,
-    });
 
-    const createdTasks = createActionPlan({ diagnostic, actionPlan });
+    try {
+      const scoreSummary = calculateDiagnosticScore(template, answerValues);
+      const recommendations = generateRecommendations({
+        template,
+        answers: answerValues,
+        score: scoreSummary.score,
+        responsibleName: diagnostic.responsibleName,
+      });
+      const actionPlan = buildActionPlan({
+        diagnostic,
+        recommendations,
+        score: scoreSummary.score,
+      });
 
-    updateDiagnostic(diagnostic.id, {
-      progress: 100,
-      answeredQuestions: answeredCount,
-      status: "completed",
-      hasResponses: true,
-      score: scoreSummary.score,
-      actionPlan,
-    });
-    const toastMessage = createdTasks.length
-      ? `Diagnóstico concluído! ${createdTasks.length} ações foram enviadas para o Kanban.`
-      : "Diagnóstico concluído!";
-    toast.success(toastMessage);
-    setIsExecuting(false);
+      let createdTasks: ReturnType<typeof createActionPlan> = [];
+      let kanbanError: string | null = null;
+
+      try {
+        createdTasks = createActionPlan({ diagnostic, actionPlan });
+      } catch (error) {
+        kanbanError = error instanceof Error ? error.message : "Erro ao criar cards no Kanban.";
+        console.error("[diagnostic:kanban:error]", {
+          diagnosticId: diagnostic.id,
+          error: kanbanError,
+        });
+      }
+
+      const reportPayload: DiagnosticReportPayload = {
+        diagnosticId: diagnostic.id,
+        generatedAt: new Date().toISOString(),
+        score: scoreSummary.score,
+        recommendations,
+        actionPlanSummary: {
+          title: actionPlan.title,
+          actions: actionPlan.actions.length,
+          taskIds: createdTasks.map((task) => task.id),
+        },
+      };
+
+      updateDiagnostic(diagnostic.id, {
+        progress: 100,
+        answeredQuestions: answeredCount,
+        status: "completed",
+        hasResponses: true,
+        score: scoreSummary.score,
+        actionPlan,
+        reportPayload,
+      });
+
+      console.info("[diagnostic:completed]", {
+        diagnosticId: diagnostic.id,
+        score: scoreSummary.score,
+        kanbanTaskIds: reportPayload.actionPlanSummary?.taskIds || [],
+      });
+
+      const toastMessage = kanbanError
+        ? "Diagnóstico concluído com ressalvas"
+        : createdTasks.length
+          ? `Diagnóstico concluído! ${createdTasks.length} ações foram enviadas para o Kanban.`
+          : "Diagnóstico concluído!";
+
+      const toastDescription = kanbanError
+        ? "Relatório disponível, mas não foi possível enviar as ações para o Kanban. Tente novamente mais tarde."
+        : undefined;
+
+      toast.success(toastMessage, {
+        description: toastDescription,
+      });
+    } finally {
+      setIsExecuting(false);
+    }
   };
 
   const handleExitExecution = () => {
@@ -96,12 +141,17 @@ export default function DiagnosticoDetalhe() {
   };
 
   const handleExportReport = (format: "html" | "pdf") => {
-    const generatedAt = new Date().toLocaleString("pt-BR");
+    const payload = diagnostic.reportPayload;
+    const generatedAt = payload
+      ? new Date(payload.generatedAt).toLocaleString("pt-BR")
+      : new Date().toLocaleString("pt-BR");
     const actionPlanStatus = diagnostic.actionPlan
       ? `Gerado em ${diagnostic.actionPlan.generatedAt}`
-      : "Não gerado";
+      : payload?.actionPlanSummary
+        ? `Pendente no Kanban (${payload.actionPlanSummary.actions} ações)`
+        : "Não gerado";
 
-    const recommendations = diagnostic.actionPlan?.actions || [];
+    const recommendations = payload?.recommendations || diagnostic.actionPlan?.actions || [];
 
     const htmlContent = `<!DOCTYPE html>
       <html lang="pt-BR">

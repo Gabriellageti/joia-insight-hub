@@ -187,6 +187,18 @@ export interface ActionPlan {
   actions: ActionRecommendation[];
 }
 
+export interface DiagnosticReportPayload {
+  diagnosticId: string;
+  generatedAt: string;
+  score?: number;
+  recommendations: ActionRecommendation[];
+  actionPlanSummary?: {
+    title: string;
+    actions: number;
+    taskIds: string[];
+  };
+}
+
 export interface Diagnostic {
   id: string;
   name: string;
@@ -210,6 +222,7 @@ export interface Diagnostic {
   hasResponses?: boolean;
   dueDate?: string;
   actionPlan?: ActionPlan;
+  reportPayload?: DiagnosticReportPayload;
 }
 
 export interface AuditMetadata {
