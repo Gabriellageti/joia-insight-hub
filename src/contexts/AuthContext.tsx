@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
-import { supabase, isSupabaseConfigured } from '@/integrations/supabase/client';
+import { supabase } from '@/integrations/supabase/client';
 
 interface AuthContextType {
   user: User | null;
@@ -18,25 +18,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const getSupabaseOrThrow = () => {
-    if (!supabase) {
-      throw new Error(
-        'Supabase não está configurado. Defina VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY para habilitar autenticação.'
-      );
-    }
-
-    return supabase;
-  };
-
   useEffect(() => {
-    if (!isSupabaseConfigured || !supabase) {
-      setLoading(false);
-      return;
-    }
-
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      (event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
@@ -54,57 +39,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signUp = async (email: string, password: string, fullName: string) => {
-    try {
-      const client = getSupabaseOrThrow();
-      const redirectUrl = `${window.location.origin}/`;
-
-      const { error } = await client.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: redirectUrl,
-          data: {
-            full_name: fullName,
-          }
+    const redirectUrl = `${window.location.origin}/`;
+    
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: redirectUrl,
+        data: {
+          full_name: fullName,
         }
-      });
-
-      return { error: error as Error | null };
-    } catch (error) {
-      return { error: error as Error };
-    }
+      }
+    });
+    
+    return { error: error as Error | null };
   };
 
   const signIn = async (email: string, password: string) => {
-    try {
-      const client = getSupabaseOrThrow();
-      const { error } = await client.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      return { error: error as Error | null };
-    } catch (error) {
-      return { error: error as Error };
-    }
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    
+    return { error: error as Error | null };
   };
 
   const signOut = async () => {
-    try {
-      const client = getSupabaseOrThrow();
-      await client.auth.signOut();
-    } catch (error) {
-      console.warn(error);
-    }
+    await supabase.auth.signOut();
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, loading: isSupabaseConfigured ? loading : false, signUp, signIn, signOut }}>
-      {!isSupabaseConfigured && (
-        <div className="mb-4 rounded-lg bg-yellow-100 p-3 text-yellow-800">
-          Configure as variáveis de ambiente do Supabase para habilitar autenticação.
-        </div>
-      )}
+    <AuthContext.Provider value={{ user, session, loading, signUp, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );

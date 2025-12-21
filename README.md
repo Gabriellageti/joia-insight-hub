@@ -60,13 +60,6 @@ This project is built with:
 - shadcn-ui
 - Tailwind CSS
 
-## Manual checks
-
-To ensure the app keeps loading even without Supabase environment variables, verify the following flows after fresh installs or deployment changes:
-
-- Run `npm install` and start the dev server **without** setting `VITE_SUPABASE_URL` or `VITE_SUPABASE_PUBLISHABLE_KEY`. Confirm pages render normally, with the warning banner indicating Supabase configuration is pending, and no console errors block rendering.
-- After adding the Supabase variables, restart the dev server and confirm sign-in, sign-up, and sign-out paths function as expected.
-
 ## How can I deploy this project?
 
 Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
