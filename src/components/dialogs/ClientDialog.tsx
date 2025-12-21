@@ -322,7 +322,7 @@ export function ClientDialog({
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting) return;
 
@@ -391,16 +391,21 @@ export function ClientDialog({
       lastContact: (client as any)?.lastContact || new Date().toLocaleDateString("pt-BR"),
     };
 
-    if (client) {
-      updateClient((client as any).id, clientData);
-      toast.success("Cliente atualizado com sucesso");
-      onOpenChange(false);
-      setIsSubmitting(false);
-    } else {
-      const createdClient = addClient(clientData);
-      toast.success("Cliente criado. Próximo passo: criar um projeto.");
-      onOpenChange(false);
-      navigate(`/clientes/${(createdClient as any).id}`);
+    try {
+      if (client) {
+        await updateClient((client as any).id, clientData);
+        toast.success("Cliente atualizado com sucesso");
+        onOpenChange(false);
+      } else {
+        const createdClient = await addClient(clientData);
+        toast.success("Cliente criado. Próximo passo: criar um projeto.");
+        onOpenChange(false);
+        navigate(`/clientes/${(createdClient as any).id}`);
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Não foi possível salvar o cliente. Verifique a conexão e tente novamente.");
+    } finally {
       setIsSubmitting(false);
     }
   };

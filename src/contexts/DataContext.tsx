@@ -39,6 +39,7 @@ import {
 import { buildStatusAuditMessage, resolveProjectStatus } from "@/lib/projects/status";
 import { calculateForecastEndDate, formatDatePtBR, parseDatePtBR, ProjectDuration, safeNumber } from "@/lib/dates";
 import { addDays } from "date-fns";
+import { useToast } from "@/components/ui/use-toast";
 import {
   ApplyDiagnosticInput,
   applyDiagnostic as applyDiagnosticMock,
@@ -50,13 +51,23 @@ import {
   getDiagnosticsSeed,
   updateTemplateRecord,
 } from "@/lib/diagnostics";
+import {
+  createClient as createSupabaseClient,
+  deleteClient as deleteSupabaseClient,
+  listClients,
+  updateClient as updateSupabaseClient,
+  type ClientRow,
+} from "@/integrations/supabase/clients";
+import type { Database } from "@/integrations/supabase/types";
 
 interface DataContextType {
   // Clients
   clients: Client[];
-  addClient: (client: Omit<Client, "id" | "createdAt">) => Client;
-  updateClient: (id: string, client: Partial<Client>) => void;
-  deleteClient: (id: string) => void;
+  clientsLoading: boolean;
+  clientsError?: string | null;
+  addClient: (client: Omit<Client, "id" | "createdAt">) => Promise<Client>;
+  updateClient: (id: string, client: Partial<Client>) => Promise<Client | undefined>;
+  deleteClient: (id: string) => Promise<void>;
 
   // Projects
   projects: Project[];
@@ -178,6 +189,12 @@ const DataContext = createContext<DataContextType | undefined>(undefined);
 const generateId = () => (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15));
 const getDate = () => new Date().toLocaleDateString("pt-BR");
 
+const formatDateFromIso = (value?: string | null) => {
+  if (!value) return getDate();
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? getDate() : parsed.toLocaleDateString("pt-BR");
+};
+
 const resolveUserName = (user?: User | null) => {
   const metadata = (user?.user_metadata ?? {}) as Record<string, string | undefined>;
   return metadata.full_name || metadata.name || metadata.name_full || user?.email || "Usuário";
@@ -191,6 +208,75 @@ type LegacyClient = Partial<Omit<Client, "address">> & {
   address?: string | ClientAddress;
   preferredMeetingDay?: string;
   followUpFrequency?: "semanal" | "quinzenal" | "mensal";
+};
+
+const mapSupabaseClientToLegacy = (client: ClientRow): LegacyClient => ({
+  id: client.id,
+  name: client.name,
+  tradeName: client.name,
+  razaoSocial: client.name,
+  cnpj: client.cnpj || "",
+  segment: client.segment || "",
+  status: (client.status as Client["status"]) || "ativo",
+  contatoPrincipal: {
+    nome: client.contact_name || "",
+    whatsapp: client.contact_phone || "",
+    email: client.contact_email || "",
+  },
+  projects: 0,
+  nps: 0,
+  risk: "low",
+  lastContact: formatDateFromIso(client.updated_at || client.created_at),
+  createdAt: formatDateFromIso(client.created_at),
+  endereco: {},
+  preferenciasRelacionamento: {},
+});
+
+type SupabaseClientInsert = Database["public"]["Tables"]["clients"]["Insert"];
+type SupabaseClientUpdate = Database["public"]["Tables"]["clients"]["Update"];
+
+const buildSupabaseClientInsert = (client: LegacyClient): SupabaseClientInsert => {
+  const timestamp = new Date().toISOString();
+
+  return {
+    name: client.razaoSocial || client.name || client.tradeName || "Cliente",
+    cnpj: client.cnpj || null,
+    segment: client.segment || client.segmentoTags?.[0] || null,
+    status: client.status || "ativo",
+    contact_name: client.contatoPrincipal?.nome || client.primaryContactName || null,
+    contact_email: client.contatoPrincipal?.email || client.primaryContactEmail || null,
+    contact_phone: client.contatoPrincipal?.whatsapp || client.primaryContactPhone || null,
+    created_at: timestamp,
+    updated_at: timestamp,
+  };
+};
+
+const buildSupabaseClientUpdate = (client: LegacyClient): SupabaseClientUpdate => {
+  const payload: SupabaseClientUpdate = { updated_at: new Date().toISOString() };
+
+  if (typeof client.razaoSocial !== "undefined" || typeof client.name !== "undefined" || typeof client.tradeName !== "undefined") {
+    payload.name = client.razaoSocial || client.name || client.tradeName;
+  }
+
+  if (typeof client.cnpj !== "undefined") {
+    payload.cnpj = client.cnpj || null;
+  }
+
+  if (typeof client.segment !== "undefined" || client.segmentoTags) {
+    payload.segment = client.segment || client.segmentoTags?.[0] || null;
+  }
+
+  if (typeof client.status !== "undefined") {
+    payload.status = client.status;
+  }
+
+  if (client.contatoPrincipal || client.primaryContactName || client.primaryContactEmail || client.primaryContactPhone) {
+    payload.contact_name = client.contatoPrincipal?.nome || client.primaryContactName || null;
+    payload.contact_email = client.contatoPrincipal?.email || client.primaryContactEmail || null;
+    payload.contact_phone = client.contatoPrincipal?.whatsapp || client.primaryContactPhone || null;
+  }
+
+  return payload;
 };
 
 const normalizeClient = (client: LegacyClient): Client => {
@@ -1065,8 +1151,11 @@ function useLocalStorage<T>(key: string, initialValue: T): [T, React.Dispatch<Re
 
 export function DataProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  const { toast } = useToast();
   const currentUserName = resolveUserName(user);
-  const [clients, setClients] = useLocalStorage<Client[]>("joia_clients", initialClients);
+  const [clients, setClients] = useState<Client[]>(initialClients.map(normalizeClient));
+  const [clientsLoading, setClientsLoading] = useState(true);
+  const [clientsError, setClientsError] = useState<string | null>(null);
   const [projects, setProjects] = useLocalStorage<Project[]>("joia_projects", initialProjects);
   const [tasks, setTasks] = useLocalStorage<Task[]>("joia_tasks", initialTasks);
   const [opportunities, setOpportunities] = useLocalStorage<Opportunity[]>(
@@ -1099,10 +1188,30 @@ export function DataProvider({ children }: { children: ReactNode }) {
     initialClientContacts
   );
 
-  // Normaliza clientes legados salvos no localStorage (uma vez por carregamento do provider)
   useEffect(() => {
-    setClients((prev) => prev.map(normalizeClient));
-  }, [setClients]);
+    const fetchClients = async () => {
+      setClientsLoading(true);
+      setClientsError(null);
+
+      try {
+        const data = await listClients();
+        const normalized = data.map(mapSupabaseClientToLegacy).map(normalizeClient);
+        setClients(normalized);
+      } catch (error) {
+        const message = (error as Error).message || "Não foi possível carregar os clientes";
+        setClientsError(message);
+        toast({
+          title: "Erro ao carregar clientes",
+          description: message,
+          variant: "destructive",
+        });
+      } finally {
+        setClientsLoading(false);
+      }
+    };
+
+    fetchClients();
+  }, [toast]);
 
   // Normaliza projetos legados para novos campos de progresso
   useEffect(() => {
@@ -1459,20 +1568,66 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const value: DataContextType = {
     clients,
-    addClient: (client) => {
-      const newClient = normalizeClient({
-        ...client,
-        id: generateId(),
-        createdAt: getDate(),
-        lastContact: getDate(),
-      });
+    clientsLoading,
+    clientsError,
+    addClient: async (client) => {
+      const payload = buildSupabaseClientInsert(client);
 
-      setClients((prev) => [...prev, newClient]);
-      return newClient;
+      try {
+        const created = await createSupabaseClient(payload);
+        const normalized = normalizeClient({ ...client, ...mapSupabaseClientToLegacy(created) });
+        setClients((prev) => [...prev, normalized]);
+        return normalized;
+      } catch (error) {
+        const message = (error as Error).message || "Erro ao criar cliente";
+        toast({
+          title: "Não foi possível criar o cliente",
+          description: message,
+          variant: "destructive",
+        });
+        throw error;
+      }
     },
-    updateClient: (id, client) =>
-      setClients((prev) => prev.map((c) => (c.id === id ? normalizeClient({ ...c, ...client }) : c))),
-    deleteClient: (id) => setClients((prev) => prev.filter((c) => c.id !== id)),
+    updateClient: async (id, client) => {
+      const payload = buildSupabaseClientUpdate(client);
+
+      try {
+        const updated = await updateSupabaseClient(id, payload);
+        let normalized: Client | undefined;
+
+        setClients((prev) =>
+          prev.map((c) => {
+            if (c.id !== id) return c;
+            normalized = normalizeClient({ ...c, ...client, ...mapSupabaseClientToLegacy(updated) });
+            return normalized;
+          })
+        );
+
+        return normalized;
+      } catch (error) {
+        const message = (error as Error).message || "Erro ao atualizar cliente";
+        toast({
+          title: "Não foi possível atualizar o cliente",
+          description: message,
+          variant: "destructive",
+        });
+        throw error;
+      }
+    },
+    deleteClient: async (id) => {
+      try {
+        await deleteSupabaseClient(id);
+        setClients((prev) => prev.filter((c) => c.id !== id));
+      } catch (error) {
+        const message = (error as Error).message || "Erro ao remover cliente";
+        toast({
+          title: "Não foi possível remover o cliente",
+          description: message,
+          variant: "destructive",
+        });
+        throw error;
+      }
+    },
 
     projects,
     addProject: (project, options) => {
