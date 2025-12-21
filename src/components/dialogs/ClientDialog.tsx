@@ -61,6 +61,38 @@ const emptyAutoFilledFields = {
   complemento: false,
 };
 
+type NormalizedAddress = {
+  logradouro: string;
+  bairro: string;
+  cidade: string;
+  uf: string;
+  complemento: string;
+};
+
+type ViaCepResponse = {
+  logradouro?: string;
+  bairro?: string;
+  localidade?: string;
+  uf?: string;
+  complemento?: string;
+  erro?: boolean;
+};
+
+type BrasilApiCepResponse = {
+  street?: string;
+  neighborhood?: string;
+  city?: string;
+  state?: string;
+  complement?: string;
+};
+
+type CepProvider = {
+  name: string;
+  url: string;
+  normalize: (data: ViaCepResponse | BrasilApiCepResponse) => NormalizedAddress;
+  hasError: (data: ViaCepResponse | BrasilApiCepResponse) => boolean;
+};
+
 interface ClientDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -296,42 +328,92 @@ export function ClientDialog({
     const controller = new AbortController();
 
     const timer = setTimeout(async () => {
-      try {
-        const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`, {
-          signal: controller.signal,
-        });
-        if (!response.ok) throw new Error("Erro ao buscar CEP");
-
-        const data = await response.json();
-        if (data?.erro) throw new Error("CEP não encontrado");
-
-        const nextAutoFilled = {
-          logradouro: Boolean(data.logradouro),
-          bairro: Boolean(data.bairro),
-          cidade: Boolean(data.localidade),
-          uf: Boolean(data.uf),
-          complemento: Boolean(data.complemento),
-        };
-
-        setFormData((prev) => ({
-          ...prev,
-          endereco: {
-            ...prev.endereco,
-            cep,
-            logradouro: data.logradouro || "",
-            complemento: data.complemento || "",
-            bairro: data.bairro || "",
-            cidade: data.localidade || "",
-            uf: data.uf || "",
+      const fetchCepFromProviders = async () => {
+        const providers: CepProvider[] = [
+          {
+            name: "ViaCEP",
+            url: `https://viacep.com.br/ws/${cep}/json/`,
+            normalize: (data: ViaCepResponse) => ({
+              logradouro: data.logradouro || "",
+              bairro: data.bairro || "",
+              cidade: data.localidade || "",
+              uf: data.uf || "",
+              complemento: data.complemento || "",
+            }),
+            hasError: (data: ViaCepResponse) => Boolean(data?.erro),
           },
-        }));
+          {
+            name: "BrasilAPI",
+            url: `https://brasilapi.com.br/api/cep/v1/${cep}`,
+            normalize: (data: BrasilApiCepResponse) => ({
+              logradouro: data.street || "",
+              bairro: data.neighborhood || "",
+              cidade: data.city || "",
+              uf: data.state || "",
+              complemento: data.complement || "",
+            }),
+            hasError: () => false,
+          },
+        ];
 
-        setAutoFilledFields(nextAutoFilled);
-        setIsAddressLocked(true);
-        setShouldFocusNumber(true);
-      } catch {
+        let lastError: Error | null = null;
+
+        for (const provider of providers) {
+          try {
+            const response = await fetch(provider.url, { signal: controller.signal });
+            if (!response.ok) {
+              throw new Error(`${provider.name}: HTTP ${response.status}`);
+            }
+
+            const data = (await response.json()) as ViaCepResponse | BrasilApiCepResponse;
+            if (provider.hasError(data)) {
+              throw new Error(`${provider.name}: CEP não encontrado`);
+            }
+
+            const normalized = provider.normalize(data);
+            const nextAutoFilled = {
+              logradouro: Boolean(normalized.logradouro),
+              bairro: Boolean(normalized.bairro),
+              cidade: Boolean(normalized.cidade),
+              uf: Boolean(normalized.uf),
+              complemento: Boolean(normalized.complemento),
+            };
+
+            setFormData((prev) => ({
+              ...prev,
+              endereco: {
+                ...prev.endereco,
+                cep,
+                ...normalized,
+              },
+            }));
+
+            setAutoFilledFields(nextAutoFilled);
+            setIsAddressLocked(true);
+            setShouldFocusNumber(true);
+            clearFieldError("cep");
+            return;
+          } catch (error) {
+            if (controller.signal.aborted) return;
+
+            lastError = error instanceof Error ? error : new Error(String(error));
+            console.error("Erro ao buscar CEP:", lastError.message);
+          }
+        }
+
+        if (lastError) throw lastError;
+      };
+
+      try {
+        await fetchCepFromProviders();
+      } catch (error) {
+        if (controller.signal.aborted) return;
+
         setIsAddressLocked(false);
         clearAutoFilledValues();
+        const message =
+          error instanceof Error && error.message ? error.message : "Não foi possível buscar o CEP";
+        setFieldError("cep", `${message}. Preencha o endereço manualmente.`);
         toast.error("Não foi possível buscar o CEP. Preencha o endereço manualmente.");
       } finally {
         setIsFetchingCep(false);
@@ -646,13 +728,17 @@ export function ClientDialog({
                       const value = e.target.value.replace(/\D/g, "").slice(0, 8);
                       setFormData((p) => ({ ...p, endereco: { ...p.endereco, cep: value } }));
                       if (!value) setIsAddressLocked(false);
+                      if (errors.cep) clearFieldError("cep");
                     }}
                     placeholder="00000000"
                     maxLength={8}
+                    aria-invalid={Boolean(errors.cep)}
+                    className={cn(errors.cep && "border-destructive focus-visible:ring-destructive")}
                   />
                   {isFetchingCep && (
                     <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
                   )}
+                  {errors.cep && <p className="mt-1 text-sm text-destructive">{errors.cep}</p>}
                 </div>
               </div>
 
