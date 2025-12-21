@@ -38,16 +38,17 @@ import {
 } from "@/lib/projects/progress";
 import { buildStatusAuditMessage, resolveProjectStatus } from "@/lib/projects/status";
 import { calculateForecastEndDate, formatDatePtBR, parseDatePtBR, ProjectDuration, safeNumber } from "@/lib/dates";
-import { syncTemplatesWithSeed } from "./templateSync";
 import { addDays } from "date-fns";
 import {
   ApplyDiagnosticInput,
   applyDiagnostic as applyDiagnosticMock,
+  createTemplate,
+  deleteTemplateRecord,
   fetchDiagnostics,
   fetchTemplates,
   getDefaultDiagnosticName,
   getDiagnosticsSeed,
-  getTemplatesSeed,
+  updateTemplateRecord,
 } from "@/lib/diagnostics";
 
 interface DataContextType {
@@ -123,9 +124,11 @@ interface DataContextType {
   updateDiagnostic: (id: string, diagnostic: Partial<Diagnostic>) => void;
   deleteDiagnostic: (id: string) => void;
   templates: DiagnosticTemplate[];
-  addTemplate: (template: Omit<DiagnosticTemplate, "id"> & { id?: string }) => DiagnosticTemplate;
-  updateTemplate: (id: string, template: Partial<DiagnosticTemplate>) => void;
-  deleteTemplate: (id: string) => void;
+  templatesLoading: boolean;
+  templatesError?: string | null;
+  addTemplate: (template: Omit<DiagnosticTemplate, "id"> & { id?: string }) => Promise<DiagnosticTemplate>;
+  updateTemplate: (id: string, template: Partial<DiagnosticTemplate>) => Promise<DiagnosticTemplate>;
+  deleteTemplate: (id: string) => Promise<void>;
   refreshDiagnostics: () => Promise<void>;
   refreshTemplates: () => Promise<void>;
   applyDiagnostic: (diagnostic: ApplyDiagnosticInput) => Promise<Diagnostic>;
@@ -172,7 +175,7 @@ interface DataContextType {
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
-const generateId = () => Math.random().toString(36).substring(2, 15);
+const generateId = () => (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15));
 const getDate = () => new Date().toLocaleDateString("pt-BR");
 
 const resolveUserName = (user?: User | null) => {
@@ -1010,7 +1013,6 @@ const initialLeads: Lead[] = [
 ];
 
 const initialDiagnostics: Diagnostic[] = getDiagnosticsSeed();
-const initialTemplates: DiagnosticTemplate[] = getTemplatesSeed();
 
 const initialContentItems: ContentItem[] = [
   {
@@ -1081,11 +1083,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [playbooks, setPlaybooks] = useLocalStorage<Playbook[]>("joia_playbooks", initialPlaybooks);
   const [employees, setEmployees] = useLocalStorage<Employee[]>("joia_employees", initialEmployees);
   const [leads, setLeads] = useLocalStorage<Lead[]>("joia_leads", initialLeads);
-  const [templates, setTemplates] = useLocalStorage<DiagnosticTemplate[]>("joia_diagnostic_templates", initialTemplates);
-  const [removedTemplateIds, setRemovedTemplateIds] = useLocalStorage<string[]>(
-    "joia_removed_diagnostic_templates",
-    []
-  );
+  const [templates, setTemplates] = useState<DiagnosticTemplate[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [templatesError, setTemplatesError] = useState<string | null>(null);
   const [diagnostics, setDiagnostics] = useLocalStorage<Diagnostic[]>("joia_diagnostics", initialDiagnostics);
   const [contentItems, setContentItems] = useLocalStorage<ContentItem[]>("joia_content", initialContentItems);
   const [contracts, setContracts] = useLocalStorage<Contract[]>("joia_contracts", []);
@@ -1121,16 +1121,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     setTemplates((prev) => prev.map(normalizeTemplate));
   }, [setTemplates]);
-
-  // Sincroniza templates do seed: atualiza templates existentes com dados mais completos do seed
-  useEffect(() => {
-    const finalTemplates = syncTemplatesWithSeed(templates, initialTemplates, new Set(removedTemplateIds));
-
-    // Só atualiza se houver diferença
-    if (JSON.stringify(finalTemplates) !== JSON.stringify(templates)) {
-      setTemplates(finalTemplates);
-    }
-  }, []);
 
   // Migra hipóteses antigas para oportunidades estruturadas
   useEffect(() => {
@@ -1173,9 +1163,23 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [setDiagnostics]);
 
   const refreshTemplates = useCallback(async () => {
-    const data = await fetchTemplates();
-    setTemplates(data.map(normalizeTemplate));
-  }, [setTemplates]);
+    setTemplatesLoading(true);
+    setTemplatesError(null);
+
+    try {
+      const data = await fetchTemplates();
+      setTemplates(data.map(normalizeTemplate));
+    } catch (error) {
+      console.error(error);
+      setTemplatesError((error as Error).message || "Não foi possível carregar os templates");
+    } finally {
+      setTemplatesLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshTemplates();
+  }, [refreshTemplates]);
 
   const handleApplyDiagnostic = useCallback(
     async (diagnostic: ApplyDiagnosticInput) => {
@@ -1601,48 +1605,56 @@ export function DataProvider({ children }: { children: ReactNode }) {
     deleteLead: (id) => setLeads((prev) => prev.filter((l) => l.id !== id)),
 
     templates,
-    addTemplate: (template) => {
-      const now = getDate();
-      const normalized = normalizeTemplate({
-        ...template,
-        id: template.id || generateId(),
-        createdAt: template.createdAt || now,
-        updatedAt: template.updatedAt || now,
-        audit: {
-          createdAt: template.audit?.createdAt || now,
-          updatedAt: template.audit?.updatedAt || now,
-          createdBy: template.audit?.createdBy || currentUserName,
-          updatedBy: template.audit?.updatedBy || currentUserName,
-        },
-      });
-      setTemplates((prev) => [...prev, normalized]);
-      setRemovedTemplateIds((prev) => prev.filter((removedId) => removedId !== normalized.id));
-      return normalized;
+    templatesLoading,
+    templatesError,
+    addTemplate: async (template) => {
+      setTemplatesLoading(true);
+      setTemplatesError(null);
+
+      try {
+        const created = await createTemplate(template);
+        const normalized = normalizeTemplate(created);
+        setTemplates((prev) => [...prev, normalized]);
+        return normalized;
+      } catch (error) {
+        const message = (error as Error).message || "Erro ao criar template";
+        setTemplatesError(message);
+        throw error;
+      } finally {
+        setTemplatesLoading(false);
+      }
     },
-    updateTemplate: (id, template) =>
-      setTemplates((prev) =>
-        prev.map((t) => {
-          if (t.id !== id) return t;
+    updateTemplate: async (id, template) => {
+      setTemplatesLoading(true);
+      setTemplatesError(null);
 
-          const now = getDate();
-          const updatedAt = template.updatedAt || now;
+      try {
+        const updated = await updateTemplateRecord(id, template);
+        const normalized = normalizeTemplate(updated);
+        setTemplates((prev) => prev.map((item) => (item.id === id ? normalized : item)));
+        return normalized;
+      } catch (error) {
+        const message = (error as Error).message || "Erro ao atualizar template";
+        setTemplatesError(message);
+        throw error;
+      } finally {
+        setTemplatesLoading(false);
+      }
+    },
+    deleteTemplate: async (id) => {
+      setTemplatesLoading(true);
+      setTemplatesError(null);
 
-          return normalizeTemplate({
-            ...t,
-            ...template,
-            updatedAt,
-            audit: {
-              createdAt: template.audit?.createdAt || t.audit?.createdAt || t.createdAt || getDate(),
-              updatedAt: template.audit?.updatedAt || updatedAt,
-              createdBy: template.audit?.createdBy || t.audit?.createdBy || currentUserName,
-              updatedBy: template.audit?.updatedBy || currentUserName,
-            },
-          });
-        })
-      ),
-    deleteTemplate: (id) => {
-      setTemplates((prev) => prev.filter((t) => t.id !== id));
-      setRemovedTemplateIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+      try {
+        await deleteTemplateRecord(id);
+        setTemplates((prev) => prev.filter((t) => t.id !== id));
+      } catch (error) {
+        const message = (error as Error).message || "Erro ao remover template";
+        setTemplatesError(message);
+        throw error;
+      } finally {
+        setTemplatesLoading(false);
+      }
     },
 
     diagnostics,

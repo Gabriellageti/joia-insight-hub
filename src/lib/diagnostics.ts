@@ -1,7 +1,19 @@
 import { differenceInCalendarDays, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Diagnostic, DiagnosticTemplate } from "@/types";
+import {
+  AuditMetadata,
+  DiagnosticTemplate,
+  DiagnosticTemplateStatus,
+  Diagnostic,
+  OpportunityRuleCondition,
+  QuestionOption,
+  TemplateOpportunityRule,
+  TemplateQuestion,
+  TemplateSection,
+} from "@/types";
 import { formatDatePtBR, parseDatePtBR } from "@/lib/dates";
+import { supabase } from "@/integrations/supabase/client";
+import { Database } from "@/integrations/supabase/types";
 
 type Status = Diagnostic["status"];
 
@@ -3359,12 +3371,476 @@ export const calculatePendingQuestions = (diagnostic: Diagnostic): number => {
   return Math.max(0, (diagnostic.totalQuestions || 0) - (diagnostic.answeredQuestions || 0));
 };
 
+type DbTemplateRow = Database["public"]["Tables"]["diagnostic_templates"]["Row"];
+type DbSectionRow = Database["public"]["Tables"]["template_sections"]["Row"];
+type DbQuestionRow = Database["public"]["Tables"]["template_questions"]["Row"];
+type DbRuleRow = Database["public"]["Tables"]["template_opportunity_rules"]["Row"];
+
+type TemplateDescriptionPayload = {
+  description?: string;
+  tags?: string[];
+  status?: DiagnosticTemplateStatus;
+  version?: string;
+  revision?: number;
+  estimatedTimeMinutes?: number | null;
+  lastPublishedAt?: string;
+  audit?: AuditMetadata;
+};
+
+type SectionDescriptionPayload = {
+  description?: string;
+  weight?: number;
+  audit?: AuditMetadata;
+};
+
+type QuestionMetadataPayload = {
+  type?: TemplateQuestion["type"];
+  weight?: number;
+  includeInScore?: boolean;
+  criticality?: TemplateQuestion["criticality"];
+  required?: boolean;
+  questionDescription?: string;
+  helperText?: string;
+  placeholder?: string;
+  minValue?: number | null;
+  maxValue?: number | null;
+  audit?: AuditMetadata;
+  optionsWithWeight?: QuestionOption[];
+  allowedFileTypes?: string[];
+  maxFileSizeMB?: number | null;
+};
+
+const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const asUuid = (value?: string) => (value && uuidRegex.test(value) ? value : undefined);
+
+const deserializeTemplateDescription = (raw?: string | null) => {
+  if (!raw) return { description: "", metadata: {} as TemplateDescriptionPayload };
+
+  try {
+    const parsed = JSON.parse(raw) as TemplateDescriptionPayload & { description?: string };
+
+    if (parsed && typeof parsed === "object") {
+      const { description = "", ...metadata } = parsed;
+      return { description, metadata };
+    }
+  } catch {
+    // ignore parsing errors and fall back to plain text
+  }
+
+  return { description: raw, metadata: {} as TemplateDescriptionPayload };
+};
+
+const serializeTemplateDescription = (template: Partial<DiagnosticTemplate> & { id?: string }) =>
+  JSON.stringify({
+    description: template.description || "",
+    tags: template.tags || [],
+    status: template.status || "draft",
+    version: template.version,
+    revision: template.revision,
+    estimatedTimeMinutes: template.estimatedTimeMinutes ?? null,
+    lastPublishedAt: template.lastPublishedAt,
+    audit: template.audit,
+  });
+
+const deserializeSectionDescription = (raw?: string | null) => {
+  if (!raw) return { description: "", metadata: {} as SectionDescriptionPayload };
+
+  try {
+    const parsed = JSON.parse(raw) as SectionDescriptionPayload & { description?: string };
+    if (parsed && typeof parsed === "object") {
+      const { description = "", ...metadata } = parsed;
+      return { description, metadata };
+    }
+  } catch {
+    // ignore parsing errors and fall back to plain text
+  }
+
+  return { description: raw, metadata: {} as SectionDescriptionPayload };
+};
+
+const serializeSectionDescription = (section: TemplateSection) =>
+  JSON.stringify({
+    description: section.description || "",
+    weight: section.weight ?? 1,
+    audit: section.audit,
+  });
+
+const serializeQuestionMetadata = (question: TemplateQuestion): QuestionMetadataPayload => ({
+  type: question.type,
+  weight: question.weight,
+  includeInScore: question.includeInScore,
+  criticality: question.criticality,
+  required: question.required,
+  questionDescription: question.description,
+  helperText: question.helperText,
+  placeholder: question.placeholder,
+  minValue: question.minValue ?? null,
+  maxValue: question.maxValue ?? null,
+  audit: question.audit,
+  optionsWithWeight: question.optionsWithWeight,
+  allowedFileTypes: question.allowedFileTypes,
+  maxFileSizeMB: question.maxFileSizeMB ?? null,
+});
+
+const parseQuestionMetadata = (payload: DbQuestionRow["metadata"]): QuestionMetadataPayload => {
+  if (!payload || typeof payload !== "object") return {};
+  return payload as QuestionMetadataPayload;
+};
+
+const mapQuestionTypeToDb = (type: TemplateQuestion["type"]): string => {
+  switch (type) {
+    case "yes_no":
+      return "boolean";
+    case "scale":
+      return "rating";
+    case "number":
+      return "number";
+    case "multiple_choice":
+      return "select";
+    default:
+      return "text";
+  }
+};
+
+const mapQuestionTypeFromDb = (dbType: string, metadataType?: TemplateQuestion["type"]): TemplateQuestion["type"] => {
+  if (metadataType) return metadataType;
+
+  switch (dbType) {
+    case "boolean":
+      return "yes_no";
+    case "rating":
+      return "scale";
+    case "number":
+      return "number";
+    case "select":
+      return "multiple_choice";
+    default:
+      return "text";
+  }
+};
+
+const serializeQuestionOptions = (question: TemplateQuestion): QuestionOption[] => {
+  if (question.optionsWithWeight?.length) return question.optionsWithWeight;
+  if (question.options?.length) return question.options.map((label) => ({ label, weight: null }));
+  return [];
+};
+
+const mapRuleFromDb = (rule: DbRuleRow): TemplateOpportunityRule => {
+  const actions = (rule.actions as Record<string, unknown>) || {};
+
+  return {
+    id: rule.id,
+    name: (actions.name as string) || rule.title || "Regra de oportunidade",
+    description: (actions.description as string) || rule.description || "",
+    type: ((actions.type as TemplateOpportunityRule["type"]) || "Outro") as TemplateOpportunityRule["type"],
+    estimatedValue: typeof actions.estimatedValue === "number" ? actions.estimatedValue : null,
+    confidence: (actions.confidence as TemplateOpportunityRule["confidence"]) || "media",
+    evidenceType: (actions.evidenceType as TemplateOpportunityRule["evidenceType"]) || "a_coletar",
+    enabled: (actions.enabled as boolean) ?? true,
+    autoGenerate: (actions.autoGenerate as boolean) ?? true,
+    condition: (rule.rule_conditions as OpportunityRuleCondition) || { type: "always" },
+    audit: actions.audit as AuditMetadata | undefined,
+  };
+};
+
+const mapRuleToDb = (
+  rule: TemplateOpportunityRule,
+  templateId: string,
+  sectionId?: string,
+  questionId?: string
+): DbRuleRow["Insert"] => ({
+  id: asUuid(rule.id),
+  template_id: templateId,
+  section_id: sectionId || null,
+  question_id: questionId || null,
+  title: rule.name,
+  description: rule.description,
+  rule_conditions: rule.condition ?? { type: "always" },
+  actions: {
+    type: rule.type,
+    estimatedValue: rule.estimatedValue ?? null,
+    confidence: rule.confidence,
+    evidenceType: rule.evidenceType,
+    enabled: rule.enabled,
+    autoGenerate: rule.autoGenerate,
+    name: rule.name,
+    description: rule.description,
+    audit: rule.audit,
+  },
+});
+
+const mapQuestionFromDb = (question: DbQuestionRow, rules: DbRuleRow[]): TemplateQuestion => {
+  const metadata = parseQuestionMetadata(question.metadata);
+  const rawOptions = question.options as QuestionOption[] | string[] | null;
+  const optionsWithWeight = (metadata.optionsWithWeight || rawOptions || []) as QuestionOption[];
+  const normalizedOptions = (optionsWithWeight || []).map((option) =>
+    typeof option === "string" ? { label: option, weight: null } : option
+  );
+  const linkedRule = rules.find((rule) => rule.question_id === question.id);
+
+  return {
+    id: question.id,
+    title: question.question,
+    description: metadata.questionDescription || metadata.helperText || "",
+    type: mapQuestionTypeFromDb(question.question_type, metadata.type),
+    weight: metadata.weight ?? 1,
+    includeInScore: metadata.includeInScore ?? true,
+    criticality: metadata.criticality ?? "media",
+    required: metadata.required ?? true,
+    helperText: metadata.helperText || "",
+    placeholder: metadata.placeholder || "",
+    order: question.position ?? 0,
+    minValue: metadata.minValue ?? null,
+    maxValue: metadata.maxValue ?? null,
+    options: normalizedOptions.map((option) => option.label),
+    optionsWithWeight: normalizedOptions,
+    regraOportunidade: linkedRule ? mapRuleFromDb(linkedRule) : undefined,
+    maxFileSizeMB: metadata.maxFileSizeMB ?? null,
+    allowedFileTypes: metadata.allowedFileTypes ?? [],
+    audit: metadata.audit,
+  };
+};
+
+const mapSectionFromDb = (
+  section: DbSectionRow,
+  questions: DbQuestionRow[],
+  rules: DbRuleRow[]
+): TemplateSection => {
+  const { description, metadata } = deserializeSectionDescription(section.description);
+  const sectionQuestions = questions
+    .filter((question) => question.section_id === section.id)
+    .sort((a, b) => (a.position || 0) - (b.position || 0))
+    .map((question) => mapQuestionFromDb(question, rules));
+
+  return {
+    id: section.id,
+    title: section.title,
+    description,
+    order: section.position ?? 0,
+    weight: metadata.weight ?? 1,
+    questions: sectionQuestions,
+    audit: metadata.audit,
+  };
+};
+
+const mapTemplateFromDb = (
+  template: DbTemplateRow,
+  sections: TemplateSection[]
+): DiagnosticTemplate => {
+  const { description, metadata } = deserializeTemplateDescription(template.description);
+  const questionCount = sections.reduce((count, section) => count + (section.questions?.length || 0), 0);
+
+  return {
+    id: template.id,
+    name: template.name,
+    description,
+    tags: metadata.tags || [],
+    status: metadata.status || "draft",
+    version: metadata.version || "v1.0",
+    revision: metadata.revision ?? 1,
+    sections,
+    questionCount,
+    sectionsCount: sections.length,
+    estimatedTimeMinutes: metadata.estimatedTimeMinutes ?? null,
+    lastPublishedAt: metadata.lastPublishedAt,
+    updatedAt: formatDatePtBR(new Date(template.updated_at)),
+    createdAt: formatDatePtBR(new Date(template.created_at)),
+    audit: metadata.audit,
+  };
+};
+
+const insertTemplateStructure = async (templateId: string, sections: TemplateSection[]) => {
+  for (const section of sections) {
+    const { data: sectionRow, error: sectionError } = await supabase
+      .from("template_sections")
+      .insert({
+        id: asUuid(section.id),
+        template_id: templateId,
+        title: section.title,
+        description: serializeSectionDescription(section),
+        position: section.order,
+      })
+      .select()
+      .single();
+
+    if (sectionError || !sectionRow) {
+      throw new Error(sectionError?.message || "Erro ao salvar seção do template");
+    }
+
+    for (const question of section.questions || []) {
+      const { data: questionRow, error: questionError } = await supabase
+        .from("template_questions")
+        .insert({
+          id: asUuid(question.id),
+          template_id: templateId,
+          section_id: sectionRow.id,
+          question: question.title,
+          question_type: mapQuestionTypeToDb(question.type),
+          options: serializeQuestionOptions(question),
+          metadata: serializeQuestionMetadata(question),
+          position: question.order,
+        })
+        .select()
+        .single();
+
+      if (questionError || !questionRow) {
+        throw new Error(questionError?.message || "Erro ao salvar pergunta do template");
+      }
+
+      if (question.regraOportunidade) {
+        const { error: ruleError } = await supabase
+          .from("template_opportunity_rules")
+          .insert(mapRuleToDb(question.regraOportunidade, templateId, sectionRow.id, questionRow.id));
+
+        if (ruleError) {
+          throw new Error(ruleError.message || "Erro ao salvar regra de oportunidade");
+        }
+      }
+    }
+  }
+};
+
+const rebuildTemplateStructure = async (templateId: string, sections: TemplateSection[]) => {
+  await supabase.from("template_opportunity_rules").delete().eq("template_id", templateId);
+  await supabase.from("template_questions").delete().eq("template_id", templateId);
+  await supabase.from("template_sections").delete().eq("template_id", templateId);
+  await insertTemplateStructure(templateId, sections);
+};
+
+const fetchTemplateById = async (id: string): Promise<DiagnosticTemplate | null> => {
+  const { data: templateRow, error: templateError } = await supabase
+    .from("diagnostic_templates")
+    .select("*")
+    .eq("id", id)
+    .single();
+
+  if (templateError || !templateRow) return null;
+
+  const [{ data: sections }, { data: questions }, { data: rules }] = await Promise.all([
+    supabase.from("template_sections").select("*").eq("template_id", id),
+    supabase.from("template_questions").select("*").eq("template_id", id),
+    supabase.from("template_opportunity_rules").select("*").eq("template_id", id),
+  ]);
+
+  const sectionList = (sections || []).map((section) =>
+    mapSectionFromDb(section, questions || [], rules || [])
+  );
+
+  return mapTemplateFromDb(templateRow, sectionList);
+};
+
 export const fetchDiagnostics = async (): Promise<Diagnostic[]> => {
   return diagnosticsSeed;
 };
 
 export const fetchTemplates = async (): Promise<DiagnosticTemplate[]> => {
-  return templateSeed;
+  const { data: templateRows, error } = await supabase
+    .from("diagnostic_templates")
+    .select("*")
+    .order("updated_at", { ascending: false });
+
+  if (error) {
+    throw new Error(error.message || "Erro ao carregar templates");
+  }
+
+  if (!templateRows?.length) return [];
+
+  const templateIds = templateRows.map((row) => row.id);
+
+  const [sectionsResponse, questionsResponse, rulesResponse] = await Promise.all([
+    supabase
+      .from("template_sections")
+      .select("*")
+      .in("template_id", templateIds)
+      .order("position", { ascending: true }),
+    supabase
+      .from("template_questions")
+      .select("*")
+      .in("template_id", templateIds)
+      .order("position", { ascending: true }),
+    supabase.from("template_opportunity_rules").select("*").in("template_id", templateIds),
+  ]);
+
+  if (sectionsResponse.error) throw new Error(sectionsResponse.error.message);
+  if (questionsResponse.error) throw new Error(questionsResponse.error.message);
+  if (rulesResponse.error) throw new Error(rulesResponse.error.message);
+
+  const sections = sectionsResponse.data || [];
+  const questions = questionsResponse.data || [];
+  const rules = rulesResponse.data || [];
+
+  return templateRows.map((templateRow) => {
+    const templateSections = sections.filter((section) => section.template_id === templateRow.id);
+    const mappedSections = templateSections.map((section) =>
+      mapSectionFromDb(section, questions.filter((question) => question.section_id === section.id), rules)
+    );
+    return mapTemplateFromDb(templateRow, mappedSections);
+  });
+};
+
+export const createTemplate = async (
+  template: Omit<DiagnosticTemplate, "id"> & { id?: string }
+): Promise<DiagnosticTemplate> => {
+  const { data: templateRow, error } = await supabase
+    .from("diagnostic_templates")
+    .insert({
+      id: asUuid(template.id),
+      name: template.name,
+      description: serializeTemplateDescription(template),
+    })
+    .select()
+    .single();
+
+  if (error || !templateRow) {
+    throw new Error(error?.message || "Erro ao criar template");
+  }
+
+  await insertTemplateStructure(templateRow.id, template.sections || []);
+
+  return (await fetchTemplateById(templateRow.id)) || mapTemplateFromDb(templateRow, []);
+};
+
+export const updateTemplateRecord = async (
+  id: string,
+  template: Partial<DiagnosticTemplate>
+): Promise<DiagnosticTemplate> => {
+  const { error } = await supabase
+    .from("diagnostic_templates")
+    .update({
+      name: template.name,
+      description: serializeTemplateDescription({
+        ...template,
+        name: template.name || "",
+        tags: template.tags || [],
+        status: (template.status as DiagnosticTemplateStatus) || "draft",
+        sections: template.sections || [],
+        questionCount: template.questionCount,
+        sectionsCount: template.sectionsCount,
+        estimatedTimeMinutes: template.estimatedTimeMinutes ?? null,
+        revision: template.revision,
+        version: template.version,
+        description: template.description || "",
+      }),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id);
+
+  if (error) {
+    throw new Error(error.message || "Erro ao atualizar template");
+  }
+
+  await rebuildTemplateStructure(id, template.sections || []);
+
+  const updated = await fetchTemplateById(id);
+  if (!updated) throw new Error("Template não encontrado após atualização");
+  return updated;
+};
+
+export const deleteTemplateRecord = async (id: string) => {
+  const { error } = await supabase.from("diagnostic_templates").delete().eq("id", id);
+  if (error) {
+    throw new Error(error.message || "Erro ao remover template");
+  }
 };
 
 export const applyDiagnostic = async (input: ApplyDiagnosticInput): Promise<Diagnostic> => {

@@ -152,7 +152,15 @@ function FilterContent({
 
 export default function Diagnostico() {
   const navigate = useNavigate();
-  const { diagnostics, templates, deleteDiagnostic, addTemplate, duplicateDiagnostic, deleteTemplate } = useData();
+  const {
+    diagnostics,
+    templates,
+    deleteDiagnostic,
+    addTemplate,
+    duplicateDiagnostic,
+    deleteTemplate,
+    templatesLoading,
+  } = useData();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingDiagnostic, setEditingDiagnostic] = useState<Diagnostic | null>(null);
   const [activeTab, setActiveTab] = useState("diagnostics");
@@ -265,16 +273,24 @@ export default function Diagnostico() {
     setDialogOpen(true);
   };
 
-  const handleCreateTemplate = () => {
-    const created = addTemplate(createTemplateMock("Novo template"));
-    toast.success(`Template "${created.name}" criado`);
-    setActiveTab("templates");
+  const handleCreateTemplate = async () => {
+    try {
+      const created = await addTemplate(createTemplateMock("Novo template"));
+      toast.success(`Template "${created.name}" criado`);
+      setActiveTab("templates");
+    } catch (error) {
+      toast.error((error as Error).message || "Não foi possível criar o template");
+    }
   };
 
-  const handleImportTemplate = () => {
-    const created = addTemplate(createTemplateMock("Template exemplo JoIA"));
-    toast.success("Template importado com sucesso");
-    setActiveTab("templates");
+  const handleImportTemplate = async () => {
+    try {
+      const created = await addTemplate(createTemplateMock("Template exemplo JoIA"));
+      toast.success("Template importado com sucesso");
+      setActiveTab("templates");
+    } catch (error) {
+      toast.error((error as Error).message || "Não foi possível importar o template");
+    }
   };
 
   const clearFilters = () => {
@@ -293,7 +309,11 @@ export default function Diagnostico() {
           <h1 className="text-2xl font-semibold text-foreground">Central de diagnósticos JoIA</h1>
           <p className="text-muted-foreground">Aplique diagnósticos padronizados, acompanhe progresso e oportunidades</p>
         </div>
-        <Button className="bg-accent text-accent-foreground hover:bg-accent/90" onClick={activeTab === "diagnostics" ? openDialogForCreate : handleCreateTemplate}>
+        <Button
+          className="bg-accent text-accent-foreground hover:bg-accent/90"
+          onClick={activeTab === "diagnostics" ? openDialogForCreate : handleCreateTemplate}
+          disabled={activeTab === "templates" && templatesLoading}
+        >
           <Plus className="h-4 w-4 mr-2" />
           {activeTab === "diagnostics" ? "Aplicar diagnóstico" : "Criar template"}
         </Button>
@@ -422,8 +442,10 @@ export default function Diagnostico() {
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-3">
-                <Button onClick={handleCreateTemplate}>Criar template</Button>
-                <Button variant="link" onClick={handleImportTemplate}>
+                <Button onClick={handleCreateTemplate} disabled={templatesLoading}>
+                  Criar template
+                </Button>
+                <Button variant="link" onClick={handleImportTemplate} disabled={templatesLoading}>
                   Importar exemplo
                 </Button>
               </div>
@@ -437,14 +459,22 @@ export default function Diagnostico() {
                     template={template}
                     onApply={handleApplyTemplate}
                     onEdit={(t) => navigate(`/templates/${t.id}/editar`)}
-                    onDuplicate={(t) => {
-                      const duplicated = addTemplate(buildDuplicatedTemplateDraft(t));
-                      toast.success(`Template ${duplicated.name} duplicado`);
+                    onDuplicate={async (t) => {
+                      try {
+                        const duplicated = await addTemplate(buildDuplicatedTemplateDraft(t));
+                        toast.success(`Template ${duplicated.name} duplicado`);
+                      } catch (error) {
+                        toast.error((error as Error).message || "Não foi possível duplicar o template");
+                      }
                     }}
-                    onDelete={(t) => {
+                    onDelete={async (t) => {
                       if (window.confirm("Deseja excluir este template?")) {
-                        deleteTemplate(t.id);
-                        toast.success(`Template ${t.name} removido`);
+                        try {
+                          await deleteTemplate(t.id);
+                          toast.success(`Template ${t.name} removido`);
+                        } catch (error) {
+                          toast.error((error as Error).message || "Não foi possível remover o template");
+                        }
                       }
                     }}
                   />

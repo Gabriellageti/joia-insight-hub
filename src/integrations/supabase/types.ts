@@ -119,6 +119,30 @@ export type Database = {
           },
         ]
       }
+      diagnostic_templates: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       documents: {
         Row: {
           client_id: string | null
@@ -220,6 +244,44 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: []
+      }
+      template_sections: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          position: number | null
+          template_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          position?: number | null
+          template_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          position?: number | null
+          template_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_sections_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "diagnostic_templates"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       financial_records: {
         Row: {
@@ -657,6 +719,124 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      template_opportunity_rules: {
+        Row: {
+          actions: Json | null
+          created_at: string
+          description: string | null
+          id: string
+          question_id: string | null
+          rule_conditions: Json
+          section_id: string | null
+          template_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          actions?: Json | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          question_id?: string | null
+          rule_conditions: Json
+          section_id?: string | null
+          template_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          actions?: Json | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          question_id?: string | null
+          rule_conditions?: Json
+          section_id?: string | null
+          template_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_opportunity_rules_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "template_questions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "template_opportunity_rules_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "template_sections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "template_opportunity_rules_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "diagnostic_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      template_questions: {
+        Row: {
+          conditions: Json | null
+          created_at: string
+          id: string
+          metadata: Json | null
+          options: Json | null
+          position: number | null
+          question: string
+          question_type: string
+          section_id: string
+          template_id: string
+          updated_at: string
+        }
+        Insert: {
+          conditions?: Json | null
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          options?: Json | null
+          position?: number | null
+          question: string
+          question_type: string
+          section_id: string
+          template_id: string
+          updated_at?: string
+        }
+        Update: {
+          conditions?: Json | null
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          options?: Json | null
+          position?: number | null
+          question?: string
+          question_type?: string
+          section_id?: string
+          template_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_questions_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "template_sections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "template_questions_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "diagnostic_templates"
             referencedColumns: ["id"]
           },
         ]

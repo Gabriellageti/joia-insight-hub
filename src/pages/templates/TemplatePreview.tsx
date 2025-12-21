@@ -85,21 +85,25 @@ export default function TemplatePreview() {
     [template]
   );
 
-  const handleDuplicate = () => {
+  const handleDuplicate = async () => {
     if (isAnalyst) {
       toast.error("Analistas não podem criar ou duplicar templates.");
       return;
     }
     if (!template) return;
-    const duplicated = addTemplate({
-      ...template,
-      id: undefined,
-      name: `${template.name} (cópia)`,
-      updatedAt: formatDatePtBR(new Date()),
-      revision: (template.revision || 1) + 1,
-    });
-    toast.success(`Template "${duplicated.name}" duplicado`);
-    navigate(`/templates/${duplicated.id}/editar`);
+    try {
+      const duplicated = await addTemplate({
+        ...template,
+        id: undefined,
+        name: `${template.name} (cópia)`,
+        updatedAt: formatDatePtBR(new Date()),
+        revision: (template.revision || 1) + 1,
+      });
+      toast.success(`Template "${duplicated.name}" duplicado`);
+      navigate(`/templates/${duplicated.id}/editar`);
+    } catch (error) {
+      toast.error((error as Error).message || "Não foi possível duplicar o template");
+    }
   };
 
   const handleEdit = () => {

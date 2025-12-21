@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Eye, Plus, Search, Sparkles } from "lucide-react";
+import { Eye, Loader2, Plus, Search, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
@@ -12,10 +12,11 @@ import { formatDatePtBR } from "@/lib/dates";
 import { toast } from "sonner";
 import { buildDuplicatedTemplateDraft } from "@/lib/diagnostics";
 import { useAuth } from "@/contexts/AuthContext";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export default function TemplatesList() {
   const navigate = useNavigate();
-  const { templates, addTemplate, deleteTemplate, updateTemplate } = useData();
+  const { templates, addTemplate, deleteTemplate, updateTemplate, templatesLoading, templatesError } = useData();
   const { user } = useAuth();
   const [search, setSearch] = useState("");
 
@@ -32,19 +33,27 @@ export default function TemplatesList() {
     );
   }, [search, templates]);
 
-  const handleDuplicate = (template: DiagnosticTemplate) => {
+  const handleDuplicate = async (template: DiagnosticTemplate) => {
     if (isAnalyst) {
       toast.error("Analistas não podem criar ou duplicar templates.");
       return;
     }
-    const duplicated = addTemplate(buildDuplicatedTemplateDraft(template));
-    toast.success(`Template "${duplicated.name}" duplicado`);
+    try {
+      const duplicated = await addTemplate(buildDuplicatedTemplateDraft(template));
+      toast.success(`Template "${duplicated.name}" duplicado`);
+    } catch (error) {
+      toast.error((error as Error).message || "Não foi possível duplicar o template");
+    }
   };
 
-  const handleDelete = (template: DiagnosticTemplate) => {
+  const handleDelete = async (template: DiagnosticTemplate) => {
     if (window.confirm("Deseja remover este template?")) {
-      deleteTemplate(template.id);
-      toast.success(`Template "${template.name}" removido`);
+      try {
+        await deleteTemplate(template.id);
+        toast.success(`Template "${template.name}" removido`);
+      } catch (error) {
+        toast.error((error as Error).message || "Não foi possível remover o template");
+      }
     }
   };
 
@@ -70,7 +79,7 @@ export default function TemplatesList() {
     navigate("/templates/novo");
   };
 
-  const handleArchive = (template: DiagnosticTemplate) => {
+  const handleArchive = async (template: DiagnosticTemplate) => {
     if (isAnalyst) {
       toast.error("Analistas não podem arquivar templates.");
       return;
@@ -79,8 +88,12 @@ export default function TemplatesList() {
       toast.error("Somente Admin ou Gestor podem arquivar templates.");
       return;
     }
-    updateTemplate(template.id, { status: "archived", updatedAt: formatDatePtBR(new Date()) });
-    toast.success(`Template "${template.name}" arquivado`);
+    try {
+      await updateTemplate(template.id, { status: "archived", updatedAt: formatDatePtBR(new Date()) });
+      toast.success(`Template "${template.name}" arquivado`);
+    } catch (error) {
+      toast.error((error as Error).message || "Não foi possível arquivar o template");
+    }
   };
 
   return (
@@ -120,7 +133,20 @@ export default function TemplatesList() {
 
       <Separator />
 
-      {filteredTemplates.length === 0 ? (
+      {templatesLoading && templates.length === 0 && (
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" /> Carregando templates...
+        </div>
+      )}
+
+      {templatesError && (
+        <Alert variant="destructive">
+          <AlertTitle>Erro ao carregar templates</AlertTitle>
+          <AlertDescription>{templatesError}</AlertDescription>
+        </Alert>
+      )}
+
+      {filteredTemplates.length === 0 && !templatesLoading ? (
         <div className="flex flex-col items-center justify-center gap-4 rounded-lg border border-dashed p-8 text-center">
           <Sparkles className="h-8 w-8 text-muted-foreground" />
           <div className="space-y-2">
