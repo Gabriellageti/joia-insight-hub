@@ -1,4 +1,4 @@
-import { assertSupabaseConfigured } from "./client";
+import { supabase } from "./client";
 import type { Database } from "./types";
 
 export type ClientRow = Database["public"]["Tables"]["clients"]["Row"];
@@ -6,7 +6,6 @@ type ClientInsert = Database["public"]["Tables"]["clients"]["Insert"];
 type ClientUpdate = Database["public"]["Tables"]["clients"]["Update"];
 
 export async function listClients(): Promise<ClientRow[]> {
-  const supabase = assertSupabaseConfigured();
   const { data, error } = await supabase.from("clients").select("*");
 
   if (error) {
@@ -17,7 +16,6 @@ export async function listClients(): Promise<ClientRow[]> {
 }
 
 export async function createClient(client: ClientInsert): Promise<ClientRow> {
-  const supabase = assertSupabaseConfigured();
   const { data, error } = await supabase.from("clients").insert(client).select().single();
 
   if (error) {
@@ -32,7 +30,6 @@ export async function createClient(client: ClientInsert): Promise<ClientRow> {
 }
 
 export async function updateClient(id: string, client: ClientUpdate): Promise<ClientRow> {
-  const supabase = assertSupabaseConfigured();
   const { data, error } = await supabase
     .from("clients")
     .update(client)
@@ -52,7 +49,6 @@ export async function updateClient(id: string, client: ClientUpdate): Promise<Cl
 }
 
 export async function deleteClient(id: string): Promise<void> {
-  const supabase = assertSupabaseConfigured();
   const { error } = await supabase.from("clients").delete().eq("id", id);
 
   if (error) {
