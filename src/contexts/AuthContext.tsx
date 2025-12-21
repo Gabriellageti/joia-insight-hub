@@ -18,18 +18,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const getSupabaseOrThrow = () => {
-    if (!supabase) {
-      throw new Error(
-        'Supabase não está configurado. Defina VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY para habilitar autenticação.'
-      );
-    }
-
-    return supabase;
-  };
-
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) {
+      setUser(null);
+      setSession(null);
       setLoading(false);
       return;
     }
@@ -54,48 +46,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signUp = async (email: string, password: string, fullName: string) => {
-    try {
-      const client = getSupabaseOrThrow();
-      const redirectUrl = `${window.location.origin}/`;
-
-      const { error } = await client.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: redirectUrl,
-          data: {
-            full_name: fullName,
-          }
-        }
-      });
-
-      return { error: error as Error | null };
-    } catch (error) {
-      return { error: error as Error };
+    if (!isSupabaseConfigured || !supabase) {
+      return {
+        error: new Error(
+          'Supabase não está configurado. Defina VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY para habilitar autenticação.'
+        )
+      };
     }
+
+    const redirectUrl = `${window.location.origin}/`;
+
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: redirectUrl,
+        data: {
+          full_name: fullName,
+        }
+      }
+    });
+
+    return { error: error as Error | null };
   };
 
   const signIn = async (email: string, password: string) => {
-    try {
-      const client = getSupabaseOrThrow();
-      const { error } = await client.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      return { error: error as Error | null };
-    } catch (error) {
-      return { error: error as Error };
+    if (!isSupabaseConfigured || !supabase) {
+      return {
+        error: new Error(
+          'Supabase não está configurado. Defina VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY para habilitar autenticação.'
+        )
+      };
     }
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    return { error: error as Error | null };
   };
 
   const signOut = async () => {
-    try {
-      const client = getSupabaseOrThrow();
-      await client.auth.signOut();
-    } catch (error) {
-      console.warn(error);
+    if (!isSupabaseConfigured || !supabase) {
+      console.warn('Supabase não está configurado. Nenhuma sessão para encerrar.');
+      return;
     }
+
+    await supabase.auth.signOut();
   };
 
   return (
