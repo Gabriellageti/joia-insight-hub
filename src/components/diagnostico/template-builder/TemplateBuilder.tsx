@@ -43,7 +43,8 @@ export type TemplateBuilderAction = "draft" | "publish" | "preview" | "duplicate
 
 interface TemplateBuilderProps {
   initialTemplate?: DiagnosticTemplate;
-  onSubmit: (template: Omit<DiagnosticTemplate, "id"> & { id?: string }, action: TemplateBuilderAction) => void;
+  onSubmit: (template: Omit<DiagnosticTemplate, "id"> & { id?: string }, action: TemplateBuilderAction) => Promise<void> | void;
+  isSubmitting?: boolean;
 }
 
 type TemplateFormState = {
@@ -158,7 +159,7 @@ const sanitizeFileTypesInput = (value: string) =>
     .map((item) => item.trim())
     .filter(Boolean);
 
-export function TemplateBuilder({ initialTemplate, onSubmit }: TemplateBuilderProps) {
+export function TemplateBuilder({ initialTemplate, onSubmit, isSubmitting }: TemplateBuilderProps) {
   const { user } = useAuth();
   const userRole = (user?.user_metadata as Record<string, string | undefined> | undefined)?.role;
   const canArchive = Boolean(userRole && (userRole.toLowerCase().includes("admin") || userRole.toLowerCase().includes("gestor")));
@@ -179,6 +180,8 @@ export function TemplateBuilder({ initialTemplate, onSubmit }: TemplateBuilderPr
   const [questionDropTargets, setQuestionDropTargets] = useState<Record<string, string | null>>({});
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
   const [publishChangeType, setPublishChangeType] = useState<"minor" | "major">("minor");
+  const [internalSubmitting, setInternalSubmitting] = useState(false);
+  const submitting = isSubmitting ?? internalSubmitting;
 
   const questionCount = useMemo(
     () => formState.sections.reduce((total, section) => total + (section.questions?.length || 0), 0),
@@ -656,6 +659,20 @@ export function TemplateBuilder({ initialTemplate, onSubmit }: TemplateBuilderPr
     return true;
   };
 
+  const submitTemplate = async (payload: Omit<DiagnosticTemplate, "id"> & { id?: string }, action: TemplateBuilderAction) => {
+    if (isSubmitting !== undefined) {
+      await onSubmit(payload, action);
+      return;
+    }
+
+    setInternalSubmitting(true);
+    try {
+      await onSubmit(payload, action);
+    } finally {
+      setInternalSubmitting(false);
+    }
+  };
+
   const handleAction = (action: TemplateBuilderAction) => {
     if (isAnalyst) {
       toast.error("Analistas não podem criar, editar ou publicar templates.");
@@ -671,7 +688,7 @@ export function TemplateBuilder({ initialTemplate, onSubmit }: TemplateBuilderPr
 
     const status: DiagnosticTemplateStatus = action === "draft" ? "draft" : formState.status || "draft";
     const payload = buildPayload(status);
-    onSubmit(payload, action);
+    void submitTemplate(payload, action);
   };
 
   const handlePublishConfirm = () => {
@@ -694,7 +711,7 @@ export function TemplateBuilder({ initialTemplate, onSubmit }: TemplateBuilderPr
     };
 
     setFormState((prev) => ({ ...prev, status: "published", version: nextVersion, lastPublishedAt: publishedAt }));
-    onSubmit(publishedPayload, "publish");
+    void submitTemplate(publishedPayload, "publish");
     setPublishDialogOpen(false);
   };
 
@@ -1407,19 +1424,34 @@ export function TemplateBuilder({ initialTemplate, onSubmit }: TemplateBuilderPr
               </span>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <Button variant="outline" className="gap-2" onClick={() => handleAction("draft")} disabled={isAnalyst}>
+              <Button
+                variant="outline"
+                className="gap-2"
+                onClick={() => handleAction("draft")}
+                disabled={isAnalyst || submitting}
+              >
                 <Save className="h-4 w-4" />
                 Salvar rascunho
               </Button>
-              <Button variant="outline" className="gap-2" onClick={() => handleAction("preview")} disabled={isAnalyst}>
+              <Button
+                variant="outline"
+                className="gap-2"
+                onClick={() => handleAction("preview")}
+                disabled={isAnalyst || submitting}
+              >
                 <Eye className="h-4 w-4" />
                 Preview completo
               </Button>
-              <Button variant="secondary" className="gap-2" onClick={() => handleAction("duplicate")} disabled={isAnalyst}>
+              <Button
+                variant="secondary"
+                className="gap-2"
+                onClick={() => handleAction("duplicate")}
+                disabled={isAnalyst || submitting}
+              >
                 <Copy className="h-4 w-4" />
                 Duplicar
               </Button>
-              <Button className="gap-2" onClick={() => handleAction("publish")} disabled={isAnalyst}>
+              <Button className="gap-2" onClick={() => handleAction("publish")} disabled={isAnalyst || submitting}>
                 <Send className="h-4 w-4" />
                 Publicar
               </Button>

@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { TemplatePageHeader } from "./TemplatePageHeader";
 import { useData } from "@/contexts/DataContext";
@@ -12,37 +13,46 @@ export default function TemplateCreate() {
   const navigate = useNavigate();
   const { addTemplate } = useData();
   const { user } = useAuth();
+  const [isSaving, setIsSaving] = useState(false);
 
   const userRole = (user?.user_metadata as Record<string, string | undefined> | undefined)?.role;
   const isAnalyst = (userRole || "").toLowerCase().includes("analista");
 
-  const handleSubmit = (template: Parameters<typeof addTemplate>[0], action: TemplateBuilderAction) => {
+  const handleSubmit = async (template: Parameters<typeof addTemplate>[0], action: TemplateBuilderAction) => {
     if (isAnalyst) {
       toast.error("Analistas não podem criar, editar ou publicar templates.");
       return;
     }
 
-    if (action === "duplicate") {
-      const duplicated = addTemplate(buildDuplicatedTemplateDraft(template as DiagnosticTemplate));
-      toast.success("Template duplicado");
-      navigate(`/templates/${duplicated.id}/editar`);
-      return;
-    }
+    setIsSaving(true);
 
-    const created = addTemplate(template);
-    const actionMessage =
-      action === "publish"
-        ? "Template publicado"
-        : action === "preview"
-          ? "Preview salvo"
-          : "Rascunho salvo";
+    try {
+      if (action === "duplicate") {
+        const duplicated = await addTemplate(buildDuplicatedTemplateDraft(template as DiagnosticTemplate));
+        toast.success("Template duplicado");
+        navigate(`/templates/${duplicated.id}/editar`);
+        return;
+      }
 
-    toast.success(actionMessage);
+      const created = await addTemplate(template);
+      const actionMessage =
+        action === "publish"
+          ? "Template publicado"
+          : action === "preview"
+            ? "Preview salvo"
+            : "Rascunho salvo";
 
-    if (action === "preview" || action === "publish") {
-      navigate(`/templates/${created.id}/preview`);
-    } else {
-      navigate(`/templates/${created.id}/editar`);
+      toast.success(actionMessage);
+
+      if (action === "preview" || action === "publish") {
+        navigate(`/templates/${created.id}/preview`);
+      } else {
+        navigate(`/templates/${created.id}/editar`);
+      }
+    } catch (error) {
+      toast.error((error as Error).message || "Não foi possível salvar o template");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -59,7 +69,7 @@ export default function TemplateCreate() {
         }
       />
 
-      <TemplateBuilder onSubmit={handleSubmit} />
+      <TemplateBuilder onSubmit={handleSubmit} isSubmitting={isSaving} />
     </div>
   );
 }
