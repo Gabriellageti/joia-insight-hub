@@ -38,6 +38,7 @@ import {
 } from "@/lib/projects/progress";
 import { buildStatusAuditMessage, resolveProjectStatus } from "@/lib/projects/status";
 import { calculateForecastEndDate, formatDatePtBR, parseDatePtBR, ProjectDuration, safeNumber } from "@/lib/dates";
+import { syncTemplatesWithSeed } from "./templateSync";
 import { addDays } from "date-fns";
 import {
   ApplyDiagnosticInput,
@@ -1081,6 +1082,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [employees, setEmployees] = useLocalStorage<Employee[]>("joia_employees", initialEmployees);
   const [leads, setLeads] = useLocalStorage<Lead[]>("joia_leads", initialLeads);
   const [templates, setTemplates] = useLocalStorage<DiagnosticTemplate[]>("joia_diagnostic_templates", initialTemplates);
+  const [removedTemplateIds, setRemovedTemplateIds] = useLocalStorage<string[]>(
+    "joia_removed_diagnostic_templates",
+    []
+  );
   const [diagnostics, setDiagnostics] = useLocalStorage<Diagnostic[]>("joia_diagnostics", initialDiagnostics);
   const [contentItems, setContentItems] = useLocalStorage<ContentItem[]>("joia_content", initialContentItems);
   const [contracts, setContracts] = useLocalStorage<Contract[]>("joia_contracts", []);
@@ -1119,32 +1124,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   // Sincroniza templates do seed: atualiza templates existentes com dados mais completos do seed
   useEffect(() => {
-    if (templates.length === 0 && initialTemplates.length > 0) {
-      setTemplates(initialTemplates);
-      return;
-    }
-    
-    // Verifica se algum template do seed tem mais conteúdo que o armazenado
-    const updatedTemplates = templates.map((localTemplate) => {
-      const seedTemplate = initialTemplates.find((t) => t.id === localTemplate.id);
-      if (!seedTemplate) return localTemplate;
-      
-      // Se o seed tem mais seções ou perguntas, usa o seed
-      const localQuestions = localTemplate.questionCount ?? localTemplate.sections?.reduce((c, s) => c + (s.questions?.length || 0), 0) ?? 0;
-      const seedQuestions = seedTemplate.questionCount ?? seedTemplate.sections?.reduce((c, s) => c + (s.questions?.length || 0), 0) ?? 0;
-      
-      if (seedQuestions > localQuestions) {
-        return { ...seedTemplate, updatedAt: seedTemplate.updatedAt };
-      }
-      return localTemplate;
-    });
-    
-    // Adiciona templates do seed que não existem localmente
-    const localIds = new Set(templates.map((t) => t.id));
-    const newTemplates = initialTemplates.filter((t) => !localIds.has(t.id));
-    
-    const finalTemplates = [...updatedTemplates, ...newTemplates];
-    
+    const finalTemplates = syncTemplatesWithSeed(templates, initialTemplates, new Set(removedTemplateIds));
+
     // Só atualiza se houver diferença
     if (JSON.stringify(finalTemplates) !== JSON.stringify(templates)) {
       setTemplates(finalTemplates);
@@ -1635,6 +1616,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         },
       });
       setTemplates((prev) => [...prev, normalized]);
+      setRemovedTemplateIds((prev) => prev.filter((removedId) => removedId !== normalized.id));
       return normalized;
     },
     updateTemplate: (id, template) =>
@@ -1658,7 +1640,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
           });
         })
       ),
-    deleteTemplate: (id) => setTemplates((prev) => prev.filter((t) => t.id !== id)),
+    deleteTemplate: (id) => {
+      setTemplates((prev) => prev.filter((t) => t.id !== id));
+      setRemovedTemplateIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+    },
 
     diagnostics,
     addDiagnostic: (diagnostic) =>
