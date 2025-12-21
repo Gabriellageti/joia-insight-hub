@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Filter, Plus, Search } from "lucide-react";
+import { Filter, Pencil, Plus, Search, Trash } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ClientDialog } from "@/components/dialogs/ClientDialog";
 import { useData } from "@/contexts/DataContext";
+import { toast } from "sonner";
 
 const followUpLabels = {
   semanal: "Semanal",
@@ -16,9 +17,33 @@ const followUpLabels = {
 };
 
 export default function Clientes() {
-  const { clients } = useData();
+  const { clients, deleteClient } = useData();
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedClient, setSelectedClient] = useState<typeof clients[number] | null>(null);
+
+  const handleEdit = (clientId: string) => {
+    const client = clients.find((item) => item.id === clientId) || null;
+    setSelectedClient(client);
+    setDialogOpen(true);
+  };
+
+  const handleDelete = async (clientId: string) => {
+    const client = clients.find((item) => item.id === clientId);
+    const confirmed = window.confirm(
+      `Deseja realmente excluir ${client?.nomeFantasia || client?.razaoSocial || "o cliente"}?`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      await deleteClient(clientId);
+      toast.success("Cliente excluído com sucesso");
+    } catch (error) {
+      console.error(error);
+      toast.error("Não foi possível excluir o cliente");
+    }
+  };
 
   const filteredClients = useMemo(() => {
     const term = search.toLowerCase();
@@ -81,6 +106,7 @@ export default function Clientes() {
                   <TableHead>Localização</TableHead>
                   <TableHead>Contato principal</TableHead>
                   <TableHead>Follow-up</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -147,6 +173,20 @@ export default function Clientes() {
                         )}
                       </div>
                     </TableCell>
+
+                    <TableCell className="text-right space-x-2">
+                      <Button variant="ghost" size="icon" onClick={() => handleEdit(client.id)} aria-label="Editar cliente">
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDelete(client.id)}
+                        aria-label="Excluir cliente"
+                      >
+                        <Trash className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -155,7 +195,16 @@ export default function Clientes() {
         </CardContent>
       </Card>
 
-      <ClientDialog open={dialogOpen} onOpenChange={setDialogOpen} />
+      <ClientDialog
+        open={dialogOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedClient(null);
+          }
+          setDialogOpen(open);
+        }}
+        client={selectedClient || undefined}
+      />
     </div>
   );
 }

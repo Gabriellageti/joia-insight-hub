@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useMemo, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useData } from "@/contexts/DataContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,9 +9,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ArrowLeft, Building2, MapPin, PhoneCall, Shield } from "lucide-react";
+import { ArrowLeft, Building2, MapPin, PhoneCall, Shield, Trash } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { isPastDate } from "@/lib/dates";
+import { ClientDialog } from "@/components/dialogs/ClientDialog";
+import { toast } from "sonner";
 
 const riskColors = { low: "bg-green-500/10 text-green-700", medium: "bg-yellow-500/10 text-yellow-700", high: "bg-red-500/10 text-red-700" };
 const riskLabels = { low: "Baixo", medium: "Médio", high: "Alto" };
@@ -27,11 +29,32 @@ const getAddressString = (address?: string | { logradouro?: string; cidade?: str
 
 export default function ClienteDetalhes() {
   const { id } = useParams<{ id: string }>();
-  const { clients, projects, clientContacts } = useData();
+  const navigate = useNavigate();
+  const { clients, projects, clientContacts, deleteClient } = useData();
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   const client = useMemo(() => clients.find((c) => c.id === id), [clients, id]);
   const clientProjects = useMemo(() => projects.filter((project) => project.clientId === id), [projects, id]);
   const contacts = useMemo(() => clientContacts.filter((contact) => contact.clientId === id), [clientContacts, id]);
+
+  const handleDelete = async () => {
+    if (!client) return;
+
+    const confirmed = window.confirm(
+      `Deseja realmente excluir ${client.nomeFantasia || client.razaoSocial || client.name || "o cliente"}?`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      await deleteClient(client.id);
+      toast.success("Cliente excluído com sucesso");
+      navigate("/clientes");
+    } catch (error) {
+      console.error(error);
+      toast.error("Não foi possível excluir o cliente");
+    }
+  };
 
   if (!client) {
     return (
@@ -96,9 +119,18 @@ export default function ClienteDetalhes() {
             <h1 className="text-2xl font-semibold text-foreground">{client.name}</h1>
           </div>
         </div>
-        <Badge variant={client.status === "ativo" ? "default" : "secondary"}>
-          {client.status === "ativo" ? "Ativo" : "Inativo"}
-        </Badge>
+        <div className="flex items-center gap-2">
+          <Badge variant={client.status === "ativo" ? "default" : "secondary"}>
+            {client.status === "ativo" ? "Ativo" : "Inativo"}
+          </Badge>
+          <Button variant="outline" onClick={() => setDialogOpen(true)}>
+            Editar
+          </Button>
+          <Button variant="ghost" className="text-destructive" onClick={handleDelete}>
+            <Trash className="h-4 w-4 mr-2" />
+            Excluir
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -234,6 +266,8 @@ export default function ClienteDetalhes() {
           )}
         </CardContent>
       </Card>
+
+      <ClientDialog open={dialogOpen} onOpenChange={setDialogOpen} client={client} />
     </div>
   );
 }
