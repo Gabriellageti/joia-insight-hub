@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { Play, FileBarChart2, ArrowLeft, Download, ExternalLink } from "lucide-react";
 import { calculateDiagnosticScore, resolveAnswerValue } from "@/lib/diagnostic-evaluation";
 import { buildActionPlan, generateRecommendations } from "@/lib/recommendations";
+import { ImpactProjection } from "@/types";
 
 export default function DiagnosticoDetalhe() {
   const { id } = useParams();
@@ -102,6 +103,20 @@ export default function DiagnosticoDetalhe() {
       : "Não gerado";
 
     const recommendations = diagnostic.actionPlan?.actions || [];
+    const planPositiveImpact = diagnostic.actionPlan?.positiveImpact;
+    const planNegativeImpact = diagnostic.actionPlan?.negativeImpact;
+
+    const formatImpact = (label: string, impact?: ImpactProjection) =>
+      impact
+        ? `<p><strong>${label} - Benefício:</strong> ${impact.expectedBenefit}</p>
+            <p class="muted"><strong>${label} - Risco evitado:</strong> ${impact.avoidedRisk}</p>
+            ${impact.estimatedCostOrTime ? `<p class="muted"><strong>${label} - Custo/tempo:</strong> ${impact.estimatedCostOrTime}</p>` : ""}`
+        : `<p class="muted">${label}: impacto não informado.</p>`;
+
+    const formatRecommendationImpact = (impact?: ImpactProjection) =>
+      impact
+        ? `${impact.expectedBenefit} <span class="muted">${impact.avoidedRisk}${impact.estimatedCostOrTime ? ` • ${impact.estimatedCostOrTime}` : ""}</span>`
+        : "Impacto não informado.";
 
     const htmlContent = `<!DOCTYPE html>
       <html lang="pt-BR">
@@ -138,15 +153,22 @@ export default function DiagnosticoDetalhe() {
             ${
               recommendations.length
                 ? `<ol class="list">${recommendations
-                    .map((rec) => `<li><strong>${rec.title}</strong> — ${rec.description} (Impacto ${rec.impact}, Responsável: ${rec.responsible}, Prazo: ${rec.dueDate})</li>`)
+                    .map((rec) => `<li><strong>${rec.title}</strong> — ${rec.description} (Impacto ${rec.impact}, Responsável: ${rec.responsible}, Prazo: ${rec.dueDate})
+                        <div style="margin-top:4px">
+                          <em>Executar:</em> ${formatRecommendationImpact(rec.positiveImpact)}
+                        </div>
+                        <div>
+                          <em>Não executar:</em> ${formatRecommendationImpact(rec.negativeImpact)}
+                        </div>
+                      </li>`)
                     .join("" )}</ol>`
                 : "<p class=\"muted\">Nenhuma recomendação registrada.</p>"
             }
           </div>
           <div class="card">
             <h2>Impacto</h2>
-            <p><strong>Executar plano:</strong> Melhora a maturidade operacional e reduz riscos ao cumprir ${recommendations.length} ações priorizadas.</p>
-            <p><strong>Não executar:</strong> Mantém os gaps identificados e pode comprometer os objetivos de ${diagnostic.projectName}.</p>
+            ${formatImpact("Executar plano", planPositiveImpact)}
+            ${formatImpact("Não executar", planNegativeImpact)}
           </div>
         </body>
       </html>`;
@@ -196,6 +218,24 @@ export default function DiagnosticoDetalhe() {
 
   const isCompleted = diagnostic.status === "completed";
   const recommendations = diagnostic.actionPlan?.actions || [];
+  const planPositiveImpact = diagnostic.actionPlan?.positiveImpact;
+  const planNegativeImpact = diagnostic.actionPlan?.negativeImpact;
+
+  const renderImpactList = (impact?: ImpactProjection) => (
+    <ul className="text-sm text-muted-foreground space-y-1">
+      <li>
+        <strong>Benefício esperado:</strong> {impact?.expectedBenefit || "Não informado."}
+      </li>
+      <li>
+        <strong>Risco evitado:</strong> {impact?.avoidedRisk || "Não informado."}
+      </li>
+      {impact?.estimatedCostOrTime && (
+        <li>
+          <strong>Custo/tempo:</strong> {impact.estimatedCostOrTime}
+        </li>
+      )}
+    </ul>
+  );
 
   return (
     <div className="space-y-6">
@@ -342,6 +382,22 @@ export default function DiagnosticoDetalhe() {
                         <Badge variant="outline">Impacto {rec.impact}</Badge>
                       </div>
                       <p className="text-sm text-muted-foreground">{rec.description}</p>
+                      <div className="space-y-1 text-xs text-muted-foreground">
+                        <p>
+                          <strong>Executar:</strong> {rec.positiveImpact?.expectedBenefit || "Impacto não informado."}
+                        </p>
+                        <p className="text-[11px]">
+                          Risco evitado: {rec.positiveImpact?.avoidedRisk || "Não informado."}
+                          {rec.positiveImpact?.estimatedCostOrTime ? ` • ${rec.positiveImpact.estimatedCostOrTime}` : ""}
+                        </p>
+                        <p>
+                          <strong>Não executar:</strong> {rec.negativeImpact?.expectedBenefit || "Impacto não informado."}
+                        </p>
+                        <p className="text-[11px]">
+                          Risco: {rec.negativeImpact?.avoidedRisk || "Não informado."}
+                          {rec.negativeImpact?.estimatedCostOrTime ? ` • ${rec.negativeImpact.estimatedCostOrTime}` : ""}
+                        </p>
+                      </div>
                       <p className="text-xs text-muted-foreground">
                         Responsável: {rec.responsible} • Prazo: {rec.dueDate}
                       </p>
@@ -356,17 +412,11 @@ export default function DiagnosticoDetalhe() {
             <div className="grid gap-4 md:grid-cols-2">
               <div className="rounded-lg border p-4 space-y-2 bg-emerald-50">
                 <p className="text-sm font-semibold text-emerald-900">Impacto de executar</p>
-                <p className="text-sm text-emerald-800">
-                  Implementar o plano reduz riscos, aumenta a eficiência e aproveita as {recommendations.length} ações
-                  priorizadas para elevar o score do projeto.
-                </p>
+                <div className="text-emerald-800">{renderImpactList(planPositiveImpact)}</div>
               </div>
               <div className="rounded-lg border p-4 space-y-2 bg-amber-50">
                 <p className="text-sm font-semibold text-amber-900">Impacto de não executar</p>
-                <p className="text-sm text-amber-800">
-                  A ausência de ação mantém os gaps identificados, pode atrasar o roadmap e limitar o ganho de maturidade
-                  organizacional.
-                </p>
+                <div className="text-amber-800">{renderImpactList(planNegativeImpact)}</div>
               </div>
             </div>
           </CardContent>
@@ -400,6 +450,22 @@ export default function DiagnosticoDetalhe() {
                     </div>
                   </div>
                   <p className="text-sm text-muted-foreground">{action.description}</p>
+                  <div className="space-y-1 text-xs text-muted-foreground">
+                    <p>
+                      <strong>Executar:</strong> {action.positiveImpact?.expectedBenefit || "Impacto não informado."}
+                    </p>
+                    <p className="text-[11px]">
+                      Risco evitado: {action.positiveImpact?.avoidedRisk || "Não informado."}
+                      {action.positiveImpact?.estimatedCostOrTime ? ` • ${action.positiveImpact.estimatedCostOrTime}` : ""}
+                    </p>
+                    <p>
+                      <strong>Não executar:</strong> {action.negativeImpact?.expectedBenefit || "Impacto não informado."}
+                    </p>
+                    <p className="text-[11px]">
+                      Risco: {action.negativeImpact?.avoidedRisk || "Não informado."}
+                      {action.negativeImpact?.estimatedCostOrTime ? ` • ${action.negativeImpact.estimatedCostOrTime}` : ""}
+                    </p>
+                  </div>
                   <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
                     <span>Responsável: {action.responsible}</span>
                     {action.rationale && (
