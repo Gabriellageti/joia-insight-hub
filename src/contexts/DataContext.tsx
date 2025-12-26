@@ -49,6 +49,7 @@ import {
   fetchTemplates,
   getDefaultDiagnosticName,
   getDiagnosticsSeed,
+  isMissingTemplatesTableError,
   updateTemplateRecord,
 } from "@/lib/diagnostics";
 import {
@@ -1172,6 +1173,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [playbooks, setPlaybooks] = useLocalStorage<Playbook[]>("joia_playbooks", initialPlaybooks);
   const [employees, setEmployees] = useLocalStorage<Employee[]>("joia_employees", initialEmployees);
   const [leads, setLeads] = useLocalStorage<Lead[]>("joia_leads", initialLeads);
+  const [removedTemplateIds, setRemovedTemplateIds] = useLocalStorage<string[]>(
+    "joia_removed_template_ids",
+    []
+  );
   const [templates, setTemplates] = useState<DiagnosticTemplate[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
   const [templatesError, setTemplatesError] = useState<string | null>(null);
@@ -1277,14 +1282,15 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
     try {
       const data = await fetchTemplates();
-      setTemplates(data.map(normalizeTemplate));
+      const filtered = data.filter((template) => !removedTemplateIds.includes(template.id));
+      setTemplates(filtered.map(normalizeTemplate));
     } catch (error) {
       console.error(error);
       setTemplatesError((error as Error).message || "Não foi possível carregar os templates");
     } finally {
       setTemplatesLoading(false);
     }
-  }, []);
+  }, [removedTemplateIds]);
 
   useEffect(() => {
     refreshTemplates();
@@ -1804,6 +1810,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
         await deleteTemplateRecord(id);
         setTemplates((prev) => prev.filter((t) => t.id !== id));
       } catch (error) {
+        if (isMissingTemplatesTableError(error)) {
+          setRemovedTemplateIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+          setTemplates((prev) => prev.filter((t) => t.id !== id));
+          return;
+        }
         const message = (error as Error).message || "Erro ao remover template";
         setTemplatesError(message);
         throw error;
