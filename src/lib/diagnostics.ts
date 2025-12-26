@@ -3418,15 +3418,21 @@ export const isMissingTemplatesTableError = (error: unknown): boolean => {
   if (!error || typeof error !== "object") return false;
 
   const maybePostgrest = error as PostgrestError;
+
+  // Código padrão do PostgREST para "tabela não encontrada"
   if (maybePostgrest.code === "PGRST205") return true;
 
   const message =
     typeof maybePostgrest.message === "string"
       ? maybePostgrest.message.toLowerCase()
       : error instanceof Error
-        ? error.message.toLowerCase()
-        : "";
+      ? error.message.toLowerCase()
+      : "";
 
+  return message.includes('relation "templates" does not exist');
+};
+
+ main
   return (
     message.includes("could not find the table") ||
     message.includes("schema cache") ||
@@ -3761,7 +3767,19 @@ export const fetchTemplates = async (): Promise<DiagnosticTemplate[]> => {
     .order("updated_at", { ascending: false });
 
   if (error) {
-    if (isMissingTemplatesTableError(error)) {
+if (error) {
+  if (isMissingTemplatesTableError(error)) {
+    console.warn(
+      "Templates table is missing, skipping template loading.",
+      error,
+    );
+    return;
+  }
+
+  // continua o tratamento normal de erro aqui…
+}
+
+   main
       console.warn(
         "Tabela diagnostic_templates não encontrada; usando templates seed enquanto as migrações não forem aplicadas."
       );
