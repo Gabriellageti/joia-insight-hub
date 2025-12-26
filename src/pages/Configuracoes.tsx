@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function Configuracoes() {
@@ -136,7 +137,7 @@ export default function Configuracoes() {
                   <p className="font-medium">Modo Escuro</p>
                   <p className="text-sm text-muted-foreground">Alternar entre tema claro e escuro</p>
                 </div>
-                <Switch />
+                <ThemeToggle />
               </div>
               <div className="flex items-center justify-between">
                 <div>
