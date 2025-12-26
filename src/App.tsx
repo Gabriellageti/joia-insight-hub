@@ -3,6 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { ThemeProvider } from "next-themes";
 import { DataProvider } from "@/contexts/DataContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -33,53 +34,58 @@ import TemplateDiagnosticPreview from "./pages/templates/TemplateDiagnosticPrevi
 const queryClient = new QueryClient();
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <AuthProvider>
-        <DataProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <Routes>
-              <Route path="/auth" element={<Auth />} />
-              <Route
-                path="/*"
-                element={
-                  <ProtectedRoute>
-                    <MainLayout>
-                      <Routes>
-                        <Route path="/" element={<Dashboard />} />
-                        <Route path="/clientes" element={<Clientes />} />
-                        <Route path="/clientes/:id" element={<ClienteDetalhes />} />
-                        <Route path="/projetos" element={<Projetos />} />
-                        <Route path="/diagnostico" element={<Diagnostico />} />
-                        <Route path="/diagnosticos/:id" element={<DiagnosticoDetalhe />} />
-                        <Route path="/templates" element={<TemplatesList />} />
-                        <Route path="/templates/novo" element={<TemplateCreate />} />
-                        <Route path="/templates/:id/editar" element={<TemplateEdit />} />
-                        <Route path="/templates/:id/preview" element={<TemplatePreview />} />
-                        <Route path="/templates-diagnostico/:templateId/preview" element={<TemplateDiagnosticPreview />} />
-                        <Route path="/plano-acao" element={<PlanoAcao />} />
-                        <Route path="/indicadores" element={<Indicadores />} />
-                        <Route path="/reunioes" element={<Reunioes />} />
-                        <Route path="/documentos" element={<Documentos />} />
-                        <Route path="/playbooks" element={<Playbooks />} />
-                        <Route path="/equipe" element={<Equipe />} />
-                        <Route path="/financeiro" element={<Financeiro />} />
-                        <Route path="/marketing" element={<Marketing />} />
-                        <Route path="/configuracoes" element={<Configuracoes />} />
-                        <Route path="*" element={<NotFound />} />
-                      </Routes>
-                    </MainLayout>
-                  </ProtectedRoute>
-                }
-              />
-            </Routes>
-          </BrowserRouter>
-        </DataProvider>
-      </AuthProvider>
-    </TooltipProvider>
-  </QueryClientProvider>
+  <ThemeProvider attribute="class" defaultTheme="light">
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <AuthProvider>
+          <DataProvider>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter>
+              <Routes>
+                <Route path="/auth" element={<Auth />} />
+                <Route
+                  path="/*"
+                  element={
+                    <ProtectedRoute>
+                      <MainLayout>
+                        <Routes>
+                          <Route path="/" element={<Dashboard />} />
+                          <Route path="/clientes" element={<Clientes />} />
+                          <Route path="/clientes/:id" element={<ClienteDetalhes />} />
+                          <Route path="/projetos" element={<Projetos />} />
+                          <Route path="/diagnostico" element={<Diagnostico />} />
+                          <Route path="/diagnosticos/:id" element={<DiagnosticoDetalhe />} />
+                          <Route path="/templates" element={<TemplatesList />} />
+                          <Route path="/templates/novo" element={<TemplateCreate />} />
+                          <Route path="/templates/:id/editar" element={<TemplateEdit />} />
+                          <Route path="/templates/:id/preview" element={<TemplatePreview />} />
+                          <Route
+                            path="/templates-diagnostico/:templateId/preview"
+                            element={<TemplateDiagnosticPreview />}
+                          />
+                          <Route path="/plano-acao" element={<PlanoAcao />} />
+                          <Route path="/indicadores" element={<Indicadores />} />
+                          <Route path="/reunioes" element={<Reunioes />} />
+                          <Route path="/documentos" element={<Documentos />} />
+                          <Route path="/playbooks" element={<Playbooks />} />
+                          <Route path="/equipe" element={<Equipe />} />
+                          <Route path="/financeiro" element={<Financeiro />} />
+                          <Route path="/marketing" element={<Marketing />} />
+                          <Route path="/configuracoes" element={<Configuracoes />} />
+                          <Route path="*" element={<NotFound />} />
+                        </Routes>
+                      </MainLayout>
+                    </ProtectedRoute>
+                  }
+                />
+              </Routes>
+            </BrowserRouter>
+          </DataProvider>
+        </AuthProvider>
+      </TooltipProvider>
+    </QueryClientProvider>
+  </ThemeProvider>
 );
 
 export default App;
