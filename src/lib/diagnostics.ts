@@ -14,6 +14,7 @@ import {
 import { formatDatePtBR, parseDatePtBR } from "@/lib/dates";
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
+import { PostgrestError } from "@supabase/supabase-js";
 
 type Status = Diagnostic["status"];
 
@@ -3413,6 +3414,17 @@ type QuestionMetadataPayload = {
 const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const asUuid = (value?: string) => (value && uuidRegex.test(value) ? value : undefined);
 
+const isMissingTemplatesTable = (error: PostgrestError | null): boolean => {
+  if (!error) return false;
+  if (error.code === "PGRST205") return true;
+  const message = error.message.toLowerCase();
+  return (
+    message.includes("could not find the table") ||
+    message.includes("schema cache") ||
+    message.includes('relation "diagnostic_templates" does not exist')
+  );
+};
+
 const deserializeTemplateDescription = (raw?: string | null) => {
   if (!raw) return { description: "", metadata: {} as TemplateDescriptionPayload };
 
@@ -3740,6 +3752,12 @@ export const fetchTemplates = async (): Promise<DiagnosticTemplate[]> => {
     .order("updated_at", { ascending: false });
 
   if (error) {
+    if (isMissingTemplatesTable(error)) {
+      console.warn(
+        "Tabela diagnostic_templates não encontrada; usando templates seed enquanto as migrações não forem aplicadas."
+      );
+      return templateSeed;
+    }
     throw new Error(error.message || "Erro ao carregar templates");
   }
 
