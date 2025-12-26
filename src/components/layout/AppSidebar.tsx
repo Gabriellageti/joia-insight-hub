@@ -69,8 +69,8 @@ export function AppSidebar() {
             <span className="text-accent-foreground font-bold text-sm">J</span>
           </div>
           <div>
-            <h1 className="font-semibold text-foreground">JoIA Ops</h1>
-            <p className="text-xs text-muted-foreground">Gestão Empresarial</p>
+            <h1 className="font-semibold text-sidebar-foreground">JoIA Ops</h1>
+            <p className="text-xs text-sidebar-foreground/70">Gestão Empresarial</p>
           </div>
         </div>
       </SidebarHeader>
