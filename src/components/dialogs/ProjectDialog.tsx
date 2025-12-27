@@ -442,43 +442,48 @@ export function ProjectDialog({
       responsibleUserId: payload.responsibleUserId || null,
     }));
 
-    if (project) {
-      await updateProject(project.id, payload);
+    try {
+      if (project) {
+        await updateProject(project.id, payload);
 
-      const existing = opportunities.filter(
-        (opportunity) => opportunity.projectId === project.id,
-      );
+        const existing = opportunities.filter(
+          (opportunity) => opportunity.projectId === project.id,
+        );
 
-      parsedOpportunities.forEach((opportunity) => {
-        if (opportunity.id) {
-          updateOpportunity(opportunity.id, opportunity);
-        } else {
-          addOpportunity({
+        parsedOpportunities.forEach((opportunity) => {
+          if (opportunity.id) {
+            updateOpportunity(opportunity.id, opportunity);
+          } else {
+            addOpportunity({
+              ...opportunity,
+              projectId: project.id,
+              clientId: payload.clientId,
+            });
+          }
+        });
+
+        existing.forEach((opportunity) => {
+          if (!parsedOpportunities.some((draft) => draft.id === opportunity.id)) {
+            deleteOpportunity(opportunity.id);
+          }
+        });
+        toast.success("Projeto atualizado com sucesso");
+      } else {
+        await addProject(payload, {
+          opportunities: parsedOpportunities.map((opportunity) => ({
             ...opportunity,
-            projectId: project.id,
             clientId: payload.clientId,
-          });
-        }
-      });
+            projectId: "", // Will be set by addProject
+          })),
+          seedStructure: autoStructure,
+        });
+        toast.success("Projeto criado com sucesso");
+      }
 
-      existing.forEach((opportunity) => {
-        if (!parsedOpportunities.some((draft) => draft.id === opportunity.id)) {
-          deleteOpportunity(opportunity.id);
-        }
-      });
-      toast.success("Projeto atualizado com sucesso");
-    } else {
-      await addProject(payload, {
-        opportunities: parsedOpportunities.map((opportunity) => ({
-          ...opportunity,
-          clientId: payload.clientId,
-          projectId: "", // Will be set by addProject
-        })),
-        seedStructure: autoStructure,
-      });
-      toast.success("Projeto criado com sucesso");
+      onOpenChange(false);
+    } catch {
+      // Erros já são tratados/exibidos no DataContext
     }
-    onOpenChange(false);
   };
 
   const userRole = (

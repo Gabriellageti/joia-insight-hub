@@ -38,7 +38,7 @@ import {
 } from "@/lib/projects/progress";
 import { buildStatusAuditMessage, resolveProjectStatus } from "@/lib/projects/status";
 import { calculateForecastEndDate, formatDatePtBR, parseDatePtBR, ProjectDuration, safeNumber } from "@/lib/dates";
-import { addDays } from "date-fns";
+import { addDays, format } from "date-fns";
 import { useToast } from "@/components/ui/use-toast";
 import {
   ApplyDiagnosticInput,
@@ -956,6 +956,11 @@ const mapSupabaseProjectToLegacy = (project: ProjectRow): Partial<Project> => ({
 type SupabaseProjectInsert = Database["public"]["Tables"]["projects"]["Insert"];
 type SupabaseProjectUpdate = Database["public"]["Tables"]["projects"]["Update"];
 
+const toSupabaseDate = (value?: string | null): string | null => {
+  const parsed = parseDatePtBR(value || undefined);
+  return parsed ? format(parsed, "yyyy-MM-dd") : null;
+};
+
 const buildSupabaseProjectInsert = (project: Partial<Project>, clientId: string): SupabaseProjectInsert => {
   const timestamp = new Date().toISOString();
 
@@ -967,9 +972,11 @@ const buildSupabaseProjectInsert = (project: Partial<Project>, clientId: string)
     phase: project.phase || "Diagnóstico",
     progress: project.progress || 0,
     responsible: project.responsible || project.responsibleNameLegacy || null,
-    start_date: project.startDate || null,
-    end_date: project.endDate || project.forecastEndDate || null,
-    money_hypothesis: project.moneyHypothesis ? parseFloat(project.moneyHypothesis.replace(/[^\d.-]/g, "")) || null : null,
+    start_date: toSupabaseDate(project.startDate),
+    end_date: toSupabaseDate(project.endDate || project.forecastEndDate || null),
+    money_hypothesis: project.moneyHypothesis
+      ? parseFloat(project.moneyHypothesis.replace(/[^\d.-]/g, "")) || null
+      : null,
     status: project.status || "Em andamento",
     created_at: timestamp,
     updated_at: timestamp,
@@ -1004,11 +1011,11 @@ const buildSupabaseProjectUpdate = (project: Partial<Project>): SupabaseProjectU
   }
 
   if (typeof project.startDate !== "undefined") {
-    payload.start_date = project.startDate || null;
+    payload.start_date = toSupabaseDate(project.startDate);
   }
 
   if (typeof project.endDate !== "undefined" || typeof project.forecastEndDate !== "undefined") {
-    payload.end_date = project.endDate || project.forecastEndDate || null;
+    payload.end_date = toSupabaseDate(project.endDate || project.forecastEndDate || null);
   }
 
   return payload;
@@ -1053,7 +1060,7 @@ const buildSupabaseTaskInsert = (task: Omit<Task, "id" | "createdAt">): Supabase
   type: task.type || "processo",
   responsible: task.responsible || null,
   priority: task.priority ? task.priority.charAt(0).toUpperCase() + task.priority.slice(1) : "Média",
-  due_date: task.dueDate || null,
+  due_date: toSupabaseDate(task.dueDate),
   status: task.status ? task.status.charAt(0).toUpperCase() + task.status.slice(1).replace(/_/g, " ") : "A fazer",
   evidence_required: task.evidenceRequired || false,
   evidence_url: task.evidenceFile || null,
@@ -1075,7 +1082,7 @@ const buildSupabaseTaskUpdate = (task: Partial<Task>): SupabaseTaskUpdate => {
   if (typeof task.priority !== "undefined") {
     payload.priority = task.priority ? task.priority.charAt(0).toUpperCase() + task.priority.slice(1) : null;
   }
-  if (typeof task.dueDate !== "undefined") payload.due_date = task.dueDate || null;
+  if (typeof task.dueDate !== "undefined") payload.due_date = toSupabaseDate(task.dueDate);
   if (typeof task.status !== "undefined") {
     payload.status = task.status ? task.status.charAt(0).toUpperCase() + task.status.slice(1).replace(/_/g, " ") : null;
   }
@@ -2067,6 +2074,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
           description: message,
           variant: "destructive",
         });
+        throw new Error(message);
       }
     },
     updateProject: async (id, project) => {
