@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { Upload, Search, Grid, List, FolderTree, Layers } from "lucide-react";
+import { Upload, Search, Grid, List, FolderTree, Layers, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Toggle } from "@/components/ui/toggle";
@@ -12,25 +12,20 @@ import {
   ClientProjectTree,
 } from "@/components/documents";
 import {
-  FileItem,
   DocumentCategory,
   QuickFilter,
   ViewMode,
   LayoutMode,
 } from "@/types/documents";
-import {
-  mockFileItems,
-  mockClients,
-  mockProjects,
-  mockTasks,
-  mockDiagnostics,
-  mockMeetings,
-} from "@/lib/documents/mockData";
+import { useDocuments } from "@/hooks/useDocuments";
+import { useData } from "@/contexts/DataContext";
 
 const STORAGE_KEY = "documentos-filters";
 
 export default function Documentos() {
-  const [files, setFiles] = useState<FileItem[]>(mockFileItems);
+  const { documents, loading, addDocument, approveDocument, rejectDocument, deleteDocument } = useDocuments();
+  const { clients, projects, tasks, diagnostics, meetings } = useData();
+  
   const [search, setSearch] = useState("");
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
@@ -39,6 +34,32 @@ export default function Documentos() {
   const [viewMode, setViewMode] = useState<ViewMode>("category");
   const [layoutMode, setLayoutMode] = useState<LayoutMode>("grid");
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
+
+  // Map data for components
+  const clientsForFilter = useMemo(() => 
+    clients.map((c) => ({ id: c.id, name: c.name })),
+    [clients]
+  );
+
+  const projectsForFilter = useMemo(() => 
+    projects.map((p) => ({ id: p.id, name: p.name, clientId: p.clientId })),
+    [projects]
+  );
+
+  const tasksForModal = useMemo(() => 
+    tasks.map((t) => ({ id: t.id, title: t.title, projectId: t.projectId })),
+    [tasks]
+  );
+
+  const diagnosticsForModal = useMemo(() => 
+    diagnostics.map((d) => ({ id: d.id, name: d.name, projectId: d.projectId || "" })),
+    [diagnostics]
+  );
+
+  const meetingsForModal = useMemo(() => 
+    meetings.map((m) => ({ id: m.id, title: m.title, projectId: m.projectId || "" })),
+    [meetings]
+  );
 
   // Load persisted filters
   useEffect(() => {
@@ -61,13 +82,13 @@ export default function Documentos() {
   }, [selectedClientId, selectedProjectId]);
 
   const getProjectsForClient = useCallback(
-    (clientId: string) => mockProjects.filter((p) => p.clientId === clientId),
-    []
+    (clientId: string) => projectsForFilter.filter((p) => p.clientId === clientId),
+    [projectsForFilter]
   );
 
   // Filtered files
   const filteredFiles = useMemo(() => {
-    return files.filter((file) => {
+    return documents.filter((file) => {
       // Search
       if (search && !file.nomeExibicao.toLowerCase().includes(search.toLowerCase())) {
         return false;
@@ -96,11 +117,11 @@ export default function Documentos() {
       }
       return true;
     });
-  }, [files, search, selectedClientId, selectedProjectId, selectedCategory, quickFilter]);
+  }, [documents, search, selectedClientId, selectedProjectId, selectedCategory, quickFilter]);
 
   // Category counts (considering client/project filters)
   const categoryCounts = useMemo(() => {
-    const baseFiltered = files.filter((file) => {
+    const baseFiltered = documents.filter((file) => {
       if (selectedClientId && file.clienteId !== selectedClientId) return false;
       if (selectedProjectId && file.projetoId !== selectedProjectId) return false;
       return true;
@@ -111,11 +132,11 @@ export default function Documentos() {
       counts[file.categoriaId] = (counts[file.categoriaId] || 0) + 1;
     });
     return counts;
-  }, [files, selectedClientId, selectedProjectId]);
+  }, [documents, selectedClientId, selectedProjectId]);
 
   // Quick filter counts
   const quickFilterCounts = useMemo(() => {
-    const baseFiltered = files.filter((file) => {
+    const baseFiltered = documents.filter((file) => {
       if (selectedClientId && file.clienteId !== selectedClientId) return false;
       if (selectedProjectId && file.projetoId !== selectedProjectId) return false;
       if (selectedCategory !== "all" && file.categoriaId !== selectedCategory) return false;
@@ -128,39 +149,36 @@ export default function Documentos() {
       pending: baseFiltered.filter((f) => f.tipo === "Evidência" && f.statusEvidencia === "Pendente").length,
       rejected: baseFiltered.filter((f) => f.tipo === "Evidência" && f.statusEvidencia === "Rejeitada").length,
     };
-  }, [files, selectedClientId, selectedProjectId, selectedCategory]);
+  }, [documents, selectedClientId, selectedProjectId, selectedCategory]);
 
-  const handleUpload = (newFile: Omit<FileItem, "id" | "uploadedAt">) => {
-    const file: FileItem = {
-      ...newFile,
-      id: `file-${Date.now()}`,
-      uploadedAt: new Date().toISOString(),
-    };
-    setFiles((prev) => [file, ...prev]);
+  const handleUpload = async (newFile: any) => {
+    await addDocument(newFile);
   };
 
-  const handleApprove = (id: string) => {
-    setFiles((prev) =>
-      prev.map((f) => (f.id === id ? { ...f, statusEvidencia: "Aprovada" as const } : f))
-    );
+  const handleApprove = async (id: string) => {
+    await approveDocument(id);
   };
 
-  const handleReject = (id: string) => {
+  const handleReject = async (id: string) => {
     const motivo = window.prompt("Informe o motivo da rejeição:");
     if (motivo) {
-      setFiles((prev) =>
-        prev.map((f) =>
-          f.id === id ? { ...f, statusEvidencia: "Rejeitada" as const, motivoRejeicao: motivo } : f
-        )
-      );
+      await rejectDocument(id, motivo);
     }
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (window.confirm("Tem certeza que deseja excluir este arquivo?")) {
-      setFiles((prev) => prev.filter((f) => f.id !== id));
+      await deleteDocument(id);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -181,8 +199,8 @@ export default function Documentos() {
 
       {/* Filters */}
       <DocumentFilters
-        clients={mockClients}
-        projects={mockProjects}
+        clients={clientsForFilter}
+        projects={projectsForFilter}
         selectedClientId={selectedClientId}
         selectedProjectId={selectedProjectId}
         onClientChange={setSelectedClientId}
@@ -292,11 +310,11 @@ export default function Documentos() {
         open={uploadModalOpen}
         onOpenChange={setUploadModalOpen}
         onUpload={handleUpload}
-        clients={mockClients}
-        projects={mockProjects}
-        tasks={mockTasks}
-        diagnostics={mockDiagnostics}
-        meetings={mockMeetings}
+        clients={clientsForFilter}
+        projects={projectsForFilter}
+        tasks={tasksForModal}
+        diagnostics={diagnosticsForModal}
+        meetings={meetingsForModal}
         defaultClientId={selectedClientId}
         defaultProjectId={selectedProjectId}
       />
