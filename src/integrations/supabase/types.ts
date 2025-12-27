@@ -58,48 +58,90 @@ export type Database = {
       }
       diagnostics: {
         Row: {
+          action_plan: Json | null
+          answered_questions: number | null
           area: string | null
+          auto_generate_opportunities: boolean | null
           client_id: string | null
+          client_name: string | null
           created_at: string
+          due_date: string | null
           evidence_url: string | null
           findings: string | null
           id: string
           name: string
           opportunities: string | null
+          opportunities_count: number | null
+          progress: number | null
           project_id: string | null
+          project_name: string | null
           recommendations: string | null
+          report_payload: Json | null
+          responsible_id: string | null
+          responsible_name: string | null
           score: number | null
           status: string | null
+          template_id: string | null
+          template_name: string | null
+          total_questions: number | null
           updated_at: string
         }
         Insert: {
+          action_plan?: Json | null
+          answered_questions?: number | null
           area?: string | null
+          auto_generate_opportunities?: boolean | null
           client_id?: string | null
+          client_name?: string | null
           created_at?: string
+          due_date?: string | null
           evidence_url?: string | null
           findings?: string | null
           id?: string
           name: string
           opportunities?: string | null
+          opportunities_count?: number | null
+          progress?: number | null
           project_id?: string | null
+          project_name?: string | null
           recommendations?: string | null
+          report_payload?: Json | null
+          responsible_id?: string | null
+          responsible_name?: string | null
           score?: number | null
           status?: string | null
+          template_id?: string | null
+          template_name?: string | null
+          total_questions?: number | null
           updated_at?: string
         }
         Update: {
+          action_plan?: Json | null
+          answered_questions?: number | null
           area?: string | null
+          auto_generate_opportunities?: boolean | null
           client_id?: string | null
+          client_name?: string | null
           created_at?: string
+          due_date?: string | null
           evidence_url?: string | null
           findings?: string | null
           id?: string
           name?: string
           opportunities?: string | null
+          opportunities_count?: number | null
+          progress?: number | null
           project_id?: string | null
+          project_name?: string | null
           recommendations?: string | null
+          report_payload?: Json | null
+          responsible_id?: string | null
+          responsible_name?: string | null
           score?: number | null
           status?: string | null
+          template_id?: string | null
+          template_name?: string | null
+          total_questions?: number | null
           updated_at?: string
         }
         Relationships: [

@@ -1188,10 +1188,15 @@ const buildSupabaseTaskUpdate = (task: Partial<Task>): SupabaseTaskUpdate => {
   return payload;
 };
 
-type SupabaseDiagnosticInsert = Database["public"]["Tables"]["diagnostics"]["Insert"];
-type SupabaseDiagnosticUpdate = Database["public"]["Tables"]["diagnostics"]["Update"];
+// Tipos temporários para colunas que existem no banco mas ainda não estão no types.ts gerado
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ExtendedDiagnosticRow = DiagnosticRow & Record<string, any>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type SupabaseDiagnosticInsert = Record<string, any>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type SupabaseDiagnosticUpdate = Record<string, any>;
 
-const mapSupabaseDiagnosticToLegacy = (diagnostic: DiagnosticRow): Diagnostic => ({
+const mapSupabaseDiagnosticToLegacy = (diagnostic: ExtendedDiagnosticRow): Diagnostic => ({
   id: diagnostic.id,
   name: diagnostic.name,
   projectId: diagnostic.project_id || "",
@@ -1212,8 +1217,8 @@ const mapSupabaseDiagnosticToLegacy = (diagnostic: DiagnosticRow): Diagnostic =>
   responsibleName: diagnostic.responsible_name || undefined,
   responsibleId: diagnostic.responsible_id || undefined,
   dueDate: formatDatePtBR(diagnostic.due_date),
-  actionPlan: (diagnostic.action_plan as ActionPlan) || undefined,
-  reportPayload: (diagnostic.report_payload as Diagnostic["reportPayload"]) || undefined,
+  actionPlan: diagnostic.action_plan as unknown as Diagnostic["actionPlan"],
+  reportPayload: diagnostic.report_payload as unknown as Diagnostic["reportPayload"],
 });
 
 const buildSupabaseDiagnosticInsert = (diagnostic: Diagnostic): SupabaseDiagnosticInsert => {
