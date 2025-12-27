@@ -4338,7 +4338,21 @@ export const fetchTemplates = async (): Promise<{ templates: DiagnosticTemplate[
     throw new Error(error.message || "Erro ao carregar templates");
   }
 
-  if (!templateRows?.length) return { templates: [], fromSeed: false };
+  // Se a tabela existe mas está vazia, popula com os templates seed
+  if (!templateRows?.length) {
+    console.log("Tabela diagnostic_templates vazia; populando com templates seed...");
+    try {
+      for (const seed of templateSeed) {
+        await createTemplate(seed);
+      }
+      // Refetch após popular
+      return fetchTemplates();
+    } catch (seedError) {
+      console.error("Erro ao popular templates seed:", seedError);
+      // Fallback para seeds em memória se falhar
+      return { templates: templateSeed, fromSeed: true };
+    }
+  }
 
   const templateIds = templateRows.map((row: DbTemplateRow) => row.id);
 
