@@ -3414,15 +3414,20 @@ type QuestionMetadataPayload = {
 const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const asUuid = (value?: string) => (value && uuidRegex.test(value) ? value : undefined);
 
+export const isMissingTemplatesTableMessage = (message?: string): boolean => {
+  if (!message) return false;
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("could not find the table") ||
+    normalized.includes("schema cache") ||
+    normalized.includes('relation "diagnostic_templates" does not exist')
+  );
+};
+
 const isMissingTemplatesTable = (error: PostgrestError | null): boolean => {
   if (!error) return false;
   if (error.code === "PGRST205") return true;
-  const message = error.message.toLowerCase();
-  return (
-    message.includes("could not find the table") ||
-    message.includes("schema cache") ||
-    message.includes('relation "diagnostic_templates" does not exist')
-  );
+  return isMissingTemplatesTableMessage(error.message);
 };
 
 const deserializeTemplateDescription = (raw?: string | null) => {
@@ -3745,7 +3750,7 @@ export const fetchDiagnostics = async (): Promise<Diagnostic[]> => {
   return diagnosticsSeed;
 };
 
-export const fetchTemplates = async (): Promise<DiagnosticTemplate[]> => {
+export const fetchTemplates = async (): Promise<{ templates: DiagnosticTemplate[]; fromSeed: boolean }> => {
   const { data: templateRows, error } = await supabase
     .from("diagnostic_templates")
     .select("*")
@@ -3756,12 +3761,12 @@ export const fetchTemplates = async (): Promise<DiagnosticTemplate[]> => {
       console.warn(
         "Tabela diagnostic_templates não encontrada; usando templates seed enquanto as migrações não forem aplicadas."
       );
-      return templateSeed;
+      return { templates: templateSeed, fromSeed: true };
     }
     throw new Error(error.message || "Erro ao carregar templates");
   }
 
-  if (!templateRows?.length) return [];
+  if (!templateRows?.length) return { templates: [], fromSeed: false };
 
   const templateIds = templateRows.map((row) => row.id);
 
@@ -3787,13 +3792,15 @@ export const fetchTemplates = async (): Promise<DiagnosticTemplate[]> => {
   const questions = questionsResponse.data || [];
   const rules = rulesResponse.data || [];
 
-  return templateRows.map((templateRow) => {
+  const templates = templateRows.map((templateRow) => {
     const templateSections = sections.filter((section) => section.template_id === templateRow.id);
     const mappedSections = templateSections.map((section) =>
       mapSectionFromDb(section, questions.filter((question) => question.section_id === section.id), rules)
     );
     return mapTemplateFromDb(templateRow, mappedSections);
   });
+
+  return { templates, fromSeed: false };
 };
 
 export const createTemplate = async (
