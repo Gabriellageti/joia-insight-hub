@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, List, Kanban } from "lucide-react";
+import { Plus, List, Kanban, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -22,11 +22,12 @@ const priorityLabels = { low: "Baixa", medium: "Média", high: "Alta" };
 interface TaskCardProps {
   task: Task;
   onClick: () => void;
+  onDelete: () => void;
   onDragStart: () => void;
   onDragEnd: () => void;
 }
 
-function TaskCard({ task, onClick, onDragStart, onDragEnd }: TaskCardProps) {
+function TaskCard({ task, onClick, onDelete, onDragStart, onDragEnd }: TaskCardProps) {
   return (
     <Card
       draggable
@@ -36,7 +37,26 @@ function TaskCard({ task, onClick, onDragStart, onDragEnd }: TaskCardProps) {
       onClick={onClick}
     >
       <CardContent className="p-4 space-y-3">
-        <div className="flex items-start justify-between"><h4 className="font-medium text-sm">{task.title}</h4><Badge className={priorityColors[task.priority]} variant="outline">{priorityLabels[task.priority]}</Badge></div>
+        <div className="flex items-start justify-between gap-2">
+          <h4 className="font-medium text-sm">{task.title}</h4>
+          <div className="flex items-center gap-1">
+            <Badge className={priorityColors[task.priority]} variant="outline">{priorityLabels[task.priority]}</Badge>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              aria-label="Excluir tarefa"
+              onClick={(event) => {
+                event.stopPropagation();
+                onDelete();
+              }}
+              onPointerDown={(event) => event.stopPropagation()}
+            >
+              <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+            </Button>
+          </div>
+        </div>
         <div className="text-xs text-muted-foreground"><p>{task.projectName}</p><p>{task.clientName}</p></div>
         <div className="flex items-center justify-between text-xs"><span className="text-muted-foreground">{task.responsible}</span><span className="font-medium text-accent">{task.impact}</span></div>
         <div className="flex items-center justify-between text-xs"><Badge variant="outline">{task.type}</Badge><span className="text-muted-foreground">{task.dueDate}</span></div>
@@ -46,7 +66,7 @@ function TaskCard({ task, onClick, onDragStart, onDragEnd }: TaskCardProps) {
 }
 
 export default function PlanoAcao() {
-  const { tasks, updateTask } = useData();
+  const { tasks, updateTask, deleteTask } = useData();
   const [view, setView] = useState<"kanban" | "list">("kanban");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -102,6 +122,7 @@ export default function PlanoAcao() {
                       key={task.id}
                       task={task}
                       onClick={() => { setEditingTask(task); setDialogOpen(true); }}
+                      onDelete={() => deleteTask(task.id)}
                       onDragStart={() => setDraggingTaskId(task.id)}
                       onDragEnd={() => {
                         setDraggingTaskId(null);
