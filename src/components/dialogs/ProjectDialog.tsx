@@ -83,7 +83,7 @@ type OpportunityDraft = {
   status?: Opportunity["status"];
 };
 
-const RESPONSIBLE_ROLES = ["Admin", "Gestor", "Analista"] as const;
+const RESPONSIBLE_ROLES = ["Admin", "Gestor", "Analista", "Admin JoIA", "Gestor JoIA", "Analista JoIA", "gestor_projetos", "admin_joia", "analista"] as const;
 
 const defaultOpportunityDraft = (): OpportunityDraft => ({
   type: "Receita incremental",
