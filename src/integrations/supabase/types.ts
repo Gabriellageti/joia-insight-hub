@@ -245,6 +245,53 @@ export type Database = {
         }
         Relationships: []
       }
+      expenses: {
+        Row: {
+          category: string | null
+          created_at: string
+          date: string | null
+          description: string
+          id: string
+          project_id: string | null
+          project_name: string | null
+          receipt: string | null
+          updated_at: string
+          value: number
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          date?: string | null
+          description: string
+          id?: string
+          project_id?: string | null
+          project_name?: string | null
+          receipt?: string | null
+          updated_at?: string
+          value: number
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          date?: string | null
+          description?: string
+          id?: string
+          project_id?: string | null
+          project_name?: string | null
+          receipt?: string | null
+          updated_at?: string
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expenses_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       template_sections: {
         Row: {
           created_at: string

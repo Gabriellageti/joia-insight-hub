@@ -67,6 +67,13 @@ import {
   updatePlaybookRecord,
   type PlaybookRow,
 } from "@/integrations/supabase/playbooks";
+import {
+  createExpense as createSupabaseExpense,
+  deleteExpense as deleteSupabaseExpense,
+  listExpenses,
+  updateExpense as updateSupabaseExpense,
+  type ExpenseRow,
+} from "@/integrations/supabase/expenses";
 import type { Database } from "@/integrations/supabase/types";
 
 interface DataContextType {
@@ -172,9 +179,9 @@ interface DataContextType {
 
   // Expenses
   expenses: Expense[];
-  addExpense: (expense: Omit<Expense, "id" | "createdAt">) => void;
-  updateExpense: (id: string, expense: Partial<Expense>) => void;
-  deleteExpense: (id: string) => void;
+  addExpense: (expense: Omit<Expense, "id" | "createdAt">) => Promise<Expense | undefined>;
+  updateExpense: (id: string, expense: Partial<Expense>) => Promise<Expense | undefined>;
+  deleteExpense: (id: string) => Promise<void>;
 
   // Project audit log
   projectAuditLogs: ProjectAuditLogEntry[];
@@ -366,6 +373,67 @@ const buildSupabasePlaybookUpdate = (playbook: Playbook): Database["public"]["Ta
   content: serializePlaybookContent(playbook),
   updated_at: new Date().toISOString(),
 });
+
+type SupabaseExpenseInsert = Database["public"]["Tables"]["expenses"]["Insert"];
+type SupabaseExpenseUpdate = Database["public"]["Tables"]["expenses"]["Update"];
+
+const mapSupabaseExpense = (expense: ExpenseRow): Expense => ({
+  id: expense.id,
+  description: expense.description,
+  category: expense.category ?? "",
+  projectId: expense.project_id ?? undefined,
+  projectName: expense.project_name ?? undefined,
+  value: Number(expense.value ?? 0),
+  date: expense.date ?? "",
+  receipt: expense.receipt ?? undefined,
+  createdAt: formatDateFromIso(expense.created_at),
+});
+
+const buildSupabaseExpenseInsert = (
+  expense: Omit<Expense, "id" | "createdAt">
+): SupabaseExpenseInsert => ({
+  description: expense.description,
+  category: expense.category || null,
+  project_id: expense.projectId ?? null,
+  project_name: expense.projectName ?? null,
+  value: expense.value,
+  date: expense.date || null,
+  receipt: expense.receipt ?? null,
+});
+
+const buildSupabaseExpenseUpdate = (expense: Partial<Expense>): SupabaseExpenseUpdate => {
+  const payload: SupabaseExpenseUpdate = { updated_at: new Date().toISOString() };
+
+  if (typeof expense.description !== "undefined") {
+    payload.description = expense.description;
+  }
+
+  if (typeof expense.category !== "undefined") {
+    payload.category = expense.category;
+  }
+
+  if ("projectId" in expense) {
+    payload.project_id = expense.projectId ?? null;
+  }
+
+  if ("projectName" in expense) {
+    payload.project_name = expense.projectName ?? null;
+  }
+
+  if (typeof expense.value !== "undefined") {
+    payload.value = expense.value;
+  }
+
+  if ("date" in expense) {
+    payload.date = expense.date ?? null;
+  }
+
+  if ("receipt" in expense) {
+    payload.receipt = expense.receipt ?? null;
+  }
+
+  return payload;
+};
 
 const normalizeClient = (client: LegacyClient): Client => {
   const segmentoTags = (
@@ -1329,6 +1397,28 @@ export function DataProvider({ children }: { children: ReactNode }) {
     fetchPlaybooks();
   }, [toast, user]);
 
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    const fetchExpenses = async () => {
+      try {
+        const data = await listExpenses();
+        setExpenses(data.map(mapSupabaseExpense));
+      } catch (error) {
+        const message = (error as Error).message || "Não foi possível carregar as despesas";
+        toast({
+          title: "Erro ao carregar despesas",
+          description: message,
+          variant: "destructive",
+        });
+      }
+    };
+
+    fetchExpenses();
+  }, [toast, user]);
+
   // Normaliza projetos legados para novos campos de progresso
   useEffect(() => {
     setProjects((prev) => prev.map(normalizeProject));
@@ -2035,11 +2125,78 @@ export function DataProvider({ children }: { children: ReactNode }) {
     deleteContract: (id) => setContracts((prev) => prev.filter((c) => c.id !== id)),
 
     expenses,
-    addExpense: (expense) =>
-      setExpenses((prev) => [...prev, { ...expense, id: generateId(), createdAt: getDate() }]),
-    updateExpense: (id, expense) =>
-      setExpenses((prev) => prev.map((e) => (e.id === id ? { ...e, ...expense } : e))),
-    deleteExpense: (id) => setExpenses((prev) => prev.filter((e) => e.id !== id)),
+    addExpense: async (expense) => {
+      if (!user) {
+        const created = { ...expense, id: generateId(), createdAt: getDate() };
+        setExpenses((prev) => [...prev, created]);
+        return created;
+      }
+
+      const payload = buildSupabaseExpenseInsert(expense);
+
+      try {
+        const created = await createSupabaseExpense(payload);
+        const normalized = mapSupabaseExpense(created);
+        setExpenses((prev) => [...prev, normalized]);
+        return normalized;
+      } catch (error) {
+        const message = (error as Error).message || "Erro ao criar despesa";
+        toast({
+          title: "Não foi possível criar a despesa",
+          description: message,
+          variant: "destructive",
+        });
+        return undefined;
+      }
+    },
+    updateExpense: async (id, expense) => {
+      if (!user) {
+        let updated: Expense | undefined;
+        setExpenses((prev) =>
+          prev.map((e) => {
+            if (e.id !== id) return e;
+            updated = { ...e, ...expense };
+            return updated;
+          })
+        );
+        return updated;
+      }
+
+      const payload = buildSupabaseExpenseUpdate(expense);
+
+      try {
+        const updated = await updateSupabaseExpense(id, payload);
+        const normalized = mapSupabaseExpense(updated);
+        setExpenses((prev) => prev.map((e) => (e.id === id ? normalized : e)));
+        return normalized;
+      } catch (error) {
+        const message = (error as Error).message || "Erro ao atualizar despesa";
+        toast({
+          title: "Não foi possível atualizar a despesa",
+          description: message,
+          variant: "destructive",
+        });
+        return undefined;
+      }
+    },
+    deleteExpense: async (id) => {
+      if (!user) {
+        setExpenses((prev) => prev.filter((e) => e.id !== id));
+        return;
+      }
+
+      try {
+        await deleteSupabaseExpense(id);
+        setExpenses((prev) => prev.filter((e) => e.id !== id));
+      } catch (error) {
+        const message = (error as Error).message || "Erro ao remover despesa";
+        toast({
+          title: "Não foi possível remover a despesa",
+          description: message,
+          variant: "destructive",
+        });
+      }
+    },
 
     projectAuditLogs,
     addProjectAuditLog: (entry) => {
