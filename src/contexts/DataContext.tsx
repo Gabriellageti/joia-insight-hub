@@ -45,10 +45,8 @@ import {
   applyDiagnostic as applyDiagnosticMock,
   createTemplate,
   deleteTemplateRecord,
-  fetchDiagnostics,
   fetchTemplates,
   getDefaultDiagnosticName,
-  getDiagnosticsSeed,
   isMissingTemplatesTableMessage,
   updateTemplateRecord,
 } from "@/lib/diagnostics";
@@ -90,6 +88,13 @@ import {
   updateExpense as updateSupabaseExpense,
   type ExpenseRow,
 } from "@/integrations/supabase/expenses";
+import {
+  createDiagnostic as createSupabaseDiagnostic,
+  deleteDiagnostic as deleteSupabaseDiagnostic,
+  listDiagnostics,
+  updateDiagnostic as updateSupabaseDiagnostic,
+  type DiagnosticRow,
+} from "@/integrations/supabase/diagnostics";
 import type { Database } from "@/integrations/supabase/types";
 
 interface DataContextType {
@@ -163,9 +168,9 @@ interface DataContextType {
 
   // Diagnostics
   diagnostics: Diagnostic[];
-  addDiagnostic: (diagnostic: Omit<Diagnostic, "id" | "createdAt">) => void;
-  updateDiagnostic: (id: string, diagnostic: Partial<Diagnostic>) => void;
-  deleteDiagnostic: (id: string) => void;
+  addDiagnostic: (diagnostic: Omit<Diagnostic, "id" | "createdAt">) => Promise<Diagnostic | undefined>;
+  updateDiagnostic: (id: string, diagnostic: Partial<Diagnostic>) => Promise<Diagnostic | undefined>;
+  deleteDiagnostic: (id: string) => Promise<void>;
   templates: DiagnosticTemplate[];
   templatesLoading: boolean;
   templatesError?: string | null;
@@ -1101,6 +1106,90 @@ const buildSupabaseTaskUpdate = (task: Partial<Task>): SupabaseTaskUpdate => {
   return payload;
 };
 
+type SupabaseDiagnosticInsert = Database["public"]["Tables"]["diagnostics"]["Insert"];
+type SupabaseDiagnosticUpdate = Database["public"]["Tables"]["diagnostics"]["Update"];
+
+const mapSupabaseDiagnosticToLegacy = (diagnostic: DiagnosticRow): Diagnostic => ({
+  id: diagnostic.id,
+  name: diagnostic.name,
+  projectId: diagnostic.project_id || "",
+  projectName: diagnostic.project_name || "",
+  clientId: diagnostic.client_id || "",
+  clientName: diagnostic.client_name || "",
+  templateId: diagnostic.template_id || "",
+  templateName: diagnostic.template_name || "",
+  status: (diagnostic.status as Diagnostic["status"]) || "draft",
+  progress: diagnostic.progress ?? 0,
+  score: diagnostic.score ?? undefined,
+  opportunities: diagnostic.opportunities_count ?? 0,
+  createdAt: formatDateFromIso(diagnostic.created_at),
+  updatedAt: formatDateFromIso(diagnostic.updated_at),
+  totalQuestions: diagnostic.total_questions ?? 0,
+  answeredQuestions: diagnostic.answered_questions ?? 0,
+  autoGenerateOpportunities: diagnostic.auto_generate_opportunities ?? true,
+  responsibleName: diagnostic.responsible_name || undefined,
+  responsibleId: diagnostic.responsible_id || undefined,
+  dueDate: formatDatePtBR(diagnostic.due_date),
+  actionPlan: (diagnostic.action_plan as ActionPlan) || undefined,
+  reportPayload: (diagnostic.report_payload as Diagnostic["reportPayload"]) || undefined,
+});
+
+const buildSupabaseDiagnosticInsert = (diagnostic: Diagnostic): SupabaseDiagnosticInsert => {
+  const timestamp = new Date().toISOString();
+
+  return {
+    name: diagnostic.name,
+    client_id: diagnostic.clientId || null,
+    client_name: diagnostic.clientName || null,
+    project_id: diagnostic.projectId || null,
+    project_name: diagnostic.projectName || null,
+    template_id: diagnostic.templateId || null,
+    template_name: diagnostic.templateName || null,
+    status: diagnostic.status,
+    progress: diagnostic.progress ?? 0,
+    score: diagnostic.score ?? null,
+    opportunities_count: diagnostic.opportunities ?? 0,
+    total_questions: diagnostic.totalQuestions ?? 0,
+    answered_questions: diagnostic.answeredQuestions ?? 0,
+    auto_generate_opportunities: diagnostic.autoGenerateOpportunities ?? true,
+    responsible_name: diagnostic.responsibleName || null,
+    responsible_id: diagnostic.responsibleId || null,
+    due_date: toSupabaseDate(diagnostic.dueDate),
+    action_plan: diagnostic.actionPlan ?? null,
+    report_payload: diagnostic.reportPayload ?? null,
+    created_at: timestamp,
+    updated_at: timestamp,
+  };
+};
+
+const buildSupabaseDiagnosticUpdate = (diagnostic: Partial<Diagnostic>): SupabaseDiagnosticUpdate => {
+  const payload: SupabaseDiagnosticUpdate = { updated_at: new Date().toISOString() };
+
+  if (typeof diagnostic.name !== "undefined") payload.name = diagnostic.name;
+  if (typeof diagnostic.clientId !== "undefined") payload.client_id = diagnostic.clientId || null;
+  if (typeof diagnostic.clientName !== "undefined") payload.client_name = diagnostic.clientName || null;
+  if (typeof diagnostic.projectId !== "undefined") payload.project_id = diagnostic.projectId || null;
+  if (typeof diagnostic.projectName !== "undefined") payload.project_name = diagnostic.projectName || null;
+  if (typeof diagnostic.templateId !== "undefined") payload.template_id = diagnostic.templateId || null;
+  if (typeof diagnostic.templateName !== "undefined") payload.template_name = diagnostic.templateName || null;
+  if (typeof diagnostic.status !== "undefined") payload.status = diagnostic.status;
+  if (typeof diagnostic.progress !== "undefined") payload.progress = diagnostic.progress;
+  if (typeof diagnostic.score !== "undefined") payload.score = diagnostic.score ?? null;
+  if (typeof diagnostic.opportunities !== "undefined") payload.opportunities_count = diagnostic.opportunities ?? 0;
+  if (typeof diagnostic.totalQuestions !== "undefined") payload.total_questions = diagnostic.totalQuestions;
+  if (typeof diagnostic.answeredQuestions !== "undefined") payload.answered_questions = diagnostic.answeredQuestions;
+  if (typeof diagnostic.autoGenerateOpportunities !== "undefined") {
+    payload.auto_generate_opportunities = diagnostic.autoGenerateOpportunities ?? true;
+  }
+  if (typeof diagnostic.responsibleName !== "undefined") payload.responsible_name = diagnostic.responsibleName || null;
+  if (typeof diagnostic.responsibleId !== "undefined") payload.responsible_id = diagnostic.responsibleId || null;
+  if (typeof diagnostic.dueDate !== "undefined") payload.due_date = toSupabaseDate(diagnostic.dueDate);
+  if (typeof diagnostic.actionPlan !== "undefined") payload.action_plan = diagnostic.actionPlan ?? null;
+  if (typeof diagnostic.reportPayload !== "undefined") payload.report_payload = diagnostic.reportPayload ?? null;
+
+  return payload;
+};
+
 const initialOpportunities: Opportunity[] = [
   {
     id: "opp-1",
@@ -1340,7 +1429,7 @@ const initialLeads: Lead[] = [
   },
 ];
 
-const initialDiagnostics: Diagnostic[] = getDiagnosticsSeed();
+const initialDiagnostics: Diagnostic[] = [];
 
 const initialContentItems: ContentItem[] = [
   {
@@ -1423,7 +1512,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     "joia_removed_seed_templates",
     []
   );
-  const [diagnostics, setDiagnostics] = useLocalStorage<Diagnostic[]>("joia_diagnostics", initialDiagnostics);
+  const [diagnostics, setDiagnostics] = useState<Diagnostic[]>(initialDiagnostics);
   const [contentItems, setContentItems] = useLocalStorage<ContentItem[]>("joia_content", initialContentItems);
   const [contracts, setContracts] = useLocalStorage<Contract[]>("joia_contracts", []);
   const [expenses, setExpenses] = useLocalStorage<Expense[]>("joia_expenses", []);
@@ -1631,9 +1720,25 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [projects, setOpportunities, setProjects]);
 
   const refreshDiagnostics = useCallback(async () => {
-    const data = await fetchDiagnostics();
-    setDiagnostics(data.map(normalizeDiagnostic));
-  }, [setDiagnostics]);
+    if (!user) {
+      setDiagnostics([]);
+      return;
+    }
+
+    try {
+      const data = await listDiagnostics();
+      const mapped = data.map(mapSupabaseDiagnosticToLegacy).map(normalizeDiagnostic);
+      setDiagnostics(mapped);
+    } catch (error) {
+      const message = (error as Error).message || "Não foi possível carregar os diagnósticos";
+      toast({
+        title: "Erro ao carregar diagnósticos",
+        description: message,
+        variant: "destructive",
+      });
+      setDiagnostics([]);
+    }
+  }, [setDiagnostics, toast, user]);
 
   const refreshTemplates = useCallback(async () => {
     setTemplatesLoading(true);
@@ -1658,6 +1763,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
     refreshTemplates();
   }, [refreshTemplates]);
 
+  useEffect(() => {
+    refreshDiagnostics();
+  }, [refreshDiagnostics]);
+
   const handleApplyDiagnostic = useCallback(
     async (diagnostic: ApplyDiagnosticInput) => {
       const template = templates.find((item) => item.id === diagnostic.templateId);
@@ -1667,10 +1776,24 @@ export function DataProvider({ children }: { children: ReactNode }) {
         templateName: diagnostic.templateName || template?.name || diagnostic.templateId,
       });
       const normalized = normalizeDiagnostic(created);
-      setDiagnostics((prev) => [...prev, normalized]);
-      return normalized;
+
+      try {
+        const payload = buildSupabaseDiagnosticInsert(normalized);
+        const stored = await createSupabaseDiagnostic(payload);
+        const mapped = normalizeDiagnostic(mapSupabaseDiagnosticToLegacy(stored));
+        setDiagnostics((prev) => [...prev, mapped]);
+        return mapped;
+      } catch (error) {
+        const message = (error as Error).message || "Erro ao aplicar diagnóstico";
+        toast({
+          title: "Não foi possível aplicar o diagnóstico",
+          description: message,
+          variant: "destructive",
+        });
+        throw error;
+      }
     },
-    [setDiagnostics, templates]
+    [setDiagnostics, templates, toast]
   );
 
   const handleDuplicateDiagnostic = useCallback(
@@ -1701,10 +1824,23 @@ export function DataProvider({ children }: { children: ReactNode }) {
         hasResponses: false,
       });
 
-      setDiagnostics((prev) => [...prev, normalized]);
-      return normalized;
+      try {
+        const payload = buildSupabaseDiagnosticInsert(normalized);
+        const stored = await createSupabaseDiagnostic(payload);
+        const mapped = normalizeDiagnostic(mapSupabaseDiagnosticToLegacy(stored));
+        setDiagnostics((prev) => [...prev, mapped]);
+        return mapped;
+      } catch (error) {
+        const message = (error as Error).message || "Erro ao duplicar diagnóstico";
+        toast({
+          title: "Não foi possível duplicar o diagnóstico",
+          description: message,
+          variant: "destructive",
+        });
+        throw error;
+      }
     },
-    [setDiagnostics]
+    [setDiagnostics, toast]
   );
 
   const createActionPlan = useCallback(
@@ -2349,20 +2485,56 @@ export function DataProvider({ children }: { children: ReactNode }) {
     },
 
     diagnostics,
-    addDiagnostic: (diagnostic) =>
-      setDiagnostics((prev) => [
-        ...prev,
-        normalizeDiagnostic({ ...diagnostic, id: generateId(), createdAt: getDate(), updatedAt: getDate() }),
-      ]),
-    updateDiagnostic: (id, diagnostic) =>
-      setDiagnostics((prev) =>
-        prev.map((d) =>
-          d.id === id
-            ? normalizeDiagnostic({ ...d, ...diagnostic, updatedAt: diagnostic.updatedAt || getDate() })
-            : d
-        )
-      ),
-    deleteDiagnostic: (id) => setDiagnostics((prev) => prev.filter((d) => d.id !== id)),
+    addDiagnostic: async (diagnostic) => {
+      const normalized = normalizeDiagnostic({ ...diagnostic, id: generateId(), createdAt: getDate(), updatedAt: getDate() });
+
+      try {
+        const payload = buildSupabaseDiagnosticInsert(normalized);
+        const stored = await createSupabaseDiagnostic(payload);
+        const mapped = normalizeDiagnostic(mapSupabaseDiagnosticToLegacy(stored));
+        setDiagnostics((prev) => [...prev, mapped]);
+        return mapped;
+      } catch (error) {
+        const message = (error as Error).message || "Erro ao criar diagnóstico";
+        toast({
+          title: "Não foi possível criar o diagnóstico",
+          description: message,
+          variant: "destructive",
+        });
+        return undefined;
+      }
+    },
+    updateDiagnostic: async (id, diagnostic) => {
+      try {
+        const payload = buildSupabaseDiagnosticUpdate(diagnostic);
+        const stored = await updateSupabaseDiagnostic(id, payload);
+        const mapped = normalizeDiagnostic(mapSupabaseDiagnosticToLegacy(stored));
+        setDiagnostics((prev) => prev.map((d) => (d.id === id ? mapped : d)));
+        return mapped;
+      } catch (error) {
+        const message = (error as Error).message || "Erro ao atualizar diagnóstico";
+        toast({
+          title: "Não foi possível atualizar o diagnóstico",
+          description: message,
+          variant: "destructive",
+        });
+        return undefined;
+      }
+    },
+    deleteDiagnostic: async (id) => {
+      try {
+        await deleteSupabaseDiagnostic(id);
+        setDiagnostics((prev) => prev.filter((d) => d.id !== id));
+      } catch (error) {
+        const message = (error as Error).message || "Erro ao remover diagnóstico";
+        toast({
+          title: "Não foi possível remover o diagnóstico",
+          description: message,
+          variant: "destructive",
+        });
+        throw error;
+      }
+    },
     refreshDiagnostics,
     refreshTemplates,
     applyDiagnostic: handleApplyDiagnostic,
