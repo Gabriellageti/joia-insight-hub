@@ -89,6 +89,13 @@ import {
   type ExpenseRow,
 } from "@/integrations/supabase/expenses";
 import {
+  createEmployee as createSupabaseEmployee,
+  deleteEmployee as deleteSupabaseEmployee,
+  listEmployees,
+  updateEmployee as updateSupabaseEmployee,
+  type EmployeeRow,
+} from "@/integrations/supabase/employees";
+import {
   createDiagnostic as createSupabaseDiagnostic,
   deleteDiagnostic as deleteSupabaseDiagnostic,
   listDiagnostics,
@@ -156,9 +163,9 @@ interface DataContextType {
 
   // Employees
   employees: Employee[];
-  addEmployee: (employee: Omit<Employee, "id" | "createdAt">) => void;
-  updateEmployee: (id: string, employee: Partial<Employee>) => void;
-  deleteEmployee: (id: string) => void;
+  addEmployee: (employee: Omit<Employee, "id" | "createdAt">) => Promise<Employee>;
+  updateEmployee: (id: string, employee: Partial<Employee>) => Promise<Employee | undefined>;
+  deleteEmployee: (id: string) => Promise<void>;
 
   // Leads
   leads: Lead[];
@@ -370,6 +377,25 @@ const mapSupabasePlaybook = (playbook: PlaybookRow): Playbook => {
     fileType: content.fileType,
     fileSize: content.fileSize,
     createdAt: formatDateFromIso(playbook.created_at),
+  };
+};
+
+const mapSupabaseEmployee = (employee: EmployeeRow): Employee => {
+  const status = employee.status === "onboarding" ? "onboarding" : "active";
+
+  return {
+    id: employee.id,
+    name: employee.name,
+    email: employee.email || "",
+    role: employee.role || "Analista",
+    seniority: "Pleno",
+    startDate: formatDateFromIso(employee.hire_date || employee.created_at),
+    projects: 0,
+    onboardingProgress: status === "onboarding" ? 0 : 100,
+    status,
+    permissions: [],
+    avatarUrl: employee.avatar_url || undefined,
+    createdAt: formatDateFromIso(employee.created_at),
   };
 };
 
@@ -966,6 +992,58 @@ const toSupabaseDate = (value?: string | null): string | null => {
   return parsed ? format(parsed, "yyyy-MM-dd") : null;
 };
 
+type SupabaseEmployeeInsert = Database["public"]["Tables"]["employees"]["Insert"];
+type SupabaseEmployeeUpdate = Database["public"]["Tables"]["employees"]["Update"];
+
+const buildSupabaseEmployeeInsert = (
+  employee: Omit<Employee, "id" | "createdAt">,
+  userId?: string | null
+): SupabaseEmployeeInsert => {
+  const timestamp = new Date().toISOString();
+
+  return {
+    name: employee.name,
+    email: employee.email || null,
+    role: employee.role || null,
+    status: employee.status || "onboarding",
+    hire_date: toSupabaseDate(employee.startDate),
+    avatar_url: employee.avatarUrl || null,
+    user_id: userId || null,
+    created_at: timestamp,
+    updated_at: timestamp,
+  };
+};
+
+const buildSupabaseEmployeeUpdate = (employee: Partial<Employee>): SupabaseEmployeeUpdate => {
+  const payload: SupabaseEmployeeUpdate = { updated_at: new Date().toISOString() };
+
+  if (typeof employee.name !== "undefined") {
+    payload.name = employee.name;
+  }
+
+  if (typeof employee.email !== "undefined") {
+    payload.email = employee.email || null;
+  }
+
+  if (typeof employee.role !== "undefined") {
+    payload.role = employee.role || null;
+  }
+
+  if (typeof employee.status !== "undefined") {
+    payload.status = employee.status;
+  }
+
+  if (typeof employee.startDate !== "undefined") {
+    payload.hire_date = toSupabaseDate(employee.startDate);
+  }
+
+  if (typeof employee.avatarUrl !== "undefined") {
+    payload.avatar_url = employee.avatarUrl || null;
+  }
+
+  return payload;
+};
+
 const buildSupabaseProjectInsert = (project: Partial<Project>, clientId: string): SupabaseProjectInsert => {
   const timestamp = new Date().toISOString();
 
@@ -1355,51 +1433,6 @@ const initialPlaybooks: Playbook[] = [
   },
 ];
 
-const initialEmployees: Employee[] = [
-  {
-    id: "employee-1",
-    name: "João Mendes",
-    email: "joao@joia.com",
-    role: "Gestor de Projetos",
-    accessRole: "Gestor",
-    seniority: "Senior",
-    startDate: "01/03/2023",
-    projects: 3,
-    onboardingProgress: 100,
-    status: "active",
-    permissions: ["projects", "clients", "finance"],
-    createdAt: "01/03/2023",
-  },
-  {
-    id: "employee-2",
-    name: "Bruna Lira",
-    email: "bruna@joia.com",
-    role: "Analista",
-    accessRole: "Analista",
-    seniority: "Pleno",
-    startDate: "10/06/2024",
-    projects: 2,
-    onboardingProgress: 90,
-    status: "active",
-    permissions: ["clients", "projects"],
-    createdAt: "10/06/2024",
-  },
-  {
-    id: "employee-3",
-    name: "Sara Martins",
-    email: "sara@joia.com",
-    role: "Gestora de Projetos",
-    accessRole: "Admin",
-    seniority: "Senior",
-    startDate: "15/02/2022",
-    projects: 4,
-    onboardingProgress: 100,
-    status: "active",
-    permissions: ["clients", "projects", "finance"],
-    createdAt: "15/02/2022",
-  },
-];
-
 const initialLeads: Lead[] = [
   {
     id: "lead-1",
@@ -1503,7 +1536,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [indicators, setIndicators] = useLocalStorage<Indicator[]>("joia_indicators", initialIndicators);
   const [documents, setDocuments] = useLocalStorage<Document[]>("joia_documents", []);
   const [playbooks, setPlaybooks] = useState<Playbook[]>(initialPlaybooks);
-  const [employees, setEmployees] = useLocalStorage<Employee[]>("joia_employees", initialEmployees);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [leads, setLeads] = useLocalStorage<Lead[]>("joia_leads", initialLeads);
   const [templates, setTemplates] = useState<DiagnosticTemplate[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
@@ -1664,6 +1697,30 @@ export function DataProvider({ children }: { children: ReactNode }) {
     };
 
     fetchExpenses();
+  }, [toast, user]);
+
+  useEffect(() => {
+    if (!user) {
+      setEmployees([]);
+      return;
+    }
+
+    const fetchEmployees = async () => {
+      try {
+        const data = await listEmployees();
+        setEmployees(data.map(mapSupabaseEmployee));
+      } catch (error) {
+        const message = (error as Error).message || "Não foi possível carregar os colaboradores";
+        toast({
+          title: "Erro ao carregar colaboradores",
+          description: message,
+          variant: "destructive",
+        });
+        setEmployees([]);
+      }
+    };
+
+    fetchEmployees();
   }, [toast, user]);
 
   // Normaliza projetos legados para novos campos de progresso
@@ -2415,11 +2472,64 @@ export function DataProvider({ children }: { children: ReactNode }) {
     },
 
     employees,
-    addEmployee: (employee) =>
-      setEmployees((prev) => [...prev, { ...employee, id: generateId(), createdAt: getDate() }]),
-    updateEmployee: (id, employee) =>
-      setEmployees((prev) => prev.map((e) => (e.id === id ? { ...e, ...employee } : e))),
-    deleteEmployee: (id) => setEmployees((prev) => prev.filter((e) => e.id !== id)),
+    addEmployee: async (employee) => {
+      const payload = buildSupabaseEmployeeInsert(employee, user?.id);
+
+      try {
+        const created = await createSupabaseEmployee(payload);
+        const normalized = mapSupabaseEmployee(created);
+        setEmployees((prev) => [...prev, normalized]);
+        return normalized;
+      } catch (error) {
+        const message = (error as Error).message || "Erro ao criar colaborador";
+        toast({
+          title: "Não foi possível criar o colaborador",
+          description: message,
+          variant: "destructive",
+        });
+        throw error;
+      }
+    },
+    updateEmployee: async (id, employee) => {
+      const payload = buildSupabaseEmployeeUpdate(employee);
+
+      try {
+        const updated = await updateSupabaseEmployee(id, payload);
+        let normalized: Employee | undefined;
+
+        setEmployees((prev) =>
+          prev.map((e) => {
+            if (e.id !== id) return e;
+            normalized = { ...e, ...mapSupabaseEmployee(updated) };
+            return normalized;
+          })
+        );
+
+        return normalized;
+      } catch (error) {
+        const message = (error as Error).message || "Erro ao atualizar colaborador";
+        toast({
+          title: "Não foi possível atualizar o colaborador",
+          description: message,
+          variant: "destructive",
+        });
+        throw error;
+      }
+    },
+    deleteEmployee: async (id) => {
+      try {
+        await deleteSupabaseEmployee(id);
+        setEmployees((prev) => prev.filter((e) => e.id !== id));
+      } catch (error) {
+        const message = (error as Error).message || "Erro ao remover colaborador";
+        toast({
+          title: "Não foi possível remover o colaborador",
+          description: message,
+          variant: "destructive",
+        });
+        throw error;
+      }
+    },
 
     leads,
     addLead: (lead) => setLeads((prev) => [...prev, { ...lead, id: generateId(), createdAt: getDate() }]),

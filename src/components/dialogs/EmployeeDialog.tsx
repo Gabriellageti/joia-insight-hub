@@ -56,7 +56,7 @@ export function EmployeeDialog({ open, onOpenChange, employee }: EmployeeDialogP
     }
   }, [employee, open]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.name.trim()) {
@@ -68,14 +68,18 @@ export function EmployeeDialog({ open, onOpenChange, employee }: EmployeeDialogP
       return;
     }
 
-    if (employee) {
-      updateEmployee(employee.id, formData);
-      toast.success("Colaborador atualizado com sucesso");
-    } else {
-      addEmployee(formData);
-      toast.success("Colaborador criado com sucesso");
+    try {
+      if (employee) {
+        await updateEmployee(employee.id, formData);
+        toast.success("Colaborador atualizado com sucesso");
+      } else {
+        await addEmployee(formData);
+        toast.success("Colaborador criado com sucesso");
+      }
+      onOpenChange(false);
+    } catch {
+      toast.error("Não foi possível salvar o colaborador");
     }
-    onOpenChange(false);
   };
 
   return (
