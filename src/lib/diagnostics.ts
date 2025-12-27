@@ -13,6 +13,7 @@ import {
 } from "@/types";
 import { formatDatePtBR, parseDatePtBR } from "@/lib/dates";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 import { PostgrestError } from "@supabase/supabase-js";
 
 // Cliente "untyped" para tabelas de templates que ainda não existem no schema
@@ -3285,78 +3286,32 @@ const templateSeed: DiagnosticTemplate[] = [
   },
 ];
 
-const diagnosticsSeed: Diagnostic[] = [
-  {
-    id: "diagnostic-1",
-    name: defaultName("Operações SaaS", "Implantação BI Operacional", parseDatePtBR("22/01/2025") || new Date()),
-    projectId: "project-1",
-    projectName: "Implantação BI Operacional",
-    clientId: "client-1",
-    clientName: "Alfa Tecnologia LTDA",
-    templateId: "template-1",
-    templateName: "Operações SaaS",
-    status: "in_progress",
-    progress: 55,
-    score: undefined,
-    opportunities: 7,
-    createdAt: "22/01/2025",
-    updatedAt: "12/02/2025",
-    totalQuestions: 82,
-    answeredQuestions: 45,
-    autoGenerateOpportunities: true,
-    responsibleName: "Marina Rocha",
-    responsibleId: "employee-1",
-    hasResponses: true,
-    dueDate: "28/02/2025",
-  },
-  {
-    id: "diagnostic-2",
-    name: defaultName("Diagnóstico de Compras JoIA", "Expansão Marketplace", parseDatePtBR("10/02/2025") || new Date()),
-    projectId: "project-2",
-    projectName: "Expansão Marketplace",
-    clientId: "client-2",
-    clientName: "BetaLog Transportes",
-    templateId: "template-2",
-    templateName: "Diagnóstico de Compras JoIA",
-    status: "draft",
-    progress: 0,
-    opportunities: 0,
-    createdAt: "10/02/2025",
-    updatedAt: "10/02/2025",
-    totalQuestions: 27,
-    answeredQuestions: 0,
-    autoGenerateOpportunities: true,
-    responsibleName: "Diego Carvalho",
-    responsibleId: "employee-2",
-    hasResponses: false,
-    dueDate: "05/03/2025",
-  },
-  {
-    id: "diagnostic-3",
-    name: defaultName("Diagnóstico Financeiro", "PMO Transformação Financeira", parseDatePtBR("03/12/2024") || new Date()),
-    projectId: "project-3",
-    projectName: "PMO Transformação Financeira",
-    clientId: "client-1",
-    clientName: "Alfa Tecnologia LTDA",
-    templateId: "template-4",
-    templateName: "Diagnóstico Financeiro",
-    status: "completed",
-    progress: 100,
-    score: 82,
-    opportunities: 12,
-    createdAt: "03/12/2024",
-    updatedAt: "20/12/2024",
-    totalQuestions: 56,
-    answeredQuestions: 56,
-    autoGenerateOpportunities: false,
-    responsibleName: "Marina Rocha",
-    responsibleId: "employee-1",
-    hasResponses: true,
-    dueDate: "15/01/2025",
-  },
-];
+type DiagnosticRow = Database["public"]["Tables"]["diagnostics"]["Row"];
 
-export const getDiagnosticsSeed = () => diagnosticsSeed;
+const mapDiagnosticFromDb = (row: DiagnosticRow): Diagnostic => ({
+  id: row.id,
+  name: row.name,
+  projectId: row.project_id || "",
+  projectName: row.project_name || "",
+  clientId: row.client_id || "",
+  clientName: row.client_name || "",
+  templateId: row.template_id || "",
+  templateName: row.template_name || "",
+  status: (row.status as Diagnostic["status"]) || "draft",
+  progress: row.progress ?? 0,
+  score: row.score ?? undefined,
+  opportunities: row.opportunities_count ?? 0,
+  createdAt: formatDatePtBR(row.created_at),
+  updatedAt: formatDatePtBR(row.updated_at),
+  totalQuestions: row.total_questions ?? 0,
+  answeredQuestions: row.answered_questions ?? 0,
+  autoGenerateOpportunities: row.auto_generate_opportunities ?? true,
+  responsibleName: row.responsible_name || undefined,
+  responsibleId: row.responsible_id || undefined,
+  dueDate: formatDatePtBR(row.due_date),
+  actionPlan: (row.action_plan as Diagnostic["actionPlan"]) || undefined,
+  reportPayload: (row.report_payload as Diagnostic["reportPayload"]) || undefined,
+});
 export const getTemplatesSeed = () => templateSeed;
 
 export const calculateDaysSinceUpdate = (dateString?: string): number => {
@@ -3755,7 +3710,13 @@ const fetchTemplateById = async (id: string): Promise<DiagnosticTemplate | null>
 };
 
 export const fetchDiagnostics = async (): Promise<Diagnostic[]> => {
-  return diagnosticsSeed;
+  const { data, error } = await untypedSupabase.from("diagnostics").select("*").order("updated_at", { ascending: false });
+
+  if (error) {
+    throw new Error(error.message || "Erro ao carregar diagnósticos");
+  }
+
+  return (data || []).map((row: DiagnosticRow) => mapDiagnosticFromDb(row));
 };
 
 export const fetchTemplates = async (): Promise<{ templates: DiagnosticTemplate[]; fromSeed: boolean }> => {
@@ -3878,7 +3839,10 @@ export const deleteTemplateRecord = async (id: string) => {
 
 export const applyDiagnostic = async (input: ApplyDiagnosticInput): Promise<Diagnostic> => {
   const { templateName, projectName, templateQuestionCount } = input;
-  const id = `diagnostic-${Math.random().toString(36).slice(2, 8)}`;
+  const id =
+    typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `diagnostic-${Math.random().toString(36).slice(2, 8)}`;
   const today = formatDatePtBR(new Date());
   const totalQuestions = templateQuestionCount ?? 40;
 
