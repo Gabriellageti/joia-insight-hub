@@ -15,15 +15,17 @@ const isMissingDiagnosticColumnError = (error: PostgrestError | null): boolean =
     normalized.includes("'action_plan'") ||
     normalized.includes("'report_payload'") ||
     normalized.includes("'answered_questions'") ||
-    normalized.includes("'total_questions'")
+    normalized.includes("'total_questions'") ||
+    normalized.includes("'auto_generate_opportunities'")
   );
 };
 
 const stripLegacyDiagnosticPayload = <T extends Record<string, unknown>>(payload: T): Omit<
   T,
-  "action_plan" | "report_payload" | "answered_questions" | "total_questions"
+  "action_plan" | "report_payload" | "answered_questions" | "total_questions" | "auto_generate_opportunities"
 > => {
-  const { action_plan, report_payload, answered_questions, total_questions, ...rest } = payload;
+  const { action_plan, report_payload, answered_questions, total_questions, auto_generate_opportunities, ...rest } =
+    payload;
   return rest;
 };
 
