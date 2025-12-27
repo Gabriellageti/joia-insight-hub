@@ -21,9 +21,10 @@ interface Comment {
 
 interface TaskCommentsProps {
   taskId: string;
+  taskTitle: string;
 }
 
-export function TaskComments({ taskId }: TaskCommentsProps) {
+export function TaskComments({ taskId, taskTitle }: TaskCommentsProps) {
   const { user } = useAuth();
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState("");
@@ -54,6 +55,27 @@ export function TaskComments({ taskId }: TaskCommentsProps) {
     }
   }, [taskId]);
 
+  const sendNotification = async (commentContent: string, commenterName: string) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      await supabase.functions.invoke("notify-task-comment", {
+        body: {
+          taskId,
+          taskTitle,
+          commentContent,
+          commenterName,
+          commenterId: user?.id,
+        },
+      });
+      console.log("Notification sent successfully");
+    } catch (error) {
+      console.error("Error sending notification:", error);
+      // Don't show error to user - notification is secondary
+    }
+  };
+
   const handleSubmit = async () => {
     if (!newComment.trim() || !user) return;
 
@@ -65,11 +87,13 @@ export function TaskComments({ taskId }: TaskCommentsProps) {
         user.email ||
         "Usuário";
 
+      const commentContent = newComment.trim();
+
       const { error } = await supabase.from("task_comments").insert({
         task_id: taskId,
         user_id: user.id,
         user_name: userName,
-        content: newComment.trim(),
+        content: commentContent,
       });
 
       if (error) throw error;
@@ -77,6 +101,9 @@ export function TaskComments({ taskId }: TaskCommentsProps) {
       setNewComment("");
       await fetchComments();
       toast.success("Comentário adicionado");
+
+      // Send notification in background
+      sendNotification(commentContent, userName);
     } catch (error) {
       console.error("Erro ao adicionar comentário:", error);
       toast.error("Erro ao adicionar comentário");
