@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { NotificationSettings } from "@/components/settings/NotificationSettings";
 
 export default function Configuracoes() {
   return (
@@ -78,35 +79,7 @@ export default function Configuracoes() {
         </TabsContent>
 
         <TabsContent value="notifications">
-          <Card>
-            <CardHeader>
-              <CardTitle>Preferências de Notificação</CardTitle>
-              <CardDescription>Configure como você deseja ser notificado</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium">Tarefas atrasadas</p>
-                  <p className="text-sm text-muted-foreground">Receba alertas sobre tarefas vencidas</p>
-                </div>
-                <Switch defaultChecked />
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium">Reuniões próximas</p>
-                  <p className="text-sm text-muted-foreground">Lembrete 30 minutos antes</p>
-                </div>
-                <Switch defaultChecked />
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium">Novos comentários</p>
-                  <p className="text-sm text-muted-foreground">Notificações de atividade em tarefas</p>
-                </div>
-                <Switch />
-              </div>
-            </CardContent>
-          </Card>
+          <NotificationSettings />
         </TabsContent>
 
         <TabsContent value="security">
