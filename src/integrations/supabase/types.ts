@@ -56,6 +56,30 @@ export type Database = {
         }
         Relationships: []
       }
+      diagnostic_templates: {
+        Row: {
+          created_at: string
+          description: Json | null
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: Json | null
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: Json | null
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       diagnostics: {
         Row: {
           action_plan: Json | null
@@ -699,6 +723,194 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      template_opportunity_rules: {
+        Row: {
+          audit: Json | null
+          auto_generate: boolean
+          condition: Json
+          confidence: string | null
+          created_at: string
+          description: string | null
+          enabled: boolean
+          estimated_value: number | null
+          evidence_type: string | null
+          id: string
+          name: string
+          question_id: string
+          template_id: string
+          type: string | null
+          updated_at: string
+        }
+        Insert: {
+          audit?: Json | null
+          auto_generate?: boolean
+          condition: Json
+          confidence?: string | null
+          created_at?: string
+          description?: string | null
+          enabled?: boolean
+          estimated_value?: number | null
+          evidence_type?: string | null
+          id?: string
+          name: string
+          question_id: string
+          template_id: string
+          type?: string | null
+          updated_at?: string
+        }
+        Update: {
+          audit?: Json | null
+          auto_generate?: boolean
+          condition?: Json
+          confidence?: string | null
+          created_at?: string
+          description?: string | null
+          enabled?: boolean
+          estimated_value?: number | null
+          evidence_type?: string | null
+          id?: string
+          name?: string
+          question_id?: string
+          template_id?: string
+          type?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_opportunity_rules_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "template_questions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "template_opportunity_rules_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "diagnostic_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      template_questions: {
+        Row: {
+          audit: Json | null
+          created_at: string
+          criticality: string | null
+          description: string | null
+          helper_text: string | null
+          id: string
+          max_value: number | null
+          min_value: number | null
+          options: Json | null
+          position: number
+          required: boolean
+          section_id: string
+          template_id: string
+          title: string
+          type: string
+          updated_at: string
+          weight: number
+        }
+        Insert: {
+          audit?: Json | null
+          created_at?: string
+          criticality?: string | null
+          description?: string | null
+          helper_text?: string | null
+          id?: string
+          max_value?: number | null
+          min_value?: number | null
+          options?: Json | null
+          position?: number
+          required?: boolean
+          section_id: string
+          template_id: string
+          title: string
+          type?: string
+          updated_at?: string
+          weight?: number
+        }
+        Update: {
+          audit?: Json | null
+          created_at?: string
+          criticality?: string | null
+          description?: string | null
+          helper_text?: string | null
+          id?: string
+          max_value?: number | null
+          min_value?: number | null
+          options?: Json | null
+          position?: number
+          required?: boolean
+          section_id?: string
+          template_id?: string
+          title?: string
+          type?: string
+          updated_at?: string
+          weight?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_questions_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "template_sections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "template_questions_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "diagnostic_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      template_sections: {
+        Row: {
+          audit: Json | null
+          created_at: string
+          description: string | null
+          id: string
+          position: number
+          template_id: string
+          title: string
+          updated_at: string
+          weight: number
+        }
+        Insert: {
+          audit?: Json | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          position?: number
+          template_id: string
+          title: string
+          updated_at?: string
+          weight?: number
+        }
+        Update: {
+          audit?: Json | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          position?: number
+          template_id?: string
+          title?: string
+          updated_at?: string
+          weight?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_sections_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "diagnostic_templates"
             referencedColumns: ["id"]
           },
         ]
