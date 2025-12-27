@@ -987,6 +987,10 @@ const mapSupabaseProjectToLegacy = (project: ProjectRow): Partial<Project> => ({
 type SupabaseProjectInsert = Database["public"]["Tables"]["projects"]["Insert"];
 type SupabaseProjectUpdate = Database["public"]["Tables"]["projects"]["Update"];
 
+const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const toSupabaseUuid = (value?: string | null): string | null =>
+  value && uuidRegex.test(value) ? value : null;
+
 const toSupabaseDate = (value?: string | null): string | null => {
   const parsed = parseDatePtBR(value || undefined);
   return parsed ? format(parsed, "yyyy-MM-dd") : null;
@@ -1217,11 +1221,11 @@ const buildSupabaseDiagnosticInsert = (diagnostic: Diagnostic): SupabaseDiagnost
 
   return {
     name: diagnostic.name,
-    client_id: diagnostic.clientId || null,
+    client_id: toSupabaseUuid(diagnostic.clientId),
     client_name: diagnostic.clientName || null,
-    project_id: diagnostic.projectId || null,
+    project_id: toSupabaseUuid(diagnostic.projectId),
     project_name: diagnostic.projectName || null,
-    template_id: diagnostic.templateId || null,
+    template_id: toSupabaseUuid(diagnostic.templateId),
     template_name: diagnostic.templateName || null,
     status: diagnostic.status,
     progress: diagnostic.progress ?? 0,
@@ -1231,7 +1235,7 @@ const buildSupabaseDiagnosticInsert = (diagnostic: Diagnostic): SupabaseDiagnost
     answered_questions: diagnostic.answeredQuestions ?? 0,
     auto_generate_opportunities: diagnostic.autoGenerateOpportunities ?? true,
     responsible_name: diagnostic.responsibleName || null,
-    responsible_id: diagnostic.responsibleId || null,
+    responsible_id: toSupabaseUuid(diagnostic.responsibleId),
     due_date: toSupabaseDate(diagnostic.dueDate),
     action_plan: diagnostic.actionPlan ?? null,
     report_payload: diagnostic.reportPayload ?? null,
@@ -1244,11 +1248,11 @@ const buildSupabaseDiagnosticUpdate = (diagnostic: Partial<Diagnostic>): Supabas
   const payload: SupabaseDiagnosticUpdate = { updated_at: new Date().toISOString() };
 
   if (typeof diagnostic.name !== "undefined") payload.name = diagnostic.name;
-  if (typeof diagnostic.clientId !== "undefined") payload.client_id = diagnostic.clientId || null;
+  if (typeof diagnostic.clientId !== "undefined") payload.client_id = toSupabaseUuid(diagnostic.clientId);
   if (typeof diagnostic.clientName !== "undefined") payload.client_name = diagnostic.clientName || null;
-  if (typeof diagnostic.projectId !== "undefined") payload.project_id = diagnostic.projectId || null;
+  if (typeof diagnostic.projectId !== "undefined") payload.project_id = toSupabaseUuid(diagnostic.projectId);
   if (typeof diagnostic.projectName !== "undefined") payload.project_name = diagnostic.projectName || null;
-  if (typeof diagnostic.templateId !== "undefined") payload.template_id = diagnostic.templateId || null;
+  if (typeof diagnostic.templateId !== "undefined") payload.template_id = toSupabaseUuid(diagnostic.templateId);
   if (typeof diagnostic.templateName !== "undefined") payload.template_name = diagnostic.templateName || null;
   if (typeof diagnostic.status !== "undefined") payload.status = diagnostic.status;
   if (typeof diagnostic.progress !== "undefined") payload.progress = diagnostic.progress;
@@ -1260,7 +1264,7 @@ const buildSupabaseDiagnosticUpdate = (diagnostic: Partial<Diagnostic>): Supabas
     payload.auto_generate_opportunities = diagnostic.autoGenerateOpportunities ?? true;
   }
   if (typeof diagnostic.responsibleName !== "undefined") payload.responsible_name = diagnostic.responsibleName || null;
-  if (typeof diagnostic.responsibleId !== "undefined") payload.responsible_id = diagnostic.responsibleId || null;
+  if (typeof diagnostic.responsibleId !== "undefined") payload.responsible_id = toSupabaseUuid(diagnostic.responsibleId);
   if (typeof diagnostic.dueDate !== "undefined") payload.due_date = toSupabaseDate(diagnostic.dueDate);
   if (typeof diagnostic.actionPlan !== "undefined") payload.action_plan = diagnostic.actionPlan ?? null;
   if (typeof diagnostic.reportPayload !== "undefined") payload.report_payload = diagnostic.reportPayload ?? null;
