@@ -1,13 +1,12 @@
 import { useMemo } from "react";
-import { Users, FolderKanban, AlertTriangle, DollarSign, CheckCircle2, ListTodo } from "lucide-react";
+import { Users, FolderKanban, AlertTriangle, CheckCircle2, ListTodo } from "lucide-react";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { ProjectProgress } from "@/components/dashboard/ProjectProgress";
 import { TaskQueue } from "@/components/dashboard/TaskQueue";
-import { MoneyOnTable } from "@/components/dashboard/MoneyOnTable";
 import { useData } from "@/contexts/DataContext";
 
 export default function Dashboard() {
-  const { clients, projects, tasks, opportunities } = useData();
+  const { clients, projects, tasks } = useData();
 
   const stats = useMemo(() => {
     // Active clients
@@ -34,19 +33,8 @@ export default function Dashboard() {
         projectsWithOverdueTasks.has(p.id)
     ).length;
 
-    // Money on table (total opportunities)
-    const totalOpportunities = opportunities.reduce(
-      (acc, o) => acc + (o.estimatedValue || 0),
-      0
-    );
-
     // Tasks completed this month
-    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-    const completedThisMonth = tasks.filter((t) => {
-      if (t.status !== "done") return false;
-      // Assuming createdAt is when it was marked done (simplified)
-      return true;
-    }).length;
+    const completedThisMonth = tasks.filter((t) => t.status === "done").length;
 
     // Pending tasks
     const pendingTasks = tasks.filter((t) => t.status !== "done").length;
@@ -55,19 +43,10 @@ export default function Dashboard() {
       activeClients,
       activeProjects,
       projectsAtRisk,
-      totalOpportunities,
       completedThisMonth,
       pendingTasks,
     };
-  }, [clients, projects, tasks, opportunities]);
-
-  const formatCurrency = (value: number) =>
-    new Intl.NumberFormat("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value);
+  }, [clients, projects, tasks]);
 
   return (
     <div className="space-y-6">
@@ -76,7 +55,7 @@ export default function Dashboard() {
         <p className="text-muted-foreground">Visão geral da JoIA e projetos ativos</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         <StatCard
           title="Clientes Ativos"
           value={stats.activeClients}
@@ -92,12 +71,6 @@ export default function Dashboard() {
           value={stats.projectsAtRisk}
           subtitle="Com tarefas atrasadas"
           icon={AlertTriangle}
-        />
-        <StatCard
-          title="Dinheiro na Mesa"
-          value={formatCurrency(stats.totalOpportunities)}
-          icon={DollarSign}
-          highlight
         />
         <StatCard
           title="Tarefas Concluídas"
@@ -119,10 +92,6 @@ export default function Dashboard() {
         <div>
           <TaskQueue />
         </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <MoneyOnTable />
       </div>
     </div>
   );
