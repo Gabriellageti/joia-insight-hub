@@ -26,7 +26,7 @@ import {
 } from "@/lib/calendar-integration";
 
 export default function Reunioes() {
-  const { meetings, loading, deleteMeeting } = useMeetings();
+  const { meetings, loading, deleteMeeting, updateMeeting } = useMeetings();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingMeeting, setEditingMeeting] = useState<MeetingData | null>(null);
   const [minutesDialogOpen, setMinutesDialogOpen] = useState(false);
@@ -66,6 +66,10 @@ export default function Reunioes() {
     setEditingMeeting(meeting);
     setDialogOpen(true);
   }, []);
+
+  const handleMeetingReschedule = useCallback(async (meetingId: string, newDate: string) => {
+    await updateMeeting(meetingId, { date: newDate });
+  }, [updateMeeting]);
 
   const confirmDelete = async () => {
     if (meetingToDelete) {
@@ -191,6 +195,7 @@ export default function Reunioes() {
           meetings={meetings}
           viewMode={viewMode}
           onMeetingClick={handleEdit}
+          onMeetingReschedule={handleMeetingReschedule}
         />
       )}
 

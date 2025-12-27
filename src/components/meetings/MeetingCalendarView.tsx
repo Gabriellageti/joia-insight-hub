@@ -1,7 +1,6 @@
-import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Video, MapPin } from "lucide-react";
+import { useMemo, useState, useCallback } from "react";
+import { ChevronLeft, ChevronRight, Video, MapPin, GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import type { MeetingData } from "@/hooks/useMeetings";
 import {
   format,
@@ -15,17 +14,18 @@ import {
   subWeeks,
   eachDayOfInterval,
   isSameMonth,
-  isSameDay,
   parse,
   isToday,
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 interface MeetingCalendarViewProps {
   meetings: MeetingData[];
   viewMode: "month" | "week";
   onMeetingClick: (meeting: MeetingData) => void;
+  onMeetingReschedule?: (meetingId: string, newDate: string) => Promise<void>;
 }
 
 const statusColors = {
@@ -35,14 +35,12 @@ const statusColors = {
 };
 
 function parseMeetingDate(dateStr: string): Date | null {
-  // Try to parse dd/mm/yyyy format
   try {
     const parsed = parse(dateStr, "dd/MM/yyyy", new Date());
     if (!isNaN(parsed.getTime())) return parsed;
   } catch {
     // ignore
   }
-  // Try ISO format
   try {
     const date = new Date(dateStr);
     if (!isNaN(date.getTime())) return date;
@@ -52,8 +50,15 @@ function parseMeetingDate(dateStr: string): Date | null {
   return null;
 }
 
-export function MeetingCalendarView({ meetings, viewMode, onMeetingClick }: MeetingCalendarViewProps) {
+export function MeetingCalendarView({ 
+  meetings, 
+  viewMode, 
+  onMeetingClick, 
+  onMeetingReschedule 
+}: MeetingCalendarViewProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [dragOverDay, setDragOverDay] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   const meetingsByDate = useMemo(() => {
     const map = new Map<string, MeetingData[]>();
@@ -96,16 +101,65 @@ export function MeetingCalendarView({ meetings, viewMode, onMeetingClick }: Meet
     }
   };
 
+  const handleDragStart = useCallback((e: React.DragEvent, meeting: MeetingData) => {
+    e.dataTransfer.setData("meetingId", meeting.id);
+    e.dataTransfer.setData("meetingTitle", meeting.title);
+    e.dataTransfer.effectAllowed = "move";
+    setIsDragging(true);
+  }, []);
+
+  const handleDragEnd = useCallback(() => {
+    setIsDragging(false);
+    setDragOverDay(null);
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent, dayKey: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOverDay(dayKey);
+  }, []);
+
+  const handleDragLeave = useCallback(() => {
+    setDragOverDay(null);
+  }, []);
+
+  const handleDrop = useCallback(async (e: React.DragEvent, dayKey: string, day: Date) => {
+    e.preventDefault();
+    setDragOverDay(null);
+    setIsDragging(false);
+
+    const meetingId = e.dataTransfer.getData("meetingId");
+    const meetingTitle = e.dataTransfer.getData("meetingTitle");
+    
+    if (!meetingId || !onMeetingReschedule) return;
+
+    const newDate = format(day, "dd/MM/yyyy");
+    
+    try {
+      await onMeetingReschedule(meetingId, newDate);
+      toast.success(`"${meetingTitle}" remarcada para ${newDate}`);
+    } catch (error) {
+      // Error is handled by the hook
+    }
+  }, [onMeetingReschedule]);
+
   const weekDays = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-medium capitalize">
-          {viewMode === "month"
-            ? format(currentDate, "MMMM yyyy", { locale: ptBR })
-            : `Semana de ${format(days[0], "dd/MM")} a ${format(days[6], "dd/MM")}`}
-        </h2>
+        <div>
+          <h2 className="text-lg font-medium capitalize">
+            {viewMode === "month"
+              ? format(currentDate, "MMMM yyyy", { locale: ptBR })
+              : `Semana de ${format(days[0], "dd/MM")} a ${format(days[6], "dd/MM")}`}
+          </h2>
+          {onMeetingReschedule && (
+            <p className="text-xs text-muted-foreground">
+              Arraste reuniões para remarcar
+            </p>
+          )}
+        </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="icon" onClick={navigatePrev}>
             <ChevronLeft className="h-4 w-4" />
@@ -136,15 +190,20 @@ export function MeetingCalendarView({ meetings, viewMode, onMeetingClick }: Meet
             const dayMeetings = meetingsByDate.get(dayKey) || [];
             const isCurrentMonth = isSameMonth(day, currentDate);
             const today = isToday(day);
+            const isDropTarget = dragOverDay === dayKey;
 
             return (
               <div
                 key={dayKey}
                 className={cn(
-                  "border-b border-r p-1 min-h-[80px]",
+                  "border-b border-r p-1 min-h-[80px] transition-colors",
                   viewMode === "week" && "min-h-[200px]",
-                  !isCurrentMonth && viewMode === "month" && "bg-muted/30"
+                  !isCurrentMonth && viewMode === "month" && "bg-muted/30",
+                  isDropTarget && "bg-accent/20 ring-2 ring-inset ring-accent"
                 )}
+                onDragOver={(e) => handleDragOver(e, dayKey)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, dayKey, day)}
               >
                 <div
                   className={cn(
@@ -157,14 +216,22 @@ export function MeetingCalendarView({ meetings, viewMode, onMeetingClick }: Meet
                 </div>
                 <div className="space-y-1">
                   {dayMeetings.slice(0, viewMode === "week" ? 10 : 3).map((meeting) => (
-                    <button
+                    <div
                       key={meeting.id}
+                      draggable={!!onMeetingReschedule}
+                      onDragStart={(e) => handleDragStart(e, meeting)}
+                      onDragEnd={handleDragEnd}
                       onClick={() => onMeetingClick(meeting)}
                       className={cn(
-                        "w-full text-left text-xs p-1 rounded truncate flex items-center gap-1",
-                        "bg-accent/10 hover:bg-accent/20 transition-colors"
+                        "w-full text-left text-xs p-1 rounded truncate flex items-center gap-1 cursor-pointer",
+                        "bg-accent/10 hover:bg-accent/20 transition-colors",
+                        onMeetingReschedule && "cursor-grab active:cursor-grabbing",
+                        isDragging && "opacity-50"
                       )}
                     >
+                      {onMeetingReschedule && (
+                        <GripVertical className="h-2.5 w-2.5 flex-shrink-0 text-muted-foreground" />
+                      )}
                       <span
                         className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", statusColors[meeting.status])}
                       />
@@ -175,7 +242,7 @@ export function MeetingCalendarView({ meetings, viewMode, onMeetingClick }: Meet
                       ) : (
                         <MapPin className="h-2.5 w-2.5 flex-shrink-0 text-muted-foreground" />
                       )}
-                    </button>
+                    </div>
                   ))}
                   {dayMeetings.length > (viewMode === "week" ? 10 : 3) && (
                     <div className="text-xs text-muted-foreground px-1">
