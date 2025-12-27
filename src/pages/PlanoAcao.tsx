@@ -58,7 +58,7 @@ export default function PlanoAcao() {
 
     const task = tasks.find((t) => t.id === draggingTaskId);
     if (task && task.status !== columnId) {
-      updateTask(task.id, { status: columnId });
+      updateTask(task.id, { status: columnId as "backlog" | "next" | "in_progress" | "validation" | "done" });
     }
 
     setDraggingTaskId(null);
