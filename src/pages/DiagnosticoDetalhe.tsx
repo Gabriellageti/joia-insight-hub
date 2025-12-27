@@ -43,10 +43,28 @@ export default function DiagnosticoDetalhe() {
   const template = useMemo(
     () => {
       if (!diagnostic) return null;
-      return (
-        templates.find((t) => t.id === diagnostic.templateId) ??
-        templates.find((t) => t.name === diagnostic.templateName)
-      );
+      // Tentar encontrar por templateId primeiro
+      if (diagnostic.templateId) {
+        const found = templates.find((t) => t.id === diagnostic.templateId);
+        if (found) return found;
+      }
+      // Fallback: tentar encontrar por templateName
+      if (diagnostic.templateName) {
+        const foundByName = templates.find((t) => t.name === diagnostic.templateName);
+        if (foundByName) return foundByName;
+      }
+      // Fallback final: extrair nome do template do nome do diagnóstico (formato: "Template • Projeto • MM/AAAA")
+      const diagnosticNameParts = diagnostic.name.split(" • ");
+      if (diagnosticNameParts.length >= 1) {
+        const possibleTemplateName = diagnosticNameParts[0].trim();
+        const foundByDiagName = templates.find((t) => 
+          t.name === possibleTemplateName || 
+          t.name.includes(possibleTemplateName) ||
+          possibleTemplateName.includes(t.name)
+        );
+        if (foundByDiagName) return foundByDiagName;
+      }
+      return null;
     },
     [diagnostic, templates]
   );

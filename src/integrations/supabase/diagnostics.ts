@@ -3,9 +3,17 @@ import type { PostgrestError } from "@supabase/supabase-js";
 import { supabase } from "./client";
 import type { Database } from "./types";
 
-export type DiagnosticRow = Database["public"]["Tables"]["diagnostics"]["Row"];
-type DiagnosticInsert = Database["public"]["Tables"]["diagnostics"]["Insert"];
-type DiagnosticUpdate = Database["public"]["Tables"]["diagnostics"]["Update"];
+// Tipo estendido para incluir colunas que existem no banco mas ainda não no types.ts gerado
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type DiagnosticRow = Database["public"]["Tables"]["diagnostics"]["Row"] & Record<string, any>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type DiagnosticInsert = Record<string, any>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type DiagnosticUpdate = Record<string, any>;
+
+// Cliente sem tipagem estrita para colunas que ainda não estão no schema
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const untypedSupabase = supabase as any;
 
 const isMissingDiagnosticColumnError = (error: PostgrestError | null): boolean => {
   if (!error?.message) return false;
@@ -88,7 +96,7 @@ const retryDiagnosticMutation = async <T extends Record<string, unknown>, R>(
 };
 
 export async function listDiagnostics(): Promise<DiagnosticRow[]> {
-  const { data, error } = await supabase.from("diagnostics").select("*").order("updated_at", { ascending: false });
+  const { data, error } = await untypedSupabase.from("diagnostics").select("*").order("updated_at", { ascending: false });
 
   if (error) {
     throw new Error(error.message);
@@ -98,19 +106,21 @@ export async function listDiagnostics(): Promise<DiagnosticRow[]> {
 }
 
 export async function createDiagnostic(payload: DiagnosticInsert): Promise<DiagnosticRow> {
-  return retryDiagnosticMutation(payload, (nextPayload) =>
-    supabase.from("diagnostics").insert(nextPayload).select().single()
-  );
+  return retryDiagnosticMutation(payload, async (nextPayload) => {
+    const result = await untypedSupabase.from("diagnostics").insert(nextPayload).select().single();
+    return result;
+  });
 }
 
 export async function updateDiagnostic(id: string, payload: DiagnosticUpdate): Promise<DiagnosticRow> {
-  return retryDiagnosticMutation(payload, (nextPayload) =>
-    supabase.from("diagnostics").update(nextPayload).eq("id", id).select().single()
-  );
+  return retryDiagnosticMutation(payload, async (nextPayload) => {
+    const result = await untypedSupabase.from("diagnostics").update(nextPayload).eq("id", id).select().single();
+    return result;
+  });
 }
 
 export async function deleteDiagnostic(id: string): Promise<void> {
-  const { error } = await supabase.from("diagnostics").delete().eq("id", id);
+  const { error } = await untypedSupabase.from("diagnostics").delete().eq("id", id);
 
   if (error) {
     throw new Error(error.message);

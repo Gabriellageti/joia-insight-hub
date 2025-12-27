@@ -3887,9 +3887,11 @@ const templateSeed: DiagnosticTemplate[] = [
   },
 ];
 
-type DiagnosticRow = Database["public"]["Tables"]["diagnostics"]["Row"];
+// Tipo temporário para colunas que existem no banco mas ainda não estão no types.ts gerado
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ExtendedDiagnosticRow = Database["public"]["Tables"]["diagnostics"]["Row"] & Record<string, any>;
 
-const mapDiagnosticFromDb = (row: DiagnosticRow): Diagnostic => ({
+const mapDiagnosticFromDb = (row: ExtendedDiagnosticRow): Diagnostic => ({
   id: row.id,
   name: row.name,
   projectId: row.project_id || "",
@@ -3910,8 +3912,8 @@ const mapDiagnosticFromDb = (row: DiagnosticRow): Diagnostic => ({
   responsibleName: row.responsible_name || undefined,
   responsibleId: row.responsible_id || undefined,
   dueDate: formatDatePtBR(row.due_date),
-  actionPlan: (row.action_plan as Diagnostic["actionPlan"]) || undefined,
-  reportPayload: (row.report_payload as Diagnostic["reportPayload"]) || undefined,
+  actionPlan: row.action_plan as unknown as Diagnostic["actionPlan"],
+  reportPayload: row.report_payload as unknown as Diagnostic["reportPayload"],
 });
 export const getTemplatesSeed = () => templateSeed;
 
@@ -4317,7 +4319,7 @@ export const fetchDiagnostics = async (): Promise<Diagnostic[]> => {
     throw new Error(error.message || "Erro ao carregar diagnósticos");
   }
 
-  return (data || []).map((row: DiagnosticRow) => mapDiagnosticFromDb(row));
+  return (data || []).map((row: ExtendedDiagnosticRow) => mapDiagnosticFromDb(row));
 };
 
 export const fetchTemplates = async (): Promise<{ templates: DiagnosticTemplate[]; fromSeed: boolean }> => {
