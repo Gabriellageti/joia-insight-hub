@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useData } from "@/contexts/DataContext";
 import { toast } from "@/hooks/use-toast";
@@ -40,6 +40,13 @@ export function useDocuments() {
   const [documents, setDocuments] = useState<FileItem[]>([]);
   const [loading, setLoading] = useState(true);
   const { clients, projects } = useData();
+  const hasFetched = useRef(false);
+  const clientsRef = useRef(clients);
+  const projectsRef = useRef(projects);
+
+  // Keep refs updated
+  clientsRef.current = clients;
+  projectsRef.current = projects;
 
   const fetchDocuments = useCallback(async () => {
     try {
@@ -52,7 +59,7 @@ export function useDocuments() {
       if (error) throw error;
 
       const mapped = (data || []).map((doc) =>
-        mapDbToFileItem(doc, clients, projects)
+        mapDbToFileItem(doc, clientsRef.current, projectsRef.current)
       );
       setDocuments(mapped);
     } catch (error: any) {
@@ -65,15 +72,17 @@ export function useDocuments() {
     } finally {
       setLoading(false);
     }
-  }, [clients, projects]);
+  }, []);
 
+  // Fetch documents only once on mount
   useEffect(() => {
-    if (clients.length > 0 || projects.length > 0) {
+    if (!hasFetched.current) {
+      hasFetched.current = true;
       fetchDocuments();
     }
-  }, [clients, projects, fetchDocuments]);
+  }, [fetchDocuments]);
 
-  const addDocument = async (file: Omit<FileItem, "id" | "uploadedAt">) => {
+  const addDocument = useCallback(async (file: Omit<FileItem, "id" | "uploadedAt">) => {
     try {
       const { data, error } = await supabase
         .from("documents")
@@ -100,7 +109,7 @@ export function useDocuments() {
 
       if (error) throw error;
 
-      const newDoc = mapDbToFileItem(data, clients, projects);
+      const newDoc = mapDbToFileItem(data, clientsRef.current, projectsRef.current);
       setDocuments((prev) => [newDoc, ...prev]);
       
       toast({
@@ -118,9 +127,9 @@ export function useDocuments() {
       });
       throw error;
     }
-  };
+  }, []);
 
-  const updateDocument = async (id: string, updates: Partial<FileItem>) => {
+  const updateDocument = useCallback(async (id: string, updates: Partial<FileItem>) => {
     try {
       const dbUpdates: any = {};
       
@@ -153,19 +162,19 @@ export function useDocuments() {
       });
       throw error;
     }
-  };
+  }, []);
 
-  const approveDocument = async (id: string) => {
+  const approveDocument = useCallback(async (id: string) => {
     await updateDocument(id, { statusEvidencia: "Aprovada" });
     toast({ title: "Evidência aprovada" });
-  };
+  }, [updateDocument]);
 
-  const rejectDocument = async (id: string, reason: string) => {
+  const rejectDocument = useCallback(async (id: string, reason: string) => {
     await updateDocument(id, { statusEvidencia: "Rejeitada", motivoRejeicao: reason });
     toast({ title: "Evidência rejeitada" });
-  };
+  }, [updateDocument]);
 
-  const deleteDocument = async (id: string) => {
+  const deleteDocument = useCallback(async (id: string) => {
     try {
       const { error } = await supabase.from("documents").delete().eq("id", id);
 
@@ -182,7 +191,7 @@ export function useDocuments() {
       });
       throw error;
     }
-  };
+  }, []);
 
   return {
     documents,
