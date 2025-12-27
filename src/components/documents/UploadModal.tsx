@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from "react";
-import { Upload, X, Check, ChevronsUpDown } from "lucide-react";
+import { Upload, X, Check, ChevronsUpDown, Loader2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -41,6 +41,7 @@ import {
   SUGGESTED_TAGS,
 } from "@/types/documents";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
 
 interface UploadModalProps {
   open: boolean;
@@ -180,6 +181,31 @@ export function UploadModal({
     setIsUploading(true);
 
     try {
+      // Generate unique file path
+      const fileExt = file.name.split(".").pop();
+      const timestamp = Date.now();
+      const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
+      const filePath = `${timestamp}_${sanitizedName}`;
+
+      // Upload file to Supabase Storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from("documents")
+        .upload(filePath, file, {
+          cacheControl: "3600",
+          upsert: false,
+        });
+
+      if (uploadError) {
+        throw new Error(`Erro no upload: ${uploadError.message}`);
+      }
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from("documents")
+        .getPublicUrl(filePath);
+
+      const publicUrl = urlData.publicUrl;
+
       const fileItem: Omit<FileItem, "id" | "uploadedAt"> = {
         nomeArquivo: file.name,
         nomeExibicao: suggestedName || file.name,
@@ -200,6 +226,7 @@ export function UploadModal({
         tamanhoBytes: file.size,
         mimeType: file.type || "application/octet-stream",
         uploadedBy: "current-user",
+        url: publicUrl,
       };
 
       onUpload(fileItem);
@@ -223,10 +250,11 @@ export function UploadModal({
       setMeetingId(null);
 
       onOpenChange(false);
-    } catch (error) {
+    } catch (error: any) {
+      console.error("Upload error:", error);
       toast({
         title: "Erro no upload",
-        description: "Ocorreu um erro ao enviar o arquivo.",
+        description: error.message || "Ocorreu um erro ao enviar o arquivo.",
         variant: "destructive",
       });
     } finally {
@@ -537,7 +565,14 @@ export function UploadModal({
             disabled={isUploading || !file}
             className="bg-accent text-accent-foreground hover:bg-accent/90"
           >
-            {isUploading ? "Enviando..." : "Enviar"}
+            {isUploading ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Enviando...
+              </>
+            ) : (
+              "Enviar"
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>

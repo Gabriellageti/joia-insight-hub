@@ -176,7 +176,14 @@ export function FileCard({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48 bg-popover z-50">
-              <DropdownMenuItem onClick={() => {}}>
+              <DropdownMenuItem 
+                onClick={() => {
+                  if (file.url) {
+                    window.open(file.url, "_blank");
+                  }
+                }}
+                disabled={!file.url}
+              >
                 <Download className="h-4 w-4 mr-2" />
                 Abrir / Baixar
               </DropdownMenuItem>
