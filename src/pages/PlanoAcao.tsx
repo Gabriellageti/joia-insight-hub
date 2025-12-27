@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Plus, List, Kanban } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useData } from "@/contexts/DataContext";
 import { TaskDialog } from "@/components/dialogs/TaskDialog";
-import { TaskCard } from "@/components/plano-acao";
+import { TaskCard, TaskFilters } from "@/components/plano-acao";
 import { Task } from "@/types";
 import { toast } from "sonner";
 
@@ -19,12 +19,56 @@ const columns = [
 ];
 
 export default function PlanoAcao() {
-  const { tasks, updateTask, deleteTask } = useData();
+  const { tasks, updateTask, deleteTask, clients } = useData();
   const [view, setView] = useState<"kanban" | "list">("kanban");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   const [activeColumn, setActiveColumn] = useState<string | null>(null);
+  
+  // Filters
+  const [selectedClient, setSelectedClient] = useState("all");
+  const [selectedResponsible, setSelectedResponsible] = useState("all");
+
+  // Get unique responsibles from tasks
+  const uniqueResponsibles = useMemo(() => {
+    const responsibles = new Set<string>();
+    tasks.forEach((task) => {
+      if (task.responsible) {
+        responsibles.add(task.responsible);
+      }
+    });
+    return Array.from(responsibles).sort();
+  }, [tasks]);
+
+  // Get unique clients from tasks
+  const uniqueClients = useMemo(() => {
+    const clientsMap = new Map<string, string>();
+    tasks.forEach((task) => {
+      if (task.clientId && task.clientName) {
+        clientsMap.set(task.clientId, task.clientName);
+      }
+    });
+    return Array.from(clientsMap.entries()).map(([id, name]) => ({ id, name }));
+  }, [tasks]);
+
+  // Filter tasks
+  const filteredTasks = useMemo(() => {
+    return tasks.filter((task) => {
+      if (selectedClient !== "all" && task.clientId !== selectedClient) {
+        return false;
+      }
+      if (selectedResponsible !== "all" && task.responsible !== selectedResponsible) {
+        return false;
+      }
+      return true;
+    });
+  }, [tasks, selectedClient, selectedResponsible]);
+
+  const handleClearFilters = () => {
+    setSelectedClient("all");
+    setSelectedResponsible("all");
+  };
 
   const handleDrop = (columnId: string) => {
     if (!draggingTaskId) return;
@@ -55,11 +99,14 @@ export default function PlanoAcao() {
 
   const tasksByColumn = columns.reduce(
     (acc, col) => {
-      acc[col.id] = tasks.filter((t) => t.status === col.id);
+      acc[col.id] = filteredTasks.filter((t) => t.status === col.id);
       return acc;
     },
     {} as Record<string, Task[]>
   );
+
+  const totalFilteredTasks = filteredTasks.length;
+  const totalTasks = tasks.length;
 
   return (
     <div className="space-y-6">
@@ -70,6 +117,11 @@ export default function PlanoAcao() {
           </h1>
           <p className="text-muted-foreground">
             Gerencie tarefas e ações dos projetos
+            {totalFilteredTasks !== totalTasks && (
+              <span className="ml-2 text-sm">
+                (Exibindo {totalFilteredTasks} de {totalTasks})
+              </span>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -100,6 +152,16 @@ export default function PlanoAcao() {
           </Button>
         </div>
       </div>
+
+      <TaskFilters
+        clients={uniqueClients}
+        responsibles={uniqueResponsibles}
+        selectedClient={selectedClient}
+        selectedResponsible={selectedResponsible}
+        onClientChange={setSelectedClient}
+        onResponsibleChange={setSelectedResponsible}
+        onClear={handleClearFilters}
+      />
 
       {view === "kanban" ? (
         <div className="flex gap-4 overflow-x-auto pb-4">
