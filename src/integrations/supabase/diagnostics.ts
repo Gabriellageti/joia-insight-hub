@@ -10,9 +10,8 @@ type DiagnosticUpdate = Database["public"]["Tables"]["diagnostics"]["Update"];
 const isMissingDiagnosticColumnError = (error: PostgrestError | null): boolean => {
   if (!error?.message) return false;
   const normalized = error.message.toLowerCase();
-  if (!normalized.includes("schema cache")) return false;
-  if (normalized.includes("diagnostics")) return true;
-  return normalized.includes("'action_plan'") || normalized.includes("'report_payload'");
+  if (normalized.includes("schema cache")) return true;
+  return normalized.includes("column") && normalized.includes("does not exist");
 };
 
 const extractMissingColumn = (error: PostgrestError | null): string | null => {
@@ -55,6 +54,39 @@ const stripLegacyDiagnosticPayload = <T extends Record<string, unknown>>(
   return sanitized;
 };
 
+const retryDiagnosticMutation = async <T extends Record<string, unknown>, R>(
+  payload: T,
+  executor: (nextPayload: T) => Promise<{ data: R | null; error: PostgrestError | null }>
+): Promise<R> => {
+  let currentPayload = payload;
+
+  while (true) {
+    const { data, error } = await executor(currentPayload);
+    if (!error) {
+      if (!data) {
+        throw new Error("Erro ao salvar diagnóstico no Supabase");
+      }
+      return data;
+    }
+
+    if (!isMissingDiagnosticColumnError(error)) {
+      throw new Error(error.message);
+    }
+
+    const missingColumn = extractMissingColumn(error);
+    const sanitizedPayload = stripLegacyDiagnosticPayload(
+      currentPayload as Record<string, unknown>,
+      missingColumn ? [missingColumn] : []
+    ) as T;
+
+    if (Object.keys(sanitizedPayload).length === Object.keys(currentPayload).length) {
+      throw new Error(error.message);
+    }
+
+    currentPayload = sanitizedPayload;
+  }
+};
+
 export async function listDiagnostics(): Promise<DiagnosticRow[]> {
   const { data, error } = await supabase.from("diagnostics").select("*").order("updated_at", { ascending: false });
 
@@ -66,61 +98,15 @@ export async function listDiagnostics(): Promise<DiagnosticRow[]> {
 }
 
 export async function createDiagnostic(payload: DiagnosticInsert): Promise<DiagnosticRow> {
-  const { data, error } = await supabase.from("diagnostics").insert(payload).select().single();
-
-  if (error) {
-    if (isMissingDiagnosticColumnError(error)) {
-      const missingColumn = extractMissingColumn(error);
-      const sanitizedPayload = stripLegacyDiagnosticPayload(
-        payload as Record<string, unknown>,
-        missingColumn ? [missingColumn] : []
-      ) as DiagnosticInsert;
-      const retry = await supabase.from("diagnostics").insert(sanitizedPayload).select().single();
-      if (retry.error) {
-        throw new Error(retry.error.message);
-      }
-      if (!retry.data) {
-        throw new Error("Erro ao criar diagnóstico no Supabase");
-      }
-      return retry.data;
-    }
-    throw new Error(error.message);
-  }
-
-  if (!data) {
-    throw new Error("Erro ao criar diagnóstico no Supabase");
-  }
-
-  return data;
+  return retryDiagnosticMutation(payload, (nextPayload) =>
+    supabase.from("diagnostics").insert(nextPayload).select().single()
+  );
 }
 
 export async function updateDiagnostic(id: string, payload: DiagnosticUpdate): Promise<DiagnosticRow> {
-  const { data, error } = await supabase.from("diagnostics").update(payload).eq("id", id).select().single();
-
-  if (error) {
-    if (isMissingDiagnosticColumnError(error)) {
-      const missingColumn = extractMissingColumn(error);
-      const sanitizedPayload = stripLegacyDiagnosticPayload(
-        payload as Record<string, unknown>,
-        missingColumn ? [missingColumn] : []
-      ) as DiagnosticUpdate;
-      const retry = await supabase.from("diagnostics").update(sanitizedPayload).eq("id", id).select().single();
-      if (retry.error) {
-        throw new Error(retry.error.message);
-      }
-      if (!retry.data) {
-        throw new Error("Erro ao atualizar diagnóstico no Supabase");
-      }
-      return retry.data;
-    }
-    throw new Error(error.message);
-  }
-
-  if (!data) {
-    throw new Error("Erro ao atualizar diagnóstico no Supabase");
-  }
-
-  return data;
+  return retryDiagnosticMutation(payload, (nextPayload) =>
+    supabase.from("diagnostics").update(nextPayload).eq("id", id).select().single()
+  );
 }
 
 export async function deleteDiagnostic(id: string): Promise<void> {
