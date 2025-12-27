@@ -1,1 +1,4 @@
 project_id = "uopxixfgaaxsgqgrfpvx"
+
+[functions.notify-task-comment]
+verify_jwt = true

@@ -282,7 +282,7 @@ export function TaskDialog({ open, onOpenChange, task }: TaskDialogProps) {
 
             {task && (
               <div className="col-span-2 border-t pt-4 mt-2">
-                <TaskComments taskId={task.id} />
+                <TaskComments taskId={task.id} taskTitle={task.title} />
               </div>
             )}
           </div>
