@@ -4257,11 +4257,18 @@ const insertTemplateStructure = async (templateId: string, sections: TemplateSec
           id: asUuid(question.id),
           template_id: templateId,
           section_id: sectionRow.id,
-          question: question.title,
-          question_type: mapQuestionTypeToDb(question.type),
+          title: question.title,
+          description: question.description || null,
+          type: mapQuestionTypeToDb(question.type),
+          weight: question.weight ?? 1,
+          criticality: question.criticality || 'media',
+          required: question.required ?? false,
+          position: question.order ?? 0,
+          helper_text: question.helperText || null,
+          min_value: question.minValue ?? null,
+          max_value: question.maxValue ?? null,
           options: serializeQuestionOptions(question),
-          metadata: serializeQuestionMetadata(question),
-          position: question.order,
+          audit: question.audit ? JSON.stringify(question.audit) : null,
         })
         .select()
         .single();
