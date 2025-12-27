@@ -60,6 +60,13 @@ import {
   updateClient as updateSupabaseClient,
   type ClientRow,
 } from "@/integrations/supabase/clients";
+import {
+  createPlaybook,
+  deletePlaybookRecord,
+  listPlaybooks,
+  updatePlaybookRecord,
+  type PlaybookRow,
+} from "@/integrations/supabase/playbooks";
 import type { Database } from "@/integrations/supabase/types";
 
 interface DataContextType {
@@ -197,6 +204,28 @@ const formatDateFromIso = (value?: string | null) => {
   return Number.isNaN(parsed.getTime()) ? getDate() : parsed.toLocaleDateString("pt-BR");
 };
 
+type PlaybookContent = {
+  area?: string;
+  whenToUse?: string;
+  howToValidate?: string;
+  steps?: string[];
+  checklist?: string[];
+  commonErrors?: string[];
+  tags?: string[];
+  fileName?: string;
+  fileType?: string;
+  fileSize?: number;
+};
+
+const parsePlaybookContent = (content?: string | null): PlaybookContent => {
+  if (!content) return {};
+  try {
+    return JSON.parse(content) as PlaybookContent;
+  } catch {
+    return {};
+  }
+};
+
 const resolveUserName = (user?: User | null) => {
   const metadata = (user?.user_metadata ?? {}) as Record<string, string | undefined>;
   return metadata.full_name || metadata.name || metadata.name_full || user?.email || "Usuário";
@@ -280,6 +309,63 @@ const buildSupabaseClientUpdate = (client: LegacyClient): SupabaseClientUpdate =
 
   return payload;
 };
+
+const serializePlaybookContent = (playbook: Partial<Playbook>): string =>
+  JSON.stringify({
+    area: playbook.area,
+    whenToUse: playbook.whenToUse,
+    howToValidate: playbook.howToValidate,
+    steps: playbook.steps,
+    checklist: playbook.checklist,
+    commonErrors: playbook.commonErrors,
+    tags: playbook.tags,
+    fileName: playbook.fileName,
+    fileType: playbook.fileType,
+    fileSize: playbook.fileSize,
+  });
+
+const mapSupabasePlaybook = (playbook: PlaybookRow): Playbook => {
+  const content = parsePlaybookContent(playbook.content);
+
+  return {
+    id: playbook.id,
+    title: playbook.title,
+    area: playbook.category || content.area || "",
+    description: playbook.description || "",
+    whenToUse: content.whenToUse || "",
+    howToValidate: content.howToValidate || "",
+    steps: content.steps || [],
+    checklist: content.checklist || [],
+    commonErrors: content.commonErrors || [],
+    tags: content.tags || [],
+    fileName: content.fileName,
+    fileType: content.fileType,
+    fileSize: content.fileSize,
+    createdAt: formatDateFromIso(playbook.created_at),
+  };
+};
+
+const buildSupabasePlaybookInsert = (playbook: Omit<Playbook, "id" | "createdAt">): Database["public"]["Tables"]["playbooks"]["Insert"] => {
+  const timestamp = new Date().toISOString();
+
+  return {
+    title: playbook.title,
+    description: playbook.description || null,
+    category: playbook.area || null,
+    content: serializePlaybookContent(playbook),
+    is_active: true,
+    created_at: timestamp,
+    updated_at: timestamp,
+  };
+};
+
+const buildSupabasePlaybookUpdate = (playbook: Playbook): Database["public"]["Tables"]["playbooks"]["Update"] => ({
+  title: playbook.title,
+  description: playbook.description || null,
+  category: playbook.area || null,
+  content: serializePlaybookContent(playbook),
+  updated_at: new Date().toISOString(),
+});
 
 const normalizeClient = (client: LegacyClient): Client => {
   const segmentoTags = (
@@ -1171,7 +1257,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [meetings, setMeetings] = useLocalStorage<Meeting[]>("joia_meetings", initialMeetings);
   const [indicators, setIndicators] = useLocalStorage<Indicator[]>("joia_indicators", initialIndicators);
   const [documents, setDocuments] = useLocalStorage<Document[]>("joia_documents", []);
-  const [playbooks, setPlaybooks] = useLocalStorage<Playbook[]>("joia_playbooks", initialPlaybooks);
+  const [playbooks, setPlaybooks] = useState<Playbook[]>(initialPlaybooks);
   const [employees, setEmployees] = useLocalStorage<Employee[]>("joia_employees", initialEmployees);
   const [leads, setLeads] = useLocalStorage<Lead[]>("joia_leads", initialLeads);
   const [templates, setTemplates] = useState<DiagnosticTemplate[]>([]);
@@ -1218,6 +1304,30 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
     fetchClients();
   }, [toast]);
+
+  useEffect(() => {
+    if (!user) {
+      setPlaybooks(initialPlaybooks);
+      return;
+    }
+
+    const fetchPlaybooks = async () => {
+      try {
+        const data = await listPlaybooks();
+        setPlaybooks(data.map(mapSupabasePlaybook));
+      } catch (error) {
+        const message = (error as Error).message || "Não foi possível carregar os playbooks";
+        toast({
+          title: "Erro ao carregar playbooks",
+          description: message,
+          variant: "destructive",
+        });
+        setPlaybooks(initialPlaybooks);
+      }
+    };
+
+    fetchPlaybooks();
+  }, [toast, user]);
 
   // Normaliza projetos legados para novos campos de progresso
   useEffect(() => {
@@ -1751,11 +1861,73 @@ export function DataProvider({ children }: { children: ReactNode }) {
     deleteDocument: (id) => setDocuments((prev) => prev.filter((d) => d.id !== id)),
 
     playbooks,
-    addPlaybook: (playbook) =>
-      setPlaybooks((prev) => [...prev, { ...playbook, id: generateId(), createdAt: getDate() }]),
-    updatePlaybook: (id, playbook) =>
-      setPlaybooks((prev) => prev.map((p) => (p.id === id ? { ...p, ...playbook } : p))),
-    deletePlaybook: (id) => setPlaybooks((prev) => prev.filter((p) => p.id !== id)),
+    addPlaybook: (playbook) => {
+      if (!user) {
+        setPlaybooks((prev) => [...prev, { ...playbook, id: generateId(), createdAt: getDate() }]);
+        return;
+      }
+
+      const payload = buildSupabasePlaybookInsert(playbook);
+
+      void (async () => {
+        try {
+          const created = await createPlaybook(payload);
+          setPlaybooks((prev) => [...prev, mapSupabasePlaybook(created)]);
+        } catch (error) {
+          const message = (error as Error).message || "Erro ao salvar playbook";
+          toast({
+            title: "Não foi possível criar o playbook",
+            description: message,
+            variant: "destructive",
+          });
+        }
+      })();
+    },
+    updatePlaybook: (id, playbook) => {
+      if (!user) {
+        setPlaybooks((prev) => prev.map((p) => (p.id === id ? { ...p, ...playbook } : p)));
+        return;
+      }
+
+      const existing = playbooks.find((item) => item.id === id);
+      if (!existing) return;
+      const merged = { ...existing, ...playbook };
+      const payload = buildSupabasePlaybookUpdate(merged);
+
+      void (async () => {
+        try {
+          const updated = await updatePlaybookRecord(id, payload);
+          setPlaybooks((prev) => prev.map((item) => (item.id === id ? mapSupabasePlaybook(updated) : item)));
+        } catch (error) {
+          const message = (error as Error).message || "Erro ao atualizar playbook";
+          toast({
+            title: "Não foi possível atualizar o playbook",
+            description: message,
+            variant: "destructive",
+          });
+        }
+      })();
+    },
+    deletePlaybook: (id) => {
+      if (!user) {
+        setPlaybooks((prev) => prev.filter((p) => p.id !== id));
+        return;
+      }
+
+      void (async () => {
+        try {
+          await deletePlaybookRecord(id);
+          setPlaybooks((prev) => prev.filter((p) => p.id !== id));
+        } catch (error) {
+          const message = (error as Error).message || "Erro ao remover playbook";
+          toast({
+            title: "Não foi possível remover o playbook",
+            description: message,
+            variant: "destructive",
+          });
+        }
+      })();
+    },
 
     employees,
     addEmployee: (employee) =>
