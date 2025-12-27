@@ -70,6 +70,7 @@ import {
 import {
   createExpense as createSupabaseExpense,
   deleteExpense as deleteSupabaseExpense,
+  isMissingExpensesTableMessage,
   listExpenses,
   updateExpense as updateSupabaseExpense,
   type ExpenseRow,
@@ -1408,6 +1409,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
         setExpenses(data.map(mapSupabaseExpense));
       } catch (error) {
         const message = (error as Error).message || "Não foi possível carregar as despesas";
+        if (isMissingExpensesTableMessage(message)) {
+          setExpenses([]);
+          return;
+        }
         toast({
           title: "Erro ao carregar despesas",
           description: message,
