@@ -1,12 +1,14 @@
 import { useState } from "react";
-import { Plus, List, Kanban, Trash2 } from "lucide-react";
+import { Plus, List, Kanban } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useData } from "@/contexts/DataContext";
 import { TaskDialog } from "@/components/dialogs/TaskDialog";
+import { TaskCard } from "@/components/plano-acao";
 import { Task } from "@/types";
+import { toast } from "sonner";
 
 const columns = [
   { id: "backlog", title: "Backlog" },
@@ -15,55 +17,6 @@ const columns = [
   { id: "validation", title: "Em Validação" },
   { id: "done", title: "Concluídas" },
 ];
-
-const priorityColors = { low: "bg-blue-100 text-blue-700", medium: "bg-yellow-100 text-yellow-700", high: "bg-red-100 text-red-700" };
-const priorityLabels = { low: "Baixa", medium: "Média", high: "Alta" };
-
-interface TaskCardProps {
-  task: Task;
-  onClick: () => void;
-  onDelete: () => void;
-  onDragStart: () => void;
-  onDragEnd: () => void;
-}
-
-function TaskCard({ task, onClick, onDelete, onDragStart, onDragEnd }: TaskCardProps) {
-  return (
-    <Card
-      draggable
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
-      className="cursor-pointer hover:shadow-md transition-shadow"
-      onClick={onClick}
-    >
-      <CardContent className="p-4 space-y-3">
-        <div className="flex items-start justify-between gap-2">
-          <h4 className="font-medium text-sm">{task.title}</h4>
-          <div className="flex items-center gap-1">
-            <Badge className={priorityColors[task.priority]} variant="outline">{priorityLabels[task.priority]}</Badge>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              aria-label="Excluir tarefa"
-              onClick={(event) => {
-                event.stopPropagation();
-                onDelete();
-              }}
-              onPointerDown={(event) => event.stopPropagation()}
-            >
-              <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
-            </Button>
-          </div>
-        </div>
-        <div className="text-xs text-muted-foreground"><p>{task.projectName}</p><p>{task.clientName}</p></div>
-        <div className="flex items-center justify-between text-xs"><span className="text-muted-foreground">{task.responsible}</span><span className="font-medium text-accent">{task.impact}</span></div>
-        <div className="flex items-center justify-between text-xs"><Badge variant="outline">{task.type}</Badge><span className="text-muted-foreground">{task.dueDate}</span></div>
-      </CardContent>
-    </Card>
-  );
-}
 
 export default function PlanoAcao() {
   const { tasks, updateTask, deleteTask } = useData();
@@ -78,51 +31,119 @@ export default function PlanoAcao() {
 
     const task = tasks.find((t) => t.id === draggingTaskId);
     if (task && task.status !== columnId) {
-      updateTask(task.id, { status: columnId as "backlog" | "next" | "in_progress" | "validation" | "done" });
+      updateTask(task.id, {
+        status: columnId as Task["status"],
+      });
+      toast.success(`Tarefa movida para ${columns.find((c) => c.id === columnId)?.title}`);
     }
 
     setDraggingTaskId(null);
     setActiveColumn(null);
   };
 
-  const tasksByColumn = columns.reduce((acc, col) => {
-    acc[col.id] = tasks.filter(t => t.status === col.id);
-    return acc;
-  }, {} as Record<string, Task[]>);
+  const handleCompleteTask = (task: Task) => {
+    updateTask(task.id, { status: "done" });
+    toast.success("Tarefa concluída!", {
+      description: task.title,
+    });
+  };
+
+  const handleDeleteTask = (task: Task) => {
+    deleteTask(task.id);
+    toast.success("Tarefa excluída");
+  };
+
+  const tasksByColumn = columns.reduce(
+    (acc, col) => {
+      acc[col.id] = tasks.filter((t) => t.status === col.id);
+      return acc;
+    },
+    {} as Record<string, Task[]>
+  );
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div><h1 className="text-2xl font-semibold text-foreground">Plano de Ação</h1><p className="text-muted-foreground">Gerencie tarefas e ações dos projetos</p></div>
+        <div>
+          <h1 className="text-2xl font-semibold text-foreground">
+            Plano de Ação
+          </h1>
+          <p className="text-muted-foreground">
+            Gerencie tarefas e ações dos projetos
+          </p>
+        </div>
         <div className="flex items-center gap-2">
-          <Tabs value={view} onValueChange={(v) => setView(v as "kanban" | "list")}><TabsList><TabsTrigger value="kanban"><Kanban className="h-4 w-4 mr-2" />Kanban</TabsTrigger><TabsTrigger value="list"><List className="h-4 w-4 mr-2" />5W2H</TabsTrigger></TabsList></Tabs>
-          <Button className="bg-accent text-accent-foreground hover:bg-accent/90" onClick={() => { setEditingTask(null); setDialogOpen(true); }}><Plus className="h-4 w-4 mr-2" />Nova Tarefa</Button>
+          <Tabs
+            value={view}
+            onValueChange={(v) => setView(v as "kanban" | "list")}
+          >
+            <TabsList>
+              <TabsTrigger value="kanban">
+                <Kanban className="h-4 w-4 mr-2" />
+                Kanban
+              </TabsTrigger>
+              <TabsTrigger value="list">
+                <List className="h-4 w-4 mr-2" />
+                5W2H
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <Button
+            className="bg-accent text-accent-foreground hover:bg-accent/90"
+            onClick={() => {
+              setEditingTask(null);
+              setDialogOpen(true);
+            }}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Nova Tarefa
+          </Button>
         </div>
       </div>
+
       {view === "kanban" ? (
         <div className="flex gap-4 overflow-x-auto pb-4">
           {columns.map((column) => (
-            <div key={column.id} className="flex-shrink-0 w-72">
+            <div key={column.id} className="flex-shrink-0 w-80">
               <Card
-                className={`bg-muted/30 transition-colors ${activeColumn === column.id ? "ring-2 ring-accent/60 bg-accent/5" : ""}`}
+                className={`bg-muted/30 transition-colors ${
+                  activeColumn === column.id
+                    ? "ring-2 ring-accent/60 bg-accent/5"
+                    : ""
+                }`}
                 onDragOver={(event) => {
                   event.preventDefault();
                   setActiveColumn(column.id);
                 }}
-                onDragLeave={() => setActiveColumn((current) => (current === column.id ? null : current))}
+                onDragLeave={() =>
+                  setActiveColumn((current) =>
+                    current === column.id ? null : current
+                  )
+                }
                 onDrop={(event) => {
                   event.preventDefault();
                   handleDrop(column.id);
                 }}
               >
-                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium flex items-center justify-between">{column.title}<Badge variant="outline">{tasksByColumn[column.id]?.length || 0}</Badge></CardTitle></CardHeader>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium flex items-center justify-between">
+                    {column.title}
+                    <Badge variant="outline">
+                      {tasksByColumn[column.id]?.length || 0}
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
                 <CardContent className="space-y-3 min-h-[200px]">
                   {tasksByColumn[column.id]?.map((task) => (
                     <TaskCard
                       key={task.id}
                       task={task}
-                      onClick={() => { setEditingTask(task); setDialogOpen(true); }}
-                      onDelete={() => deleteTask(task.id)}
+                      onClick={() => {
+                        setEditingTask(task);
+                        setDialogOpen(true);
+                      }}
+                      onDelete={() => handleDeleteTask(task)}
+                      onComplete={() => handleCompleteTask(task)}
                       onDragStart={() => setDraggingTaskId(task.id)}
                       onDragEnd={() => {
                         setDraggingTaskId(null);
@@ -136,9 +157,21 @@ export default function PlanoAcao() {
           ))}
         </div>
       ) : (
-        <Card><CardContent className="p-6"><p className="text-muted-foreground text-center py-8">Visualização 5W2H - Clique em Nova Tarefa para adicionar com campos 5W2H</p></CardContent></Card>
+        <Card>
+          <CardContent className="p-6">
+            <p className="text-muted-foreground text-center py-8">
+              Visualização 5W2H - Clique em Nova Tarefa para adicionar com
+              campos 5W2H
+            </p>
+          </CardContent>
+        </Card>
       )}
-      <TaskDialog open={dialogOpen} onOpenChange={setDialogOpen} task={editingTask} />
+
+      <TaskDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        task={editingTask}
+      />
     </div>
   );
 }
