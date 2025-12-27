@@ -24,11 +24,13 @@ const extractMissingColumn = (error: PostgrestError | null): string | null => {
 const legacyDiagnosticFields = [
   "action_plan",
   "report_payload",
+  "progress",
   "answered_questions",
   "total_questions",
   "auto_generate_opportunities",
   "client_name",
   "project_name",
+  "template_id",
   "template_name",
   "responsible_name",
   "responsible_id",
