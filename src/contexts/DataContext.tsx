@@ -1218,8 +1218,10 @@ const mapSupabaseDiagnosticToLegacy = (diagnostic: DiagnosticRow): Diagnostic =>
 
 const buildSupabaseDiagnosticInsert = (diagnostic: Diagnostic): SupabaseDiagnosticInsert => {
   const timestamp = new Date().toISOString();
+  const id = toSupabaseUuid(diagnostic.id) || undefined;
 
   return {
+    id,
     name: diagnostic.name,
     client_id: toSupabaseUuid(diagnostic.clientId),
     client_name: diagnostic.clientName || null,
