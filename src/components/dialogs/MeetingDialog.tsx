@@ -99,10 +99,7 @@ export function MeetingDialog({ open, onOpenChange, meeting }: MeetingDialogProp
       toast.error("Título é obrigatório");
       return;
     }
-    if (!formData.projectId) {
-      toast.error("Selecione um projeto");
-      return;
-    }
+    // Project is optional - meetings can be internal
     if (!formData.date || !formData.time) {
       toast.error("Data e hora são obrigatórios");
       return;
@@ -153,12 +150,19 @@ export function MeetingDialog({ open, onOpenChange, meeting }: MeetingDialogProp
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="project">Projeto *</Label>
-              <Select value={formData.projectId} onValueChange={handleProjectChange}>
+              <Label htmlFor="project">Projeto</Label>
+              <Select value={formData.projectId || "internal"} onValueChange={(value) => {
+                if (value === "internal") {
+                  setFormData({ ...formData, projectId: "", projectName: "", clientId: "", clientName: "" });
+                } else {
+                  handleProjectChange(value);
+                }
+              }}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Selecione o projeto" />
+                  <SelectValue placeholder="Selecione o projeto (opcional)" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="internal">Reunião Interna</SelectItem>
                   {projects.map((project) => (
                     <SelectItem key={project.id} value={project.id}>
                       {project.name}
