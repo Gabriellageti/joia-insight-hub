@@ -347,8 +347,46 @@ export type Database = {
           },
         ]
       }
+      indicator_history: {
+        Row: {
+          created_at: string
+          id: string
+          indicator_id: string
+          notes: string | null
+          recorded_at: string
+          value: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          indicator_id: string
+          notes?: string | null
+          recorded_at?: string
+          value: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          indicator_id?: string
+          notes?: string | null
+          recorded_at?: string
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "indicator_history_indicator_id_fkey"
+            columns: ["indicator_id"]
+            isOneToOne: false
+            referencedRelation: "indicators"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       indicators: {
         Row: {
+          alert_enabled: boolean | null
+          alert_threshold: number | null
+          alert_type: string | null
           category: string | null
           client_id: string | null
           created_at: string
@@ -364,6 +402,9 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          alert_enabled?: boolean | null
+          alert_threshold?: number | null
+          alert_type?: string | null
           category?: string | null
           client_id?: string | null
           created_at?: string
@@ -379,6 +420,9 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          alert_enabled?: boolean | null
+          alert_threshold?: number | null
+          alert_type?: string | null
           category?: string | null
           client_id?: string | null
           created_at?: string

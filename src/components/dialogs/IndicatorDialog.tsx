@@ -18,12 +18,12 @@ export function IndicatorDialog({ open, onOpenChange, indicator }: IndicatorDial
   const { addIndicator, updateIndicator, projects } = useData();
   const [formData, setFormData] = useState({
     name: "",
-    category: "Financeiro" as Indicator["category"],
+    category: "Financeiro",
     formula: "",
-    unit: "R$" as "R$" | "%" | "quantidade",
-    frequency: "mensal" as "diário" | "semanal" | "mensal",
+    unit: "R$",
+    frequency: "Mensal",
     source: "manual" as "manual" | "planilha" | "integração",
-    target: undefined as number | undefined,
+    targetValue: undefined as number | undefined,
     projectId: "",
     projectName: "",
     responsible: "",
@@ -34,16 +34,16 @@ export function IndicatorDialog({ open, onOpenChange, indicator }: IndicatorDial
     if (indicator) {
       setFormData({
         name: indicator.name,
-        category: indicator.category,
+        category: indicator.category || "Financeiro",
         formula: indicator.formula || "",
-        unit: indicator.unit,
-        frequency: indicator.frequency,
-        source: indicator.source,
-        target: indicator.target,
+        unit: indicator.unit || "R$",
+        frequency: indicator.frequency || "Mensal",
+        source: indicator.source || "manual",
+        targetValue: indicator.targetValue ?? undefined,
         projectId: indicator.projectId || "",
         projectName: indicator.projectName || "",
-        responsible: indicator.responsible,
-        values: indicator.values,
+        responsible: indicator.responsible || "",
+        values: indicator.values || [],
       });
     } else {
       setFormData({
@@ -51,9 +51,9 @@ export function IndicatorDialog({ open, onOpenChange, indicator }: IndicatorDial
         category: "Financeiro",
         formula: "",
         unit: "R$",
-        frequency: "mensal",
+        frequency: "Mensal",
         source: "manual",
-        target: undefined,
+        targetValue: undefined,
         projectId: "",
         projectName: "",
         responsible: "",
@@ -108,7 +108,7 @@ export function IndicatorDialog({ open, onOpenChange, indicator }: IndicatorDial
             </div>
             <div className="space-y-2">
               <Label htmlFor="category">Categoria</Label>
-              <Select value={formData.category} onValueChange={(value: Indicator["category"]) => setFormData({ ...formData, category: value })}>
+              <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -117,34 +117,37 @@ export function IndicatorDialog({ open, onOpenChange, indicator }: IndicatorDial
                   <SelectItem value="Vendas">Vendas</SelectItem>
                   <SelectItem value="Financeiro">Financeiro</SelectItem>
                   <SelectItem value="Estoque">Estoque</SelectItem>
-                  <SelectItem value="Processo">Processo</SelectItem>
-                  <SelectItem value="Pessoas">Pessoas</SelectItem>
+                  <SelectItem value="Operacional">Operacional</SelectItem>
+                  <SelectItem value="RH">RH</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="unit">Unidade</Label>
-              <Select value={formData.unit} onValueChange={(value: "R$" | "%" | "quantidade") => setFormData({ ...formData, unit: value })}>
+              <Select value={formData.unit} onValueChange={(value) => setFormData({ ...formData, unit: value })}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="R$">R$</SelectItem>
                   <SelectItem value="%">%</SelectItem>
-                  <SelectItem value="quantidade">Quantidade</SelectItem>
+                  <SelectItem value="un">Unidades</SelectItem>
+                  <SelectItem value="dias">Dias</SelectItem>
+                  <SelectItem value="x">x (Vezes)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="frequency">Frequência</Label>
-              <Select value={formData.frequency} onValueChange={(value: "diário" | "semanal" | "mensal") => setFormData({ ...formData, frequency: value })}>
+              <Select value={formData.frequency} onValueChange={(value) => setFormData({ ...formData, frequency: value })}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="diário">Diário</SelectItem>
-                  <SelectItem value="semanal">Semanal</SelectItem>
-                  <SelectItem value="mensal">Mensal</SelectItem>
+                  <SelectItem value="Diário">Diário</SelectItem>
+                  <SelectItem value="Semanal">Semanal</SelectItem>
+                  <SelectItem value="Mensal">Mensal</SelectItem>
+                  <SelectItem value="Trimestral">Trimestral</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -166,8 +169,8 @@ export function IndicatorDialog({ open, onOpenChange, indicator }: IndicatorDial
               <Input
                 id="target"
                 type="number"
-                value={formData.target || ""}
-                onChange={(e) => setFormData({ ...formData, target: e.target.value ? Number(e.target.value) : undefined })}
+                value={formData.targetValue || ""}
+                onChange={(e) => setFormData({ ...formData, targetValue: e.target.value ? Number(e.target.value) : undefined })}
                 placeholder="Valor meta"
               />
             </div>
