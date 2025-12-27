@@ -49,8 +49,10 @@ import {
   fetchTemplates,
   getDefaultDiagnosticName,
   getDiagnosticsSeed,
+  isMissingTemplatesTableMessage,
   updateTemplateRecord,
 } from "@/lib/diagnostics";
+import { syncTemplatesWithSeed } from "./templateSync";
 import {
   createClient as createSupabaseClient,
   deleteClient as deleteSupabaseClient,
@@ -1175,6 +1177,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [templates, setTemplates] = useState<DiagnosticTemplate[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
   const [templatesError, setTemplatesError] = useState<string | null>(null);
+  const [removedSeedTemplateIds, setRemovedSeedTemplateIds] = useLocalStorage<string[]>(
+    "joia_removed_seed_templates",
+    []
+  );
   const [diagnostics, setDiagnostics] = useLocalStorage<Diagnostic[]>("joia_diagnostics", initialDiagnostics);
   const [contentItems, setContentItems] = useLocalStorage<ContentItem[]>("joia_content", initialContentItems);
   const [contracts, setContracts] = useLocalStorage<Contract[]>("joia_contracts", []);
@@ -1276,15 +1282,19 @@ export function DataProvider({ children }: { children: ReactNode }) {
     setTemplatesError(null);
 
     try {
-      const data = await fetchTemplates();
-      setTemplates(data.map(normalizeTemplate));
+      const { templates: data, fromSeed } = await fetchTemplates();
+      const resolvedTemplates =
+        fromSeed && removedSeedTemplateIds.length > 0
+          ? syncTemplatesWithSeed([], data, new Set(removedSeedTemplateIds))
+          : data;
+      setTemplates(resolvedTemplates.map(normalizeTemplate));
     } catch (error) {
       console.error(error);
       setTemplatesError((error as Error).message || "Não foi possível carregar os templates");
     } finally {
       setTemplatesLoading(false);
     }
-  }, []);
+  }, [removedSeedTemplateIds]);
 
   useEffect(() => {
     refreshTemplates();
@@ -1805,6 +1815,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
         setTemplates((prev) => prev.filter((t) => t.id !== id));
       } catch (error) {
         const message = (error as Error).message || "Erro ao remover template";
+        if (isMissingTemplatesTableMessage(message)) {
+          setRemovedSeedTemplateIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+          setTemplates((prev) => prev.filter((t) => t.id !== id));
+          return;
+        }
         setTemplatesError(message);
         throw error;
       } finally {
