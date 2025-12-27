@@ -19,6 +19,8 @@ import { AlertCircle, ArrowLeft, Brain, CheckCircle2, RefreshCw, Sparkles } from
 import { toast } from "sonner";
 import { AnswerValue, calculateDiagnosticScore, normalizeAnswerForScore } from "@/lib/diagnostic-evaluation";
 
+const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
+
 const statusLabels: Record<DiagnosticTemplate["status"], string> = {
   draft: "Rascunho",
   published: "Publicado",
