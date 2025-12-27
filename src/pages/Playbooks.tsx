@@ -1,5 +1,15 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Search, BookOpen, FileText, CheckSquare, Plus, UploadCloud } from "lucide-react";
+import {
+  Search,
+  BookOpen,
+  FileText,
+  CheckSquare,
+  Plus,
+  UploadCloud,
+  MoreHorizontal,
+  Pencil,
+  Trash2,
+} from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -7,22 +17,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { useToast } from "@/components/ui/use-toast";
 import { useData } from "@/contexts/DataContext";
-import { Playbook } from "@/types";
-
-interface Template {
-  id: string;
-  name: string;
-  type: string;
-  downloads: number;
-}
-
-const templates: Template[] = [
-  { id: "1", name: "Template de Ata de Reunião", type: "docx", downloads: 45 },
-  { id: "2", name: "Template de Relatório Executivo", type: "pptx", downloads: 38 },
-  { id: "3", name: "Template de Plano de Ação 5W2H", type: "xlsx", downloads: 52 },
-  { id: "4", name: "Checklist de Diagnóstico Compras", type: "xlsx", downloads: 29 },
-];
+import { DiagnosticTemplate, Playbook } from "@/types";
 
 const areaColors: Record<string, string> = {
   "Diagnóstico": "bg-blue-100 text-blue-700",
@@ -32,11 +30,22 @@ const areaColors: Record<string, string> = {
 };
 
 export default function Playbooks() {
-  const { playbooks, addPlaybook } = useData();
+  const { toast } = useToast();
+  const { playbooks, addPlaybook, templates, templatesLoading, templatesError, addTemplate, updateTemplate, deleteTemplate } = useData();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(playbooks[0]?.id ?? null);
   const [createOpen, setCreateOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [templateCreateOpen, setTemplateCreateOpen] = useState(false);
+  const [templateEditId, setTemplateEditId] = useState<string | null>(null);
+  const [templateDeleteId, setTemplateDeleteId] = useState<string | null>(null);
+  const [templateForm, setTemplateForm] = useState({
+    name: "",
+    description: "",
+    tags: "",
+    status: "draft" as DiagnosticTemplate["status"],
+    estimatedTimeMinutes: "",
+  });
 
   const [createForm, setCreateForm] = useState({
     title: "",
@@ -112,6 +121,21 @@ export default function Playbooks() {
     });
   };
 
+  const resetTemplateForm = () => {
+    setTemplateForm({
+      name: "",
+      description: "",
+      tags: "",
+      status: "draft",
+      estimatedTimeMinutes: "",
+    });
+  };
+
+  const formatTemplateMinutes = (value?: number | null) => {
+    if (!value || value <= 0) return "Tempo não informado";
+    return `${value} min`;
+  };
+
   const resetUploadForm = () => {
     setUploadForm({
       title: "",
@@ -171,6 +195,97 @@ export default function Playbooks() {
   const handleOpenUpload = () => {
     resetUploadForm();
     setUploadOpen(true);
+  };
+
+  const handleOpenTemplateCreate = () => {
+    resetTemplateForm();
+    setTemplateCreateOpen(true);
+  };
+
+  const handleOpenTemplateEdit = (template: DiagnosticTemplate) => {
+    setTemplateForm({
+      name: template.name,
+      description: template.description || "",
+      tags: template.tags.join(", "),
+      status: template.status,
+      estimatedTimeMinutes: template.estimatedTimeMinutes ? String(template.estimatedTimeMinutes) : "",
+    });
+    setTemplateEditId(template.id);
+  };
+
+  const handleTemplateSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!templateForm.name) return;
+    const payload = {
+      name: templateForm.name,
+      description: templateForm.description,
+      tags: parseList(templateForm.tags),
+      status: templateForm.status,
+      estimatedTimeMinutes: templateForm.estimatedTimeMinutes
+        ? Number(templateForm.estimatedTimeMinutes)
+        : null,
+    };
+
+    try {
+      await addTemplate({
+        ...payload,
+        sections: [],
+      });
+      setTemplateCreateOpen(false);
+      resetTemplateForm();
+    } catch (error) {
+      toast({
+        title: "Erro ao criar template",
+        description: (error as Error).message || "Não foi possível criar o template.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleTemplateEditSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!templateEditId) return;
+    const template = templates.find((item) => item.id === templateEditId);
+    if (!template) return;
+
+    try {
+      await updateTemplate(templateEditId, {
+        name: templateForm.name,
+        description: templateForm.description,
+        tags: parseList(templateForm.tags),
+        status: templateForm.status,
+        estimatedTimeMinutes: templateForm.estimatedTimeMinutes
+          ? Number(templateForm.estimatedTimeMinutes)
+          : null,
+        sections: template.sections,
+        questionCount: template.questionCount,
+        sectionsCount: template.sectionsCount,
+        version: template.version,
+        revision: template.revision,
+        lastPublishedAt: template.lastPublishedAt,
+      });
+      setTemplateEditId(null);
+    } catch (error) {
+      toast({
+        title: "Erro ao atualizar template",
+        description: (error as Error).message || "Não foi possível atualizar o template.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleTemplateDelete = async () => {
+    if (!templateDeleteId) return;
+    try {
+      await deleteTemplate(templateDeleteId);
+      setTemplateDeleteId(null);
+    } catch (error) {
+      toast({
+        title: "Erro ao remover template",
+        description: (error as Error).message || "Não foi possível remover o template.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -360,17 +475,88 @@ export default function Playbooks() {
         </TabsContent>
 
         <TabsContent value="templates" className="space-y-4 mt-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {templates.map((template) => (
-              <Card key={template.id} className="hover:shadow-md transition-shadow cursor-pointer">
-                <CardContent className="p-4 text-center">
-                  <FileText className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
-                  <h4 className="font-medium text-sm mb-1">{template.name}</h4>
-                  <p className="text-xs text-muted-foreground">{template.downloads} downloads</p>
-                </CardContent>
-              </Card>
-            ))}
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="text-xs text-muted-foreground">
+              {templatesLoading ? "Carregando templates..." : `${templates.length} templates encontrados`}
+            </div>
+            <Button className="bg-accent text-accent-foreground hover:bg-accent/90" onClick={handleOpenTemplateCreate}>
+              <Plus className="h-4 w-4 mr-2" />
+              Novo template
+            </Button>
           </div>
+
+          {templatesError && (
+            <Card>
+              <CardContent className="p-4 text-sm text-destructive">
+                {templatesError}
+              </CardContent>
+            </Card>
+          )}
+
+          {templates.length === 0 && !templatesLoading ? (
+            <Card>
+              <CardContent className="p-6 text-center text-muted-foreground">
+                Nenhum template cadastrado ainda. Crie o primeiro template para começar.
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {templates.map((template) => (
+                <Card key={template.id} className="hover:shadow-md transition-shadow">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <CardTitle className="text-base">{template.name}</CardTitle>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {template.description || "Sem descrição informada"}
+                        </p>
+                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleOpenTemplateEdit(template)}>
+                            <Pencil className="h-4 w-4 mr-2" />
+                            Editar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => setTemplateDeleteId(template.id)}
+                            className="text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Excluir
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      <Badge variant="outline">{template.status}</Badge>
+                      <span>•</span>
+                      <span>{template.questionCount ?? 0} perguntas</span>
+                      <span>•</span>
+                      <span>{formatTemplateMinutes(template.estimatedTimeMinutes)}</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {template.tags.length === 0 ? (
+                        <span className="text-xs text-muted-foreground">Sem tags</span>
+                      ) : (
+                        template.tags.map((tag) => (
+                          <Badge key={`${template.id}-${tag}`} variant="secondary">
+                            {tag}
+                          </Badge>
+                        ))
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="checklists" className="mt-4">
@@ -557,10 +743,172 @@ export default function Playbooks() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={templateCreateOpen} onOpenChange={setTemplateCreateOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Novo template</DialogTitle>
+          </DialogHeader>
+          <form className="space-y-4" onSubmit={handleTemplateSubmit}>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Nome do template</label>
+              <Input
+                value={templateForm.name}
+                onChange={(event) => setTemplateForm((prev) => ({ ...prev, name: event.target.value }))}
+                placeholder="Ex: Diagnóstico Financeiro"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Descrição</label>
+              <Textarea
+                value={templateForm.description}
+                onChange={(event) => setTemplateForm((prev) => ({ ...prev, description: event.target.value }))}
+                placeholder="Objetivo e escopo do template"
+              />
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Status</label>
+                <Input
+                  value={templateForm.status}
+                  onChange={(event) =>
+                    setTemplateForm((prev) => ({
+                      ...prev,
+                      status: event.target.value as DiagnosticTemplate["status"],
+                    }))
+                  }
+                  placeholder="draft"
+                  list="template-status-options"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Tempo estimado (min)</label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={templateForm.estimatedTimeMinutes}
+                  onChange={(event) =>
+                    setTemplateForm((prev) => ({ ...prev, estimatedTimeMinutes: event.target.value }))
+                  }
+                  placeholder="60"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Tags (separadas por vírgula)</label>
+              <Input
+                value={templateForm.tags}
+                onChange={(event) => setTemplateForm((prev) => ({ ...prev, tags: event.target.value }))}
+                placeholder="diagnóstico, financeiro"
+              />
+            </div>
+            <DialogFooter className="gap-2">
+              <Button type="button" variant="outline" onClick={() => setTemplateCreateOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={templatesLoading}>
+                Salvar template
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(templateEditId)} onOpenChange={(open) => !open && setTemplateEditId(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Editar template</DialogTitle>
+          </DialogHeader>
+          <form className="space-y-4" onSubmit={handleTemplateEditSubmit}>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Nome do template</label>
+              <Input
+                value={templateForm.name}
+                onChange={(event) => setTemplateForm((prev) => ({ ...prev, name: event.target.value }))}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Descrição</label>
+              <Textarea
+                value={templateForm.description}
+                onChange={(event) => setTemplateForm((prev) => ({ ...prev, description: event.target.value }))}
+              />
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Status</label>
+                <Input
+                  value={templateForm.status}
+                  onChange={(event) =>
+                    setTemplateForm((prev) => ({
+                      ...prev,
+                      status: event.target.value as DiagnosticTemplate["status"],
+                    }))
+                  }
+                  list="template-status-options"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Tempo estimado (min)</label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={templateForm.estimatedTimeMinutes}
+                  onChange={(event) =>
+                    setTemplateForm((prev) => ({ ...prev, estimatedTimeMinutes: event.target.value }))
+                  }
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Tags (separadas por vírgula)</label>
+              <Input
+                value={templateForm.tags}
+                onChange={(event) => setTemplateForm((prev) => ({ ...prev, tags: event.target.value }))}
+              />
+            </div>
+            <DialogFooter className="gap-2">
+              <Button type="button" variant="outline" onClick={() => setTemplateEditId(null)}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={templatesLoading}>
+                Salvar alterações
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(templateDeleteId)} onOpenChange={(open) => !open && setTemplateDeleteId(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Excluir template</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Tem certeza que deseja excluir este template? Essa ação não poderá ser desfeita.
+          </p>
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" onClick={() => setTemplateDeleteId(null)}>
+              Cancelar
+            </Button>
+            <Button type="button" variant="destructive" onClick={handleTemplateDelete} disabled={templatesLoading}>
+              Excluir template
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <datalist id="playbook-area-options">
         {areaOptions.map((area) => (
           <option key={area} value={area} />
         ))}
+      </datalist>
+
+      <datalist id="template-status-options">
+        <option value="draft" />
+        <option value="published" />
+        <option value="archived" />
       </datalist>
     </div>
   );
