@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { useData } from "@/contexts/DataContext";
 import { Task } from "@/types";
 import { toast } from "sonner";
+import { TaskComments } from "@/components/plano-acao/TaskComments";
 
 interface TaskDialogProps {
   open: boolean;
@@ -278,6 +279,12 @@ export function TaskDialog({ open, onOpenChange, task }: TaskDialogProps) {
                 </div>
               </div>
             </div>
+
+            {task && (
+              <div className="col-span-2 border-t pt-4 mt-2">
+                <TaskComments taskId={task.id} />
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
