@@ -1,4 +1,13 @@
-import { DollarSign, TrendingUp, TrendingDown, CreditCard, Receipt } from "lucide-react";
+import { FormEvent, useMemo, useState } from "react";
+import {
+  CreditCard,
+  DollarSign,
+  Pencil,
+  Receipt,
+  Trash2,
+  TrendingDown,
+  TrendingUp,
+} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -10,6 +19,28 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { useData } from "@/contexts/DataContext";
 
 interface Receivable {
   id: string;
@@ -33,11 +64,126 @@ const statusConfig = {
   paid: { label: "Pago", color: "bg-green-100 text-green-700" },
 };
 
+const expenseCategories = [
+  "Folha de pagamento",
+  "Impostos",
+  "Infraestrutura",
+  "Ferramentas",
+  "Operações",
+  "Marketing",
+  "Viagens",
+  "Outros",
+];
+
 const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 };
 
+const formatDate = (value?: string) => {
+  if (!value) return "-";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString("pt-BR");
+};
+
+const formatDateInputValue = (value?: string) => {
+  if (!value) return "";
+  if (value.includes("-")) return value;
+  const [day, month, year] = value.split("/");
+  if (!day || !month || !year) return value;
+  return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+};
+
+const getTodayIso = () => new Date().toISOString().split("T")[0];
+
 export default function Financeiro() {
+  const { expenses, projects, addExpense, updateExpense, deleteExpense } = useData();
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [formState, setFormState] = useState({
+    description: "",
+    category: "",
+    projectId: "",
+    value: "",
+    date: getTodayIso(),
+    receipt: "",
+  });
+
+  const totalExpenses = useMemo(
+    () => expenses.reduce((total, expense) => total + (Number(expense.value) || 0), 0),
+    [expenses]
+  );
+
+  const sortedExpenses = useMemo(
+    () =>
+      [...expenses].sort((a, b) => {
+        const timeA = a.date ? new Date(a.date).getTime() : 0;
+        const timeB = b.date ? new Date(b.date).getTime() : 0;
+        return timeB - timeA;
+      }),
+    [expenses]
+  );
+
+  const resetForm = () => {
+    setFormState({
+      description: "",
+      category: "",
+      projectId: "",
+      value: "",
+      date: getTodayIso(),
+      receipt: "",
+    });
+    setEditingId(null);
+  };
+
+  const resolveProjectName = (projectId?: string) => {
+    if (!projectId) return undefined;
+    return projects.find((project) => project.id === projectId)?.name;
+  };
+
+  const handleEdit = (expense: typeof expenses[number]) => {
+    setEditingId(expense.id);
+    setFormState({
+      description: expense.description,
+      category: expense.category,
+      projectId: expense.projectId || "",
+      value: String(expense.value ?? ""),
+      date: formatDateInputValue(expense.date),
+      receipt: expense.receipt || "",
+    });
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!formState.description || !formState.category || !formState.value || !formState.date) {
+      return;
+    }
+
+    const payload = {
+      description: formState.description.trim(),
+      category: formState.category,
+      projectId: formState.projectId || undefined,
+      projectName: resolveProjectName(formState.projectId || undefined),
+      value: Number(formState.value),
+      date: formState.date,
+      receipt: formState.receipt.trim() || undefined,
+    };
+
+    if (editingId) {
+      await updateExpense(editingId, payload);
+    } else {
+      await addExpense(payload);
+    }
+
+    resetForm();
+  };
+
+  const handleDelete = async (id: string) => {
+    await deleteExpense(id);
+  };
+
+  const isFormValid = Boolean(formState.description && formState.category && formState.value && formState.date);
+
   return (
     <div className="space-y-6">
       <div>
@@ -84,7 +230,7 @@ export default function Financeiro() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Despesas</p>
-                <p className="text-2xl font-bold">R$ 18.200</p>
+                <p className="text-2xl font-bold">{formatCurrency(totalExpenses)}</p>
                 <p className="text-xs text-red-600 flex items-center gap-1 mt-1">
                   <TrendingDown className="h-3 w-3" />
                   -5% vs mês anterior
@@ -157,10 +303,215 @@ export default function Financeiro() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="expenses" className="mt-4">
+        <TabsContent value="expenses" className="mt-4 space-y-4">
           <Card>
-            <CardContent className="p-6 text-center text-muted-foreground">
-              Módulo de despesas em desenvolvimento...
+            <CardHeader>
+              <CardTitle>{editingId ? "Editar despesa" : "Registrar nova despesa"}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form className="grid gap-4" onSubmit={handleSubmit}>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="expense-description">Descrição</Label>
+                    <Input
+                      id="expense-description"
+                      value={formState.description}
+                      onChange={(event) =>
+                        setFormState((prev) => ({ ...prev, description: event.target.value }))
+                      }
+                      placeholder="Ex: Licença de software"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="expense-category">Categoria</Label>
+                    <Select
+                      value={formState.category}
+                      onValueChange={(value) => setFormState((prev) => ({ ...prev, category: value }))}
+                    >
+                      <SelectTrigger id="expense-category">
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {expenseCategories.map((category) => (
+                          <SelectItem key={category} value={category}>
+                            {category}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="expense-project">Projeto (opcional)</Label>
+                    <Select
+                      value={formState.projectId || "none"}
+                      onValueChange={(value) =>
+                        setFormState((prev) => ({
+                          ...prev,
+                          projectId: value === "none" ? "" : value,
+                        }))
+                      }
+                    >
+                      <SelectTrigger id="expense-project">
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Sem projeto</SelectItem>
+                        {projects.map((project) => (
+                          <SelectItem key={project.id} value={project.id}>
+                            {project.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="expense-date">Data</Label>
+                    <Input
+                      id="expense-date"
+                      type="date"
+                      value={formState.date}
+                      onChange={(event) =>
+                        setFormState((prev) => ({ ...prev, date: event.target.value }))
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="expense-value">Valor</Label>
+                    <Input
+                      id="expense-value"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={formState.value}
+                      onChange={(event) =>
+                        setFormState((prev) => ({ ...prev, value: event.target.value }))
+                      }
+                      placeholder="0,00"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="expense-receipt">Comprovante (link opcional)</Label>
+                  <Input
+                    id="expense-receipt"
+                    value={formState.receipt}
+                    onChange={(event) =>
+                      setFormState((prev) => ({ ...prev, receipt: event.target.value }))
+                    }
+                    placeholder="https://..."
+                  />
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <Button type="submit" disabled={!isFormValid}>
+                    {editingId ? "Salvar alterações" : "Registrar despesa"}
+                  </Button>
+                  {editingId ? (
+                    <Button type="button" variant="ghost" onClick={resetForm}>
+                      Cancelar edição
+                    </Button>
+                  ) : null}
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+                <CardTitle>Despesas registradas</CardTitle>
+                <span className="text-sm text-muted-foreground">
+                  Total: {formatCurrency(totalExpenses)}
+                </span>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {sortedExpenses.length === 0 ? (
+                <div className="py-10 text-center text-muted-foreground">
+                  Nenhuma despesa cadastrada ainda.
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Descrição</TableHead>
+                      <TableHead>Categoria</TableHead>
+                      <TableHead>Projeto</TableHead>
+                      <TableHead>Data</TableHead>
+                      <TableHead>Valor</TableHead>
+                      <TableHead>Comprovante</TableHead>
+                      <TableHead className="text-right">Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {sortedExpenses.map((expense) => (
+                      <TableRow key={expense.id}>
+                        <TableCell className="font-medium">{expense.description}</TableCell>
+                        <TableCell>{expense.category}</TableCell>
+                        <TableCell>
+                          {expense.projectName ||
+                            projects.find((project) => project.id === expense.projectId)?.name ||
+                            "Sem projeto"}
+                        </TableCell>
+                        <TableCell>{formatDate(expense.date)}</TableCell>
+                        <TableCell>{formatCurrency(expense.value)}</TableCell>
+                        <TableCell>
+                          {expense.receipt ? (
+                            <a
+                              href={expense.receipt}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-primary underline underline-offset-4"
+                            >
+                              Ver comprovante
+                            </a>
+                          ) : (
+                            "-"
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleEdit(expense)}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button type="button" variant="ghost" size="icon">
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Excluir despesa</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Tem certeza que deseja excluir a despesa "{expense.description}"?
+                                    Essa ação não pode ser desfeita.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => handleDelete(expense.id)}>
+                                    Excluir
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
