@@ -61,6 +61,21 @@ import {
   type ClientRow,
 } from "@/integrations/supabase/clients";
 import {
+  createProject as createSupabaseProject,
+  deleteProject as deleteSupabaseProject,
+  listProjects,
+  updateProject as updateSupabaseProject,
+  type ProjectRow,
+} from "@/integrations/supabase/projects";
+import {
+  createTask as createSupabaseTask,
+  createTasksBatch,
+  deleteTask as deleteSupabaseTask,
+  listTasks,
+  updateTask as updateSupabaseTask,
+  type TaskRow,
+} from "@/integrations/supabase/tasks";
+import {
   createPlaybook,
   deletePlaybookRecord,
   listPlaybooks,
@@ -375,8 +390,7 @@ const buildSupabasePlaybookUpdate = (playbook: Playbook): Database["public"]["Ta
   updated_at: new Date().toISOString(),
 });
 
-type SupabaseExpenseInsert = Database["public"]["Tables"]["expenses"]["Insert"];
-type SupabaseExpenseUpdate = Database["public"]["Tables"]["expenses"]["Update"];
+// Tipos de despesas agora são definidos em expenses.ts
 
 const mapSupabaseExpense = (expense: ExpenseRow): Expense => ({
   id: expense.id,
@@ -392,7 +406,7 @@ const mapSupabaseExpense = (expense: ExpenseRow): Expense => ({
 
 const buildSupabaseExpenseInsert = (
   expense: Omit<Expense, "id" | "createdAt">
-): SupabaseExpenseInsert => ({
+) => ({
   description: expense.description,
   category: expense.category || null,
   project_id: expense.projectId ?? null,
@@ -402,8 +416,8 @@ const buildSupabaseExpenseInsert = (
   receipt: expense.receipt ?? null,
 });
 
-const buildSupabaseExpenseUpdate = (expense: Partial<Expense>): SupabaseExpenseUpdate => {
-  const payload: SupabaseExpenseUpdate = { updated_at: new Date().toISOString() };
+const buildSupabaseExpenseUpdate = (expense: Partial<Expense>) => {
+  const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
 
   if (typeof expense.description !== "undefined") {
     payload.description = expense.description;
@@ -819,6 +833,16 @@ const buildSeedTasks = ({
 
   return templates.map((template, index) => {
     const dueDate = formatDatePtBR(addDays(baseDate, template.offset));
+    
+    // Preenche 5W2H automaticamente
+    const what = template.title;
+    const why = `Necessário para conclusão da fase "${phase}" do projeto`;
+    const where = projectName;
+    const when = dueDate;
+    const who = responsible;
+    const how = `Executar conforme playbook da fase ${phase}. ${template.evidenceRequired ? "Anexar evidências ao finalizar." : ""}`.trim();
+    const howMuch = template.impact || "A definir conforme escopo";
+
     return {
       id: generateId(),
       title: template.title,
@@ -836,6 +860,14 @@ const buildSeedTasks = ({
       checklist: [],
       evidenceRequired: template.evidenceRequired ?? true,
       createdAt: getDate(),
+      // Campos 5W2H preenchidos automaticamente
+      what,
+      why,
+      where,
+      when,
+      who,
+      how,
+      howMuch,
     } as Task;
   });
 };
@@ -893,79 +925,174 @@ const initialClients: Client[] = [
   }),
 ];
 
-const initialProjects: Project[] = [
-  {
-    id: "project-1",
-    name: "Implantação BI Operacional",
-    clientId: "client-1",
-    clientName: "Alfa Tecnologia LTDA",
-    objective: "Dashboard unificado de operações e faturamento",
-    scope: "Integração de CRM, ERP e suporte em um único painel",
-    phase: "Diagnóstico",
-    progress: 35,
-    progressSource: "calculated",
-    progressOverrideEnabled: false,
-    manualProgress: null,
-    status: "green",
-    responsibleUserId: "employee-1",
-    responsibleNameLegacy: "João Mendes",
-    responsible: "João Mendes",
-    forecastEndDate: "30/03/2025",
-    estimatedDuration: "manual",
-    forecastAdjustedManually: true,
-    startDate: "10/01/2025",
-    endDate: "30/03/2025",
-    createdAt: "05/01/2025",
-    moneyHypothesis: "Redução de churn em 8%",
-    legacyOpportunityMigrated: true,
-  },
-  {
-    id: "project-2",
-    name: "Estruturação de CS",
-    clientId: "client-1",
-    clientName: "Alfa Tecnologia LTDA",
-    objective: "Criar playbooks e cadência de CS",
-    scope: "Processos, treinamentos e métricas",
-    phase: "Quick wins",
-    progress: 60,
-    progressSource: "calculated",
-    progressOverrideEnabled: false,
-    manualProgress: null,
-    status: "yellow",
-    responsibleUserId: "employee-2",
-    responsibleNameLegacy: "Bruna Lira",
-    responsible: "Bruna Lira",
-    forecastEndDate: "20/04/2025",
-    estimatedDuration: "6m",
-    forecastAdjustedManually: false,
-    startDate: "20/12/2024",
-    endDate: "20/04/2025",
-    createdAt: "15/12/2024",
-  },
-  {
-    id: "project-3",
-    name: "Torre de Controle Logística",
-    clientId: "client-2",
-    clientName: "Beta Logística S/A",
-    objective: "Melhorar visibilidade do lead time",
-    scope: "KPIs, reuniões semanais e plano de ação",
-    phase: "Estruturação",
-    progress: 45,
-    progressSource: "calculated",
-    progressOverrideEnabled: false,
-    manualProgress: null,
-    status: "green",
-    responsibleUserId: null,
-    responsibleNameLegacy: "Marcos Vieira",
-    responsible: "Marcos Vieira",
-    forecastEndDate: "15/04/2025",
-    estimatedDuration: "6m",
-    forecastAdjustedManually: false,
-    startDate: "05/01/2025",
-    endDate: "15/04/2025",
-    createdAt: "18/12/2024",
-  },
-];
+// Projetos são carregados do banco de dados - não usar dados mock
+
+const mapSupabaseProjectToLegacy = (project: ProjectRow): Partial<Project> => ({
+  id: project.id,
+  name: project.name,
+  clientId: project.client_id || "",
+  clientName: "",
+  objective: project.objective || "",
+  scope: project.scope || "",
+  phase: project.phase || "Diagnóstico",
+  progress: project.progress || 0,
+  progressSource: "calculated",
+  progressOverrideEnabled: false,
+  manualProgress: null,
+  status: "green",
+  responsibleUserId: null,
+  responsibleNameLegacy: project.responsible || "",
+  responsible: project.responsible || "",
+  forecastEndDate: project.end_date || "",
+  estimatedDuration: null,
+  forecastAdjustedManually: false,
+  startDate: project.start_date || "",
+  endDate: project.end_date || "",
+  createdAt: formatDateFromIso(project.created_at),
+  moneyHypothesis: project.money_hypothesis ? String(project.money_hypothesis) : "",
+  legacyOpportunityMigrated: false,
+});
+
+type SupabaseProjectInsert = Database["public"]["Tables"]["projects"]["Insert"];
+type SupabaseProjectUpdate = Database["public"]["Tables"]["projects"]["Update"];
+
+const buildSupabaseProjectInsert = (project: Partial<Project>, clientId: string): SupabaseProjectInsert => {
+  const timestamp = new Date().toISOString();
+
+  return {
+    name: project.name || "Projeto",
+    client_id: clientId,
+    objective: project.objective || null,
+    scope: project.scope || null,
+    phase: project.phase || "Diagnóstico",
+    progress: project.progress || 0,
+    responsible: project.responsible || project.responsibleNameLegacy || null,
+    start_date: project.startDate || null,
+    end_date: project.endDate || project.forecastEndDate || null,
+    money_hypothesis: project.moneyHypothesis ? parseFloat(project.moneyHypothesis.replace(/[^\d.-]/g, "")) || null : null,
+    status: project.status || "Em andamento",
+    created_at: timestamp,
+    updated_at: timestamp,
+  };
+};
+
+const buildSupabaseProjectUpdate = (project: Partial<Project>): SupabaseProjectUpdate => {
+  const payload: SupabaseProjectUpdate = { updated_at: new Date().toISOString() };
+
+  if (typeof project.name !== "undefined") {
+    payload.name = project.name;
+  }
+
+  if (typeof project.objective !== "undefined") {
+    payload.objective = project.objective || null;
+  }
+
+  if (typeof project.scope !== "undefined") {
+    payload.scope = project.scope || null;
+  }
+
+  if (typeof project.phase !== "undefined") {
+    payload.phase = project.phase || null;
+  }
+
+  if (typeof project.progress !== "undefined") {
+    payload.progress = project.progress;
+  }
+
+  if (typeof project.responsible !== "undefined" || typeof project.responsibleNameLegacy !== "undefined") {
+    payload.responsible = project.responsible || project.responsibleNameLegacy || null;
+  }
+
+  if (typeof project.startDate !== "undefined") {
+    payload.start_date = project.startDate || null;
+  }
+
+  if (typeof project.endDate !== "undefined" || typeof project.forecastEndDate !== "undefined") {
+    payload.end_date = project.endDate || project.forecastEndDate || null;
+  }
+
+  return payload;
+};
+
+// Funções de mapeamento para tarefas
+const mapSupabaseTaskToLegacy = (task: TaskRow, projectName: string, clientName: string): Task => ({
+  id: task.id,
+  title: task.title,
+  description: task.description || "",
+  projectId: task.project_id || "",
+  projectName,
+  clientId: task.client_id || "",
+  clientName,
+  type: (task.type as Task["type"]) || "processo",
+  responsible: task.responsible || "",
+  priority: (task.priority?.toLowerCase() as Task["priority"]) || "medium",
+  dueDate: task.due_date || "",
+  impact: "",
+  status: (task.status?.toLowerCase().replace(/ /g, "_") as Task["status"]) || "backlog",
+  checklist: [],
+  evidenceRequired: task.evidence_required || false,
+  evidenceFile: task.evidence_url || undefined,
+  what: task.what || "",
+  why: task.why || "",
+  where: task.where_location || "",
+  when: task.when_date || "",
+  who: task.who || "",
+  how: task.how || "",
+  howMuch: task.how_much ? String(task.how_much) : "",
+  createdAt: formatDateFromIso(task.created_at),
+});
+
+type SupabaseTaskInsert = Database["public"]["Tables"]["tasks"]["Insert"];
+type SupabaseTaskUpdate = Database["public"]["Tables"]["tasks"]["Update"];
+
+const buildSupabaseTaskInsert = (task: Omit<Task, "id" | "createdAt">): SupabaseTaskInsert => ({
+  title: task.title,
+  description: task.description || null,
+  project_id: task.projectId || null,
+  client_id: task.clientId || null,
+  type: task.type || "processo",
+  responsible: task.responsible || null,
+  priority: task.priority ? task.priority.charAt(0).toUpperCase() + task.priority.slice(1) : "Média",
+  due_date: task.dueDate || null,
+  status: task.status ? task.status.charAt(0).toUpperCase() + task.status.slice(1).replace(/_/g, " ") : "A fazer",
+  evidence_required: task.evidenceRequired || false,
+  evidence_url: task.evidenceFile || null,
+  what: task.what || null,
+  why: task.why || null,
+  where_location: task.where || null,
+  when_date: task.when || null,
+  who: task.who || null,
+  how: task.how || null,
+  how_much: task.howMuch ? parseFloat(task.howMuch.replace(/[^\d.-]/g, "")) || null : null,
+});
+
+const buildSupabaseTaskUpdate = (task: Partial<Task>): SupabaseTaskUpdate => {
+  const payload: SupabaseTaskUpdate = { updated_at: new Date().toISOString() };
+
+  if (typeof task.title !== "undefined") payload.title = task.title;
+  if (typeof task.description !== "undefined") payload.description = task.description || null;
+  if (typeof task.responsible !== "undefined") payload.responsible = task.responsible || null;
+  if (typeof task.priority !== "undefined") {
+    payload.priority = task.priority ? task.priority.charAt(0).toUpperCase() + task.priority.slice(1) : null;
+  }
+  if (typeof task.dueDate !== "undefined") payload.due_date = task.dueDate || null;
+  if (typeof task.status !== "undefined") {
+    payload.status = task.status ? task.status.charAt(0).toUpperCase() + task.status.slice(1).replace(/_/g, " ") : null;
+  }
+  if (typeof task.evidenceRequired !== "undefined") payload.evidence_required = task.evidenceRequired;
+  if (typeof task.evidenceFile !== "undefined") payload.evidence_url = task.evidenceFile || null;
+  if (typeof task.what !== "undefined") payload.what = task.what || null;
+  if (typeof task.why !== "undefined") payload.why = task.why || null;
+  if (typeof task.where !== "undefined") payload.where_location = task.where || null;
+  if (typeof task.when !== "undefined") payload.when_date = task.when || null;
+  if (typeof task.who !== "undefined") payload.who = task.who || null;
+  if (typeof task.how !== "undefined") payload.how = task.how || null;
+  if (typeof task.howMuch !== "undefined") {
+    payload.how_much = task.howMuch ? parseFloat(task.howMuch.replace(/[^\d.-]/g, "")) || null : null;
+  }
+
+  return payload;
+};
 
 const initialOpportunities: Opportunity[] = [
   {
@@ -1013,56 +1140,7 @@ const initialOpportunities: Opportunity[] = [
   },
 ];
 
-const initialTasks: Task[] = [
-  {
-    id: "task-1",
-    title: "Mapear integrações do BI",
-    description: "Listar fontes, owners e SLA de atualização",
-    projectId: "project-1",
-    projectName: "Implantação BI Operacional",
-    clientId: "client-1",
-    clientName: "Alfa Tecnologia LTDA",
-    type: "tecnologia",
-    responsible: "João Mendes",
-    priority: "high",
-    dueDate: "28/02/2025",
-    status: "next",
-    evidenceRequired: true,
-    impact: "Reduz esforço manual de reports",
-    createdAt: "12/02/2025",
-  },
-  {
-    id: "task-2",
-    title: "Rodar treinamento de CS",
-    description: "Treinamento sobre jornada e indicadores críticos",
-    projectId: "project-2",
-    projectName: "Estruturação de CS",
-    clientId: "client-1",
-    clientName: "Alfa Tecnologia LTDA",
-    type: "treinamento",
-    responsible: "Bruna Lira",
-    priority: "medium",
-    dueDate: "05/03/2025",
-    status: "in_progress",
-    evidenceRequired: false,
-    createdAt: "01/02/2025",
-  },
-  {
-    id: "task-3",
-    title: "Definir KPIs de logística",
-    projectId: "project-3",
-    projectName: "Torre de Controle Logística",
-    clientId: "client-2",
-    clientName: "Beta Logística S/A",
-    type: "processo",
-    responsible: "Marcos Vieira",
-    priority: "medium",
-    dueDate: "18/02/2025",
-    status: "validation",
-    evidenceRequired: true,
-    createdAt: "25/01/2025",
-  },
-];
+// Tarefas são carregadas do banco de dados - não usar dados mock
 
 const initialDeliverables: ProjectDeliverable[] = [
   {
@@ -1313,8 +1391,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [clients, setClients] = useState<Client[]>(initialClients.map(normalizeClient));
   const [clientsLoading, setClientsLoading] = useState(true);
   const [clientsError, setClientsError] = useState<string | null>(null);
-  const [projects, setProjects] = useLocalStorage<Project[]>("joia_projects", initialProjects);
-  const [tasks, setTasks] = useLocalStorage<Task[]>("joia_tasks", initialTasks);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(true);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [tasksLoading, setTasksLoading] = useState(true);
   const [opportunities, setOpportunities] = useLocalStorage<Opportunity[]>(
     "joia_opportunities",
     initialOpportunities
@@ -1373,6 +1453,72 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
     fetchClients();
   }, [toast]);
+
+  // Fetch projetos do banco de dados
+  useEffect(() => {
+    const fetchProjectsData = async () => {
+      setProjectsLoading(true);
+
+      try {
+        const projectsData = await listProjects();
+        const normalized = projectsData.map((project) => {
+          const client = clients.find((c) => c.id === project.client_id);
+          const clientName = client?.nomeFantasia || client?.razaoSocial || client?.name || "";
+          return normalizeProject({ ...mapSupabaseProjectToLegacy(project), clientName });
+        });
+        setProjects(normalized);
+      } catch (error) {
+        const message = (error as Error).message || "Não foi possível carregar os projetos";
+        toast({
+          title: "Erro ao carregar projetos",
+          description: message,
+          variant: "destructive",
+        });
+        setProjects([]);
+      } finally {
+        setProjectsLoading(false);
+      }
+    };
+
+    // Só busca projetos depois que clientes foram carregados
+    if (!clientsLoading) {
+      fetchProjectsData();
+    }
+  }, [toast, clients, clientsLoading]);
+
+  // Fetch tarefas do banco de dados
+  useEffect(() => {
+    const fetchTasksData = async () => {
+      setTasksLoading(true);
+
+      try {
+        const tasksData = await listTasks();
+        const normalized = tasksData.map((task) => {
+          const project = projects.find((p) => p.id === task.project_id);
+          const client = clients.find((c) => c.id === task.client_id);
+          const projectName = project?.name || "";
+          const clientName = client?.nomeFantasia || client?.razaoSocial || client?.name || "";
+          return mapSupabaseTaskToLegacy(task, projectName, clientName);
+        });
+        setTasks(normalized);
+      } catch (error) {
+        const message = (error as Error).message || "Não foi possível carregar as tarefas";
+        toast({
+          title: "Erro ao carregar tarefas",
+          description: message,
+          variant: "destructive",
+        });
+        setTasks([]);
+      } finally {
+        setTasksLoading(false);
+      }
+    };
+
+    // Só busca tarefas depois que projetos e clientes foram carregados
+    if (!projectsLoading && !clientsLoading) {
+      fetchTasksData();
+    }
+  }, [toast, projects, clients, projectsLoading, clientsLoading]);
 
   useEffect(() => {
     if (!user) {
@@ -1845,74 +1991,174 @@ export function DataProvider({ children }: { children: ReactNode }) {
     },
 
     projects,
-    addProject: (project, options) => {
-      const projectId = generateId();
-      const baseProject = normalizeProject({
-        ...project,
-        id: projectId,
-        createdAt: getDate(),
-      });
-      const { project: newProject, statusOverrideExpired } = computeProjectWithDerivedState(baseProject);
-      const auditLogs = deriveAuditLogs(undefined, newProject, { statusOverrideExpired });
-
-      setProjects((prev) => [...prev, newProject]);
-
-      if (options?.seedStructure) {
-        const responsibleName = newProject.responsible || newProject.responsibleNameLegacy || "Responsável";
-        const seededTasks = buildSeedTasks({
-          phase: newProject.phase,
-          startDate: newProject.startDate,
-          responsible: responsibleName,
-          projectId,
-          projectName: newProject.name,
-          clientId: newProject.clientId,
-          clientName: newProject.clientName,
+    addProject: async (project, options) => {
+      try {
+        const payload = buildSupabaseProjectInsert(project, project.clientId);
+        const created = await createSupabaseProject(payload);
+        
+        const client = clients.find((c) => c.id === project.clientId);
+        const clientName = client?.nomeFantasia || client?.razaoSocial || project.clientName || "";
+        
+        const baseProject = normalizeProject({
+          ...mapSupabaseProjectToLegacy(created),
+          clientName,
+          responsibleUserId: project.responsibleUserId,
+          responsibleNameLegacy: project.responsibleNameLegacy,
+          ...project,
+          id: created.id,
+          createdAt: getDate(),
         });
+        
+        const { project: newProject, statusOverrideExpired } = computeProjectWithDerivedState(baseProject);
+        const auditLogs = deriveAuditLogs(undefined, newProject, { statusOverrideExpired });
 
-        if (seededTasks.length) {
-          setTasks((prev) => [...prev, ...seededTasks]);
-        }
-      }
+        setProjects((prev) => [...prev, newProject]);
 
-      if (options?.opportunities?.length) {
-        const prepared = options.opportunities.map((opportunity) =>
-          normalizeOpportunity({
-            ...opportunity,
-            projectId,
+        if (options?.seedStructure) {
+          const responsibleName = newProject.responsible || newProject.responsibleNameLegacy || "Responsável";
+          const seededTasks = buildSeedTasks({
+            phase: newProject.phase,
+            startDate: newProject.startDate,
+            responsible: responsibleName,
+            projectId: created.id,
+            projectName: newProject.name,
             clientId: newProject.clientId,
-            status: opportunity.status || "Identificado",
-            createdAt: getDate(),
-            source: "manual" as const,
+            clientName: newProject.clientName,
+          });
+
+          if (seededTasks.length) {
+            // Salva tarefas no banco com 5W2H preenchido
+            const taskPayloads = seededTasks.map((task) => buildSupabaseTaskInsert(task));
+            try {
+              const createdTasks = await createTasksBatch(taskPayloads);
+              const normalizedTasks = createdTasks.map((task) => 
+                mapSupabaseTaskToLegacy(task, newProject.name, newProject.clientName)
+              );
+              setTasks((prev) => [...prev, ...normalizedTasks]);
+            } catch (error) {
+              console.error("Erro ao criar tarefas:", error);
+              // Fallback: adiciona localmente
+              setTasks((prev) => [...prev, ...seededTasks]);
+            }
+          }
+        }
+
+        if (options?.opportunities?.length) {
+          const prepared = options.opportunities.map((opportunity) =>
+            normalizeOpportunity({
+              ...opportunity,
+              projectId: created.id,
+              clientId: newProject.clientId,
+              status: opportunity.status || "Identificado",
+              createdAt: getDate(),
+              source: "manual" as const,
+            })
+          );
+          setOpportunities((prev) => [...prev, ...prepared]);
+        }
+
+        if (auditLogs.length) {
+          setProjectAuditLogs((prev) => [...prev, ...auditLogs]);
+        }
+      } catch (error) {
+        const message = (error as Error).message || "Erro ao criar projeto";
+        toast({
+          title: "Não foi possível criar o projeto",
+          description: message,
+          variant: "destructive",
+        });
+      }
+    },
+    updateProject: async (id, project) => {
+      try {
+        const payload = buildSupabaseProjectUpdate(project);
+        await updateSupabaseProject(id, payload);
+
+        let auditLogs: ProjectAuditLogEntry[] = [];
+        setProjects((prev) =>
+          prev.map((p) => {
+            if (p.id !== id) return p;
+            const mergedProject = normalizeProject({ ...p, ...project });
+            const { project: nextProject, statusOverrideExpired } = computeProjectWithDerivedState(mergedProject);
+            auditLogs = deriveAuditLogs(p, nextProject, { statusOverrideExpired });
+            return nextProject;
           })
         );
-        setOpportunities((prev) => [...prev, ...prepared]);
-      }
-
-      if (auditLogs.length) {
-        setProjectAuditLogs((prev) => [...prev, ...auditLogs]);
-      }
-    },
-    updateProject: (id, project) => {
-      let auditLogs: ProjectAuditLogEntry[] = [];
-      setProjects((prev) =>
-        prev.map((p) => {
-          if (p.id !== id) return p;
-          const mergedProject = normalizeProject({ ...p, ...project });
-          const { project: nextProject, statusOverrideExpired } = computeProjectWithDerivedState(mergedProject);
-          auditLogs = deriveAuditLogs(p, nextProject, { statusOverrideExpired });
-          return nextProject;
-        })
-      );
-      if (auditLogs.length) {
-        setProjectAuditLogs((prev) => [...prev, ...auditLogs]);
+        if (auditLogs.length) {
+          setProjectAuditLogs((prev) => [...prev, ...auditLogs]);
+        }
+      } catch (error) {
+        const message = (error as Error).message || "Erro ao atualizar projeto";
+        toast({
+          title: "Não foi possível atualizar o projeto",
+          description: message,
+          variant: "destructive",
+        });
       }
     },
-    deleteProject: (id) => setProjects((prev) => prev.filter((p) => p.id !== id)),
+    deleteProject: async (id) => {
+      try {
+        await deleteSupabaseProject(id);
+        setProjects((prev) => prev.filter((p) => p.id !== id));
+      } catch (error) {
+        const message = (error as Error).message || "Erro ao remover projeto";
+        toast({
+          title: "Não foi possível remover o projeto",
+          description: message,
+          variant: "destructive",
+        });
+      }
+    },
 
     tasks,
-    addTask: (task) => setTasks((prev) => [...prev, { ...task, id: generateId(), createdAt: getDate() }]),
-    updateTask: (id, task) => setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...task } : t))),
-    deleteTask: (id) => setTasks((prev) => prev.filter((t) => t.id !== id)),
+    addTask: async (task) => {
+      try {
+        const payload = buildSupabaseTaskInsert(task);
+        const created = await createSupabaseTask(payload);
+        const project = projects.find((p) => p.id === task.projectId);
+        const client = clients.find((c) => c.id === task.clientId);
+        const normalized = mapSupabaseTaskToLegacy(
+          created,
+          project?.name || task.projectName,
+          client?.nomeFantasia || client?.razaoSocial || task.clientName
+        );
+        setTasks((prev) => [...prev, normalized]);
+      } catch (error) {
+        const message = (error as Error).message || "Erro ao criar tarefa";
+        toast({
+          title: "Não foi possível criar a tarefa",
+          description: message,
+          variant: "destructive",
+        });
+      }
+    },
+    updateTask: async (id, task) => {
+      try {
+        const payload = buildSupabaseTaskUpdate(task);
+        await updateSupabaseTask(id, payload);
+        setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...task } : t)));
+      } catch (error) {
+        const message = (error as Error).message || "Erro ao atualizar tarefa";
+        toast({
+          title: "Não foi possível atualizar a tarefa",
+          description: message,
+          variant: "destructive",
+        });
+      }
+    },
+    deleteTask: async (id) => {
+      try {
+        await deleteSupabaseTask(id);
+        setTasks((prev) => prev.filter((t) => t.id !== id));
+      } catch (error) {
+        const message = (error as Error).message || "Erro ao remover tarefa";
+        toast({
+          title: "Não foi possível remover a tarefa",
+          description: message,
+          variant: "destructive",
+        });
+      }
+    },
 
     opportunities,
     addOpportunity: (opportunity) => {
