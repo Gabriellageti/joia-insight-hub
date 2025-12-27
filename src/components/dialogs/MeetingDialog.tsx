@@ -6,17 +6,19 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useData } from "@/contexts/DataContext";
-import { Meeting } from "@/types";
+import { useMeetings, type MeetingData } from "@/hooks/useMeetings";
 import { toast } from "sonner";
 
 interface MeetingDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  meeting?: Meeting | null;
+  meeting?: MeetingData | null;
 }
 
 export function MeetingDialog({ open, onOpenChange, meeting }: MeetingDialogProps) {
-  const { addMeeting, updateMeeting, projects, clients } = useData();
+  const { addMeeting, updateMeeting } = useMeetings();
+  const { projects, clients } = useData();
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     title: "",
     projectId: "",
@@ -32,6 +34,7 @@ export function MeetingDialog({ open, onOpenChange, meeting }: MeetingDialogProp
     agenda: "",
     participants: [] as string[],
     hasMinutes: false,
+    duration: "60",
   });
   const [participantsInput, setParticipantsInput] = useState("");
 
@@ -39,9 +42,9 @@ export function MeetingDialog({ open, onOpenChange, meeting }: MeetingDialogProp
     if (meeting) {
       setFormData({
         title: meeting.title,
-        projectId: meeting.projectId,
+        projectId: meeting.projectId || "",
         projectName: meeting.projectName,
-        clientId: meeting.clientId,
+        clientId: meeting.clientId || "",
         clientName: meeting.clientName,
         date: meeting.date,
         time: meeting.time,
@@ -52,6 +55,7 @@ export function MeetingDialog({ open, onOpenChange, meeting }: MeetingDialogProp
         agenda: meeting.agenda || "",
         participants: meeting.participants,
         hasMinutes: meeting.hasMinutes,
+        duration: meeting.duration || "60",
       });
       setParticipantsInput(meeting.participants.join(", "));
     } else {
@@ -70,26 +74,27 @@ export function MeetingDialog({ open, onOpenChange, meeting }: MeetingDialogProp
         agenda: "",
         participants: [],
         hasMinutes: false,
+        duration: "60",
       });
       setParticipantsInput("");
     }
   }, [meeting, open]);
 
   const handleProjectChange = (projectId: string) => {
-    const project = projects.find(p => p.id === projectId);
-    const client = clients.find(c => c.id === project?.clientId);
-    setFormData({ 
-      ...formData, 
-      projectId, 
+    const project = projects.find((p) => p.id === projectId);
+    const client = clients.find((c) => c.id === project?.clientId);
+    setFormData({
+      ...formData,
+      projectId,
       projectName: project?.name || "",
       clientId: project?.clientId || "",
-      clientName: client?.name || "",
+      clientName: client?.name || client?.razaoSocial || "",
     });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formData.title.trim()) {
       toast.error("Título é obrigatório");
       return;
@@ -103,21 +108,31 @@ export function MeetingDialog({ open, onOpenChange, meeting }: MeetingDialogProp
       return;
     }
 
-    const participants = participantsInput.split(",").map(p => p.trim()).filter(Boolean);
+    const participants = participantsInput
+      .split(",")
+      .map((p) => p.trim())
+      .filter(Boolean);
 
     const meetingData = {
       ...formData,
       participants,
     };
 
-    if (meeting) {
-      updateMeeting(meeting.id, meetingData);
-      toast.success("Reunião atualizada com sucesso");
-    } else {
-      addMeeting(meetingData);
-      toast.success("Reunião criada com sucesso");
+    setLoading(true);
+    try {
+      if (meeting) {
+        await updateMeeting(meeting.id, meetingData);
+        toast.success("Reunião atualizada com sucesso");
+      } else {
+        await addMeeting(meetingData);
+        toast.success("Reunião criada com sucesso");
+      }
+      onOpenChange(false);
+    } catch (error) {
+      // Error is already handled by the hook
+    } finally {
+      setLoading(false);
     }
-    onOpenChange(false);
   };
 
   return (
@@ -145,14 +160,19 @@ export function MeetingDialog({ open, onOpenChange, meeting }: MeetingDialogProp
                 </SelectTrigger>
                 <SelectContent>
                   {projects.map((project) => (
-                    <SelectItem key={project.id} value={project.id}>{project.name}</SelectItem>
+                    <SelectItem key={project.id} value={project.id}>
+                      {project.name}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="type">Tipo</Label>
-              <Select value={formData.type} onValueChange={(value: "online" | "presencial") => setFormData({ ...formData, type: value })}>
+              <Select
+                value={formData.type}
+                onValueChange={(value: "online" | "presencial") => setFormData({ ...formData, type: value })}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -179,6 +199,38 @@ export function MeetingDialog({ open, onOpenChange, meeting }: MeetingDialogProp
                 onChange={(e) => setFormData({ ...formData, time: e.target.value })}
                 placeholder="14:00"
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="duration">Duração (minutos)</Label>
+              <Select value={formData.duration} onValueChange={(value) => setFormData({ ...formData, duration: value })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="30">30 min</SelectItem>
+                  <SelectItem value="60">1 hora</SelectItem>
+                  <SelectItem value="90">1h 30min</SelectItem>
+                  <SelectItem value="120">2 horas</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="status">Status</Label>
+              <Select
+                value={formData.status}
+                onValueChange={(value: "scheduled" | "completed" | "cancelled") =>
+                  setFormData({ ...formData, status: value })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="scheduled">Agendada</SelectItem>
+                  <SelectItem value="completed">Realizada</SelectItem>
+                  <SelectItem value="cancelled">Cancelada</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             {formData.type === "online" ? (
               <div className="col-span-2 space-y-2">
@@ -220,26 +272,13 @@ export function MeetingDialog({ open, onOpenChange, meeting }: MeetingDialogProp
                 rows={3}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="status">Status</Label>
-              <Select value={formData.status} onValueChange={(value: "scheduled" | "completed" | "cancelled") => setFormData({ ...formData, status: value })}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="scheduled">Agendada</SelectItem>
-                  <SelectItem value="completed">Realizada</SelectItem>
-                  <SelectItem value="cancelled">Cancelada</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
               Cancelar
             </Button>
-            <Button type="submit" className="bg-accent text-accent-foreground hover:bg-accent/90">
-              {meeting ? "Salvar" : "Criar"}
+            <Button type="submit" className="bg-accent text-accent-foreground hover:bg-accent/90" disabled={loading}>
+              {loading ? "Salvando..." : meeting ? "Salvar" : "Criar"}
             </Button>
           </DialogFooter>
         </form>
