@@ -11,14 +11,19 @@ const isMissingDiagnosticColumnError = (error: PostgrestError | null): boolean =
   if (!error?.message) return false;
   const normalized = error.message.toLowerCase();
   if (!normalized.includes("schema cache")) return false;
-  return normalized.includes("'action_plan'") || normalized.includes("'report_payload'");
+  return (
+    normalized.includes("'action_plan'") ||
+    normalized.includes("'report_payload'") ||
+    normalized.includes("'answered_questions'") ||
+    normalized.includes("'total_questions'")
+  );
 };
 
 const stripLegacyDiagnosticPayload = <T extends Record<string, unknown>>(payload: T): Omit<
   T,
-  "action_plan" | "report_payload"
+  "action_plan" | "report_payload" | "answered_questions" | "total_questions"
 > => {
-  const { action_plan, report_payload, ...rest } = payload;
+  const { action_plan, report_payload, answered_questions, total_questions, ...rest } = payload;
   return rest;
 };
 
