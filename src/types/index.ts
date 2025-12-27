@@ -370,18 +370,26 @@ export interface MeetingMinutes {
 export interface Indicator {
   id: string;
   name: string;
-  category: "Compras" | "Vendas" | "Financeiro" | "Estoque" | "Processo" | "Pessoas";
+  category?: string | null;
   formula?: string;
-  unit: "R$" | "%" | "quantidade";
-  frequency: "diário" | "semanal" | "mensal";
-  source: "manual" | "planilha" | "integração";
-  target?: number;
-  projectId?: string;
-  projectName?: string;
-  responsible: string;
+  unit?: string | null;
+  frequency?: string | null;
+  source?: "manual" | "planilha" | "integração";
+  currentValue?: number | null;
+  targetValue?: number | null;
+  trend?: "up" | "down" | "stable" | null;
+  status?: string | null;
+  projectId?: string | null;
+  projectName?: string | null;
+  clientId?: string | null;
+  clientName?: string | null;
+  responsible?: string;
   isPrimary?: boolean;
-  values: { date: string; value: number }[];
-  createdAt: string;
+  values?: { date: string; value: number }[];
+  alertEnabled?: boolean;
+  alertThreshold?: number | null;
+  alertType?: string | null;
+  createdAt?: string;
 }
 
 export interface Document {

@@ -62,16 +62,18 @@ const findPrimaryIndicator = (indicators: Indicator[], projectId: string) => {
 
 const isPrimaryIndicatorWorsening = (indicators: Indicator[], projectId: string) => {
   const indicator = findPrimaryIndicator(indicators, projectId);
-  if (!indicator || typeof indicator.target !== "number" || indicator.values.length < 3) return false;
+  const targetValue = indicator?.targetValue;
+  const values = indicator?.values || [];
+  if (!indicator || typeof targetValue !== "number" || values.length < 3) return false;
 
-  const sortedValues = [...indicator.values]
+  const sortedValues = [...values]
     .map((entry) => ({ ...entry, parsedDate: parseFlexibleDate(entry.date) }))
     .sort((a, b) => compareAsc(a.parsedDate || new Date(a.date), b.parsedDate || new Date(b.date)));
 
   const recentValues = sortedValues.slice(-3);
   if (recentValues.length < 3) return false;
 
-  const distances = recentValues.map((entry) => Math.abs(entry.value - indicator.target!));
+  const distances = recentValues.map((entry) => Math.abs(entry.value - targetValue));
   return distances[2] > distances[1] && distances[1] > distances[0];
 };
 
