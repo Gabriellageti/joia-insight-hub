@@ -187,43 +187,76 @@ export type Database = {
       }
       documents: {
         Row: {
+          category: string | null
           client_id: string | null
           created_at: string
           description: string | null
+          diagnostic_id: string | null
+          evidence_status: string | null
+          file_size: number | null
+          file_type: string | null
           id: string
           is_internal: boolean | null
+          meeting_id: string | null
+          mime_type: string | null
           name: string
           project_id: string | null
+          rejection_reason: string | null
+          tags: string[] | null
+          task_id: string | null
           type: string | null
           updated_at: string
           uploaded_by: string | null
           url: string | null
+          visibility: string | null
         }
         Insert: {
+          category?: string | null
           client_id?: string | null
           created_at?: string
           description?: string | null
+          diagnostic_id?: string | null
+          evidence_status?: string | null
+          file_size?: number | null
+          file_type?: string | null
           id?: string
           is_internal?: boolean | null
+          meeting_id?: string | null
+          mime_type?: string | null
           name: string
           project_id?: string | null
+          rejection_reason?: string | null
+          tags?: string[] | null
+          task_id?: string | null
           type?: string | null
           updated_at?: string
           uploaded_by?: string | null
           url?: string | null
+          visibility?: string | null
         }
         Update: {
+          category?: string | null
           client_id?: string | null
           created_at?: string
           description?: string | null
+          diagnostic_id?: string | null
+          evidence_status?: string | null
+          file_size?: number | null
+          file_type?: string | null
           id?: string
           is_internal?: boolean | null
+          meeting_id?: string | null
+          mime_type?: string | null
           name?: string
           project_id?: string | null
+          rejection_reason?: string | null
+          tags?: string[] | null
+          task_id?: string | null
           type?: string | null
           updated_at?: string
           uploaded_by?: string | null
           url?: string | null
+          visibility?: string | null
         }
         Relationships: [
           {
@@ -234,10 +267,31 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "documents_diagnostic_id_fkey"
+            columns: ["diagnostic_id"]
+            isOneToOne: false
+            referencedRelation: "diagnostics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_meeting_id_fkey"
+            columns: ["meeting_id"]
+            isOneToOne: false
+            referencedRelation: "meetings"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "documents_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
             referencedColumns: ["id"]
           },
         ]
