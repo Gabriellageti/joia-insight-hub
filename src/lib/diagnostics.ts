@@ -13,8 +13,11 @@ import {
 } from "@/types";
 import { formatDatePtBR, parseDatePtBR } from "@/lib/dates";
 import { supabase } from "@/integrations/supabase/client";
-import { Database } from "@/integrations/supabase/types";
 import { PostgrestError } from "@supabase/supabase-js";
+
+// Cliente "untyped" para tabelas de templates que ainda não existem no schema
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const untypedSupabase = supabase as any;
 
 type Status = Diagnostic["status"];
 
@@ -3372,10 +3375,15 @@ export const calculatePendingQuestions = (diagnostic: Diagnostic): number => {
   return Math.max(0, (diagnostic.totalQuestions || 0) - (diagnostic.answeredQuestions || 0));
 };
 
-type DbTemplateRow = Database["public"]["Tables"]["diagnostic_templates"]["Row"];
-type DbSectionRow = Database["public"]["Tables"]["template_sections"]["Row"];
-type DbQuestionRow = Database["public"]["Tables"]["template_questions"]["Row"];
-type DbRuleRow = Database["public"]["Tables"]["template_opportunity_rules"]["Row"];
+// Tipos temporários até que as tabelas de templates sejam criadas no banco
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type DbTemplateRow = any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type DbSectionRow = any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type DbQuestionRow = any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type DbRuleRow = any;
 
 type TemplateDescriptionPayload = {
   description?: string;
@@ -3668,7 +3676,7 @@ const mapTemplateFromDb = (
 
 const insertTemplateStructure = async (templateId: string, sections: TemplateSection[]) => {
   for (const section of sections) {
-    const { data: sectionRow, error: sectionError } = await supabase
+    const { data: sectionRow, error: sectionError } = await untypedSupabase
       .from("template_sections")
       .insert({
         id: asUuid(section.id),
@@ -3685,7 +3693,7 @@ const insertTemplateStructure = async (templateId: string, sections: TemplateSec
     }
 
     for (const question of section.questions || []) {
-      const { data: questionRow, error: questionError } = await supabase
+      const { data: questionRow, error: questionError } = await untypedSupabase
         .from("template_questions")
         .insert({
           id: asUuid(question.id),
@@ -3705,7 +3713,7 @@ const insertTemplateStructure = async (templateId: string, sections: TemplateSec
       }
 
       if (question.regraOportunidade) {
-        const { error: ruleError } = await supabase
+        const { error: ruleError } = await untypedSupabase
           .from("template_opportunity_rules")
           .insert(mapRuleToDb(question.regraOportunidade, templateId, sectionRow.id, questionRow.id));
 
@@ -3718,14 +3726,14 @@ const insertTemplateStructure = async (templateId: string, sections: TemplateSec
 };
 
 const rebuildTemplateStructure = async (templateId: string, sections: TemplateSection[]) => {
-  await supabase.from("template_opportunity_rules").delete().eq("template_id", templateId);
-  await supabase.from("template_questions").delete().eq("template_id", templateId);
-  await supabase.from("template_sections").delete().eq("template_id", templateId);
+  await untypedSupabase.from("template_opportunity_rules").delete().eq("template_id", templateId);
+  await untypedSupabase.from("template_questions").delete().eq("template_id", templateId);
+  await untypedSupabase.from("template_sections").delete().eq("template_id", templateId);
   await insertTemplateStructure(templateId, sections);
 };
 
 const fetchTemplateById = async (id: string): Promise<DiagnosticTemplate | null> => {
-  const { data: templateRow, error: templateError } = await supabase
+  const { data: templateRow, error: templateError } = await untypedSupabase
     .from("diagnostic_templates")
     .select("*")
     .eq("id", id)
@@ -3734,12 +3742,12 @@ const fetchTemplateById = async (id: string): Promise<DiagnosticTemplate | null>
   if (templateError || !templateRow) return null;
 
   const [{ data: sections }, { data: questions }, { data: rules }] = await Promise.all([
-    supabase.from("template_sections").select("*").eq("template_id", id),
-    supabase.from("template_questions").select("*").eq("template_id", id),
-    supabase.from("template_opportunity_rules").select("*").eq("template_id", id),
+    untypedSupabase.from("template_sections").select("*").eq("template_id", id),
+    untypedSupabase.from("template_questions").select("*").eq("template_id", id),
+    untypedSupabase.from("template_opportunity_rules").select("*").eq("template_id", id),
   ]);
 
-  const sectionList = (sections || []).map((section) =>
+  const sectionList = (sections || []).map((section: DbSectionRow) =>
     mapSectionFromDb(section, questions || [], rules || [])
   );
 
@@ -3751,7 +3759,7 @@ export const fetchDiagnostics = async (): Promise<Diagnostic[]> => {
 };
 
 export const fetchTemplates = async (): Promise<{ templates: DiagnosticTemplate[]; fromSeed: boolean }> => {
-  const { data: templateRows, error } = await supabase
+  const { data: templateRows, error } = await untypedSupabase
     .from("diagnostic_templates")
     .select("*")
     .order("updated_at", { ascending: false });
@@ -3768,20 +3776,20 @@ export const fetchTemplates = async (): Promise<{ templates: DiagnosticTemplate[
 
   if (!templateRows?.length) return { templates: [], fromSeed: false };
 
-  const templateIds = templateRows.map((row) => row.id);
+  const templateIds = templateRows.map((row: DbTemplateRow) => row.id);
 
   const [sectionsResponse, questionsResponse, rulesResponse] = await Promise.all([
-    supabase
+    untypedSupabase
       .from("template_sections")
       .select("*")
       .in("template_id", templateIds)
       .order("position", { ascending: true }),
-    supabase
+    untypedSupabase
       .from("template_questions")
       .select("*")
       .in("template_id", templateIds)
       .order("position", { ascending: true }),
-    supabase.from("template_opportunity_rules").select("*").in("template_id", templateIds),
+    untypedSupabase.from("template_opportunity_rules").select("*").in("template_id", templateIds),
   ]);
 
   if (sectionsResponse.error) throw new Error(sectionsResponse.error.message);
@@ -3792,10 +3800,10 @@ export const fetchTemplates = async (): Promise<{ templates: DiagnosticTemplate[
   const questions = questionsResponse.data || [];
   const rules = rulesResponse.data || [];
 
-  const templates = templateRows.map((templateRow) => {
-    const templateSections = sections.filter((section) => section.template_id === templateRow.id);
-    const mappedSections = templateSections.map((section) =>
-      mapSectionFromDb(section, questions.filter((question) => question.section_id === section.id), rules)
+  const templates = templateRows.map((templateRow: DbTemplateRow) => {
+    const templateSections = sections.filter((section: DbSectionRow) => section.template_id === templateRow.id);
+    const mappedSections = templateSections.map((section: DbSectionRow) =>
+      mapSectionFromDb(section, questions.filter((question: DbQuestionRow) => question.section_id === section.id), rules)
     );
     return mapTemplateFromDb(templateRow, mappedSections);
   });
@@ -3806,7 +3814,7 @@ export const fetchTemplates = async (): Promise<{ templates: DiagnosticTemplate[
 export const createTemplate = async (
   template: Omit<DiagnosticTemplate, "id"> & { id?: string }
 ): Promise<DiagnosticTemplate> => {
-  const { data: templateRow, error } = await supabase
+  const { data: templateRow, error } = await untypedSupabase
     .from("diagnostic_templates")
     .insert({
       id: asUuid(template.id),
@@ -3829,7 +3837,7 @@ export const updateTemplateRecord = async (
   id: string,
   template: Partial<DiagnosticTemplate>
 ): Promise<DiagnosticTemplate> => {
-  const { error } = await supabase
+  const { error } = await untypedSupabase
     .from("diagnostic_templates")
     .update({
       name: template.name,
@@ -3862,7 +3870,7 @@ export const updateTemplateRecord = async (
 };
 
 export const deleteTemplateRecord = async (id: string) => {
-  const { error } = await supabase.from("diagnostic_templates").delete().eq("id", id);
+  const { error } = await untypedSupabase.from("diagnostic_templates").delete().eq("id", id);
   if (error) {
     throw new Error(error.message || "Erro ao remover template");
   }
