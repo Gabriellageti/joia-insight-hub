@@ -41,7 +41,13 @@ export default function DiagnosticoDetalhe() {
   );
 
   const template = useMemo(
-    () => (diagnostic ? templates.find((t) => t.id === diagnostic.templateId) : null),
+    () => {
+      if (!diagnostic) return null;
+      return (
+        templates.find((t) => t.id === diagnostic.templateId) ??
+        templates.find((t) => t.name === diagnostic.templateName)
+      );
+    },
     [diagnostic, templates]
   );
 
