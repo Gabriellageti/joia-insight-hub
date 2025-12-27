@@ -9,10 +9,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ArrowLeft, Building2, MapPin, PhoneCall, Shield, Trash } from "lucide-react";
+import { ArrowLeft, Building2, MapPin, PhoneCall, Shield, Trash, Rocket, FileSearch } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { isPastDate } from "@/lib/dates";
 import { ClientDialog } from "@/components/dialogs/ClientDialog";
+import { DiagnosticDialog } from "@/components/dialogs/DiagnosticDialog";
 import { toast } from "sonner";
 
 const riskColors = { low: "bg-green-500/10 text-green-700", medium: "bg-yellow-500/10 text-yellow-700", high: "bg-red-500/10 text-red-700" };
@@ -30,12 +31,22 @@ const getAddressString = (address?: string | { logradouro?: string; cidade?: str
 export default function ClienteDetalhes() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { clients, projects, clientContacts, deleteClient } = useData();
+  const { clients, projects, clientContacts, deleteClient, diagnostics, templates } = useData();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [diagnosticDialogOpen, setDiagnosticDialogOpen] = useState(false);
 
   const client = useMemo(() => clients.find((c) => c.id === id), [clients, id]);
   const clientProjects = useMemo(() => projects.filter((project) => project.clientId === id), [projects, id]);
   const contacts = useMemo(() => clientContacts.filter((contact) => contact.clientId === id), [clientContacts, id]);
+  
+  // Verificar se já existe kickoff para este cliente
+  const kickoffTemplate = templates.find((t) => t.name?.toLowerCase().includes("kickoff"));
+  const hasKickoff = diagnostics.some(
+    (d) => d.clientId === id && (d.templateId === kickoffTemplate?.id || d.templateName?.toLowerCase().includes("kickoff"))
+  );
+  const kickoffCompleted = diagnostics.some(
+    (d) => d.clientId === id && (d.templateId === kickoffTemplate?.id || d.templateName?.toLowerCase().includes("kickoff")) && d.status === "completed"
+  );
 
   const handleDelete = async () => {
     if (!client) return;
@@ -85,6 +96,18 @@ export default function ClienteDetalhes() {
       completed: clientProjects.length > 0,
     },
     {
+      id: "kickoff",
+      title: "Rodar Kickoff",
+      description: kickoffCompleted
+        ? "Kickoff concluído"
+        : hasKickoff
+          ? "Kickoff em andamento"
+          : "Execute o diagnóstico inicial para mapear oportunidades",
+      completed: kickoffCompleted,
+      action: !kickoffCompleted && clientProjects.length > 0 ? () => setDiagnosticDialogOpen(true) : undefined,
+      actionLabel: hasKickoff ? "Continuar" : "Iniciar Kickoff",
+    },
+    {
       id: "contacts",
       title: "Adicionar mais contatos",
       description: contacts.length > 0 ? `${contacts.length} contato(s) cadastrados` : "Nenhum contato registrado",
@@ -106,6 +129,27 @@ export default function ClienteDetalhes() {
 
   return (
     <div className="space-y-6">
+      {/* Banner de sugestão de Kickoff */}
+      {clientProjects.length > 0 && !hasKickoff && (
+        <Alert className="border-accent/50 bg-accent/5">
+          <Rocket className="h-4 w-4 text-accent" />
+          <AlertTitle className="text-accent">Próximo passo: Rodar o Kickoff</AlertTitle>
+          <AlertDescription className="flex items-center justify-between">
+            <span>
+              Execute o diagnóstico de Kickoff para mapear oportunidades e definir o norte do projeto.
+            </span>
+            <Button
+              size="sm"
+              className="bg-accent text-accent-foreground hover:bg-accent/90 ml-4"
+              onClick={() => setDiagnosticDialogOpen(true)}
+            >
+              <FileSearch className="h-4 w-4 mr-2" />
+              Iniciar Kickoff
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Button asChild variant="ghost" className="h-auto px-2 text-muted-foreground hover:text-foreground">
@@ -268,6 +312,11 @@ export default function ClienteDetalhes() {
       </Card>
 
       <ClientDialog open={dialogOpen} onOpenChange={setDialogOpen} client={client} />
+      <DiagnosticDialog 
+        open={diagnosticDialogOpen} 
+        onOpenChange={setDiagnosticDialogOpen}
+        defaultTemplateId={kickoffTemplate?.id}
+      />
     </div>
   );
 }

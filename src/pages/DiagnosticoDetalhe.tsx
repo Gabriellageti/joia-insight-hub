@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   Card,
@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { useData } from "@/contexts/DataContext";
-import { formatRelativeUpdate, resolveStatusLabel } from "@/lib/diagnostics";
+import { formatRelativeUpdate, resolveStatusLabel, getDefaultDiagnosticName } from "@/lib/diagnostics";
 import { DiagnosticExecution } from "@/components/diagnostico/execution";
 import { DiagnosticAnswer } from "@/types/diagnostic-execution";
 import { toast } from "sonner";
@@ -27,13 +27,17 @@ import {
   resolveAnswerValue,
 } from "@/lib/diagnostic-evaluation";
 import { buildActionPlan, generateRecommendations } from "@/lib/recommendations";
-import { DiagnosticReportPayload, ImpactProjection } from "@/types";
+import { DiagnosticReportPayload, ImpactProjection, Task } from "@/types";
+import { NextStepsSuggestionModal, SuggestedNextStep } from "@/components/plano-acao";
+import { generateNextStepsSuggestions, isKickoffTemplate } from "@/lib/next-steps";
 
 export default function DiagnosticoDetalhe() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { diagnostics, templates, updateDiagnostic, createActionPlan } = useData();
+  const { diagnostics, templates, updateDiagnostic, createActionPlan, applyDiagnostic, addTask } = useData();
   const [isExecuting, setIsExecuting] = useState(false);
+  const [showNextStepsModal, setShowNextStepsModal] = useState(false);
+  const [nextStepsSuggestions, setNextStepsSuggestions] = useState<SuggestedNextStep[]>([]);
 
   const diagnostic = useMemo(
     () => diagnostics.find((item) => item.id === id),
@@ -176,10 +180,88 @@ export default function DiagnosticoDetalhe() {
         : undefined;
 
       toast.success(toastMessage, { description: toastDescription });
+
+      // Gerar sugestões de próximos passos
+      const suggestions = generateNextStepsSuggestions(
+        { ...diagnostic, score: scoreSummary.score, opportunities: diagnostic.opportunities ?? 0 },
+        template,
+        diagnostics
+      );
+
+      if (suggestions.length > 0) {
+        setNextStepsSuggestions(suggestions);
+        setShowNextStepsModal(true);
+      }
     } finally {
       setIsExecuting(false);
     }
   };
+
+  const handleConfirmNextSteps = useCallback(
+    async (selectedIds: string[]) => {
+      if (!diagnostic) return;
+
+      const selectedSuggestions = nextStepsSuggestions.filter((s) =>
+        selectedIds.includes(s.id)
+      );
+
+      let createdCount = 0;
+
+      for (const suggestion of selectedSuggestions) {
+        try {
+          if (suggestion.type === "diagnostic" && suggestion.templateId) {
+            // Criar novo diagnóstico
+            const selectedTemplate = templates.find(
+              (t) => t.id === suggestion.templateId
+            );
+            if (selectedTemplate) {
+              await applyDiagnostic({
+                projectId: diagnostic.projectId,
+                projectName: diagnostic.projectName,
+                clientId: diagnostic.clientId,
+                clientName: diagnostic.clientName,
+                templateId: suggestion.templateId,
+                templateName: suggestion.templateName || selectedTemplate.name,
+                responsibleName: diagnostic.responsibleName,
+                responsibleId: diagnostic.responsibleId,
+                name: getDefaultDiagnosticName(
+                  suggestion.templateName || selectedTemplate.name,
+                  diagnostic.projectName
+                ),
+              });
+              createdCount++;
+            }
+          } else if (suggestion.type === "task") {
+            // Criar nova tarefa
+            const newTask: Omit<Task, "id" | "createdAt"> = {
+              title: suggestion.title,
+              description: suggestion.description,
+              projectId: diagnostic.projectId,
+              projectName: diagnostic.projectName,
+              clientId: diagnostic.clientId,
+              clientName: diagnostic.clientName,
+              type: "processo",
+              responsible: diagnostic.responsibleName || "Equipe JoIA",
+              priority: suggestion.priority === "alta" ? "high" : suggestion.priority === "media" ? "medium" : "low",
+              dueDate: "",
+              status: "backlog",
+              evidenceRequired: false,
+              sourceDiagnosticId: diagnostic.id,
+            };
+            addTask(newTask as Task);
+            createdCount++;
+          }
+        } catch (error) {
+          console.error("[next-steps:error]", error);
+        }
+      }
+
+      if (createdCount > 0) {
+        toast.success(`${createdCount} ${createdCount === 1 ? "item criado" : "itens criados"} com sucesso!`);
+      }
+    },
+    [diagnostic, nextStepsSuggestions, templates, applyDiagnostic, addTask]
+  );
 
   const handleExitExecution = () => {
     setIsExecuting(false);
@@ -633,6 +715,17 @@ export default function DiagnosticoDetalhe() {
           </CardHeader>
         </Card>
       )}
+
+      {/* Modal de sugestões de próximos passos */}
+      <NextStepsSuggestionModal
+        open={showNextStepsModal}
+        onOpenChange={setShowNextStepsModal}
+        diagnosticName={diagnostic.name}
+        projectName={diagnostic.projectName}
+        clientName={diagnostic.clientName}
+        suggestions={nextStepsSuggestions}
+        onConfirm={handleConfirmNextSteps}
+      />
     </div>
   );
 }
