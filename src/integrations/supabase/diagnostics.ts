@@ -11,22 +11,46 @@ const isMissingDiagnosticColumnError = (error: PostgrestError | null): boolean =
   if (!error?.message) return false;
   const normalized = error.message.toLowerCase();
   if (!normalized.includes("schema cache")) return false;
-  return (
-    normalized.includes("'action_plan'") ||
-    normalized.includes("'report_payload'") ||
-    normalized.includes("'answered_questions'") ||
-    normalized.includes("'total_questions'") ||
-    normalized.includes("'auto_generate_opportunities'")
-  );
+  if (normalized.includes("diagnostics")) return true;
+  return normalized.includes("'action_plan'") || normalized.includes("'report_payload'");
 };
 
-const stripLegacyDiagnosticPayload = <T extends Record<string, unknown>>(payload: T): Omit<
+const extractMissingColumn = (error: PostgrestError | null): string | null => {
+  if (!error?.message) return null;
+  const match = error.message.match(/'([^']+)' column/i);
+  return match?.[1] ?? null;
+};
+
+const legacyDiagnosticFields = [
+  "action_plan",
+  "report_payload",
+  "answered_questions",
+  "total_questions",
+  "auto_generate_opportunities",
+  "client_name",
+  "project_name",
+  "template_name",
+  "responsible_name",
+  "responsible_id",
+  "due_date",
+  "opportunities_count",
+];
+
+const stripLegacyDiagnosticPayload = <T extends Record<string, unknown>>(
+  payload: T,
+  extraKeys: string[] = []
+): Omit<
   T,
   "action_plan" | "report_payload" | "answered_questions" | "total_questions" | "auto_generate_opportunities"
 > => {
-  const { action_plan, report_payload, answered_questions, total_questions, auto_generate_opportunities, ...rest } =
-    payload;
-  return rest;
+  const keysToStrip = new Set([...legacyDiagnosticFields, ...extraKeys]);
+  const sanitized = { ...payload };
+  keysToStrip.forEach((key) => {
+    if (key in sanitized) {
+      delete sanitized[key];
+    }
+  });
+  return sanitized;
 };
 
 export async function listDiagnostics(): Promise<DiagnosticRow[]> {
@@ -44,7 +68,11 @@ export async function createDiagnostic(payload: DiagnosticInsert): Promise<Diagn
 
   if (error) {
     if (isMissingDiagnosticColumnError(error)) {
-      const sanitizedPayload = stripLegacyDiagnosticPayload(payload as Record<string, unknown>) as DiagnosticInsert;
+      const missingColumn = extractMissingColumn(error);
+      const sanitizedPayload = stripLegacyDiagnosticPayload(
+        payload as Record<string, unknown>,
+        missingColumn ? [missingColumn] : []
+      ) as DiagnosticInsert;
       const retry = await supabase.from("diagnostics").insert(sanitizedPayload).select().single();
       if (retry.error) {
         throw new Error(retry.error.message);
@@ -69,7 +97,11 @@ export async function updateDiagnostic(id: string, payload: DiagnosticUpdate): P
 
   if (error) {
     if (isMissingDiagnosticColumnError(error)) {
-      const sanitizedPayload = stripLegacyDiagnosticPayload(payload as Record<string, unknown>) as DiagnosticUpdate;
+      const missingColumn = extractMissingColumn(error);
+      const sanitizedPayload = stripLegacyDiagnosticPayload(
+        payload as Record<string, unknown>,
+        missingColumn ? [missingColumn] : []
+      ) as DiagnosticUpdate;
       const retry = await supabase.from("diagnostics").update(sanitizedPayload).eq("id", id).select().single();
       if (retry.error) {
         throw new Error(retry.error.message);
