@@ -109,9 +109,9 @@ interface DataContextType {
       opportunities?: Omit<Opportunity, "id" | "createdAt" | "updatedAt" | "source">[];
       seedStructure?: boolean;
     }
-  ) => void;
-  updateProject: (id: string, project: Partial<Project>) => void;
-  deleteProject: (id: string) => void;
+  ) => Promise<void>;
+  updateProject: (id: string, project: Partial<Project>) => Promise<void>;
+  deleteProject: (id: string) => Promise<void>;
 
   // Tasks
   tasks: Task[];

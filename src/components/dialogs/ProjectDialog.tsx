@@ -317,7 +317,7 @@ export function ProjectDialog({
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!formData.name.trim()) {
@@ -443,7 +443,7 @@ export function ProjectDialog({
     }));
 
     if (project) {
-      updateProject(project.id, payload);
+      await updateProject(project.id, payload);
 
       const existing = opportunities.filter(
         (opportunity) => opportunity.projectId === project.id,
@@ -468,7 +468,7 @@ export function ProjectDialog({
       });
       toast.success("Projeto atualizado com sucesso");
     } else {
-      addProject(payload, {
+      await addProject(payload, {
         opportunities: parsedOpportunities.map((opportunity) => ({
           ...opportunity,
           clientId: payload.clientId,
