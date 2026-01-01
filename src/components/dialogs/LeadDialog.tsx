@@ -60,7 +60,7 @@ export function LeadDialog({ open, onOpenChange, lead }: LeadDialogProps) {
     }
   }, [lead, open]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.company.trim()) {
@@ -72,14 +72,18 @@ export function LeadDialog({ open, onOpenChange, lead }: LeadDialogProps) {
       return;
     }
 
-    if (lead) {
-      updateLead(lead.id, formData);
-      toast.success("Lead atualizado com sucesso");
-    } else {
-      addLead(formData);
-      toast.success("Lead criado com sucesso");
+    try {
+      if (lead) {
+        await updateLead(lead.id, formData);
+        toast.success("Lead atualizado com sucesso");
+      } else {
+        await addLead(formData);
+        toast.success("Lead criado com sucesso");
+      }
+      onOpenChange(false);
+    } catch {
+      toast.error("Erro ao salvar lead");
     }
-    onOpenChange(false);
   };
 
   return (
