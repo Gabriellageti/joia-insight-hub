@@ -3,10 +3,12 @@ import {
   CreditCard,
   DollarSign,
   Pencil,
+  Plus,
   Receipt,
   Trash2,
   TrendingDown,
   TrendingUp,
+  Check,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -40,28 +42,21 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { useData } from "@/contexts/DataContext";
-
-interface Receivable {
-  id: string;
-  client: string;
-  project: string;
-  value: number;
-  dueDate: string;
-  status: "pending" | "overdue" | "paid";
-}
-
-const receivables: Receivable[] = [
-  { id: "1", client: "Empresa ABC", project: "Otimização de Compras", value: 8500, dueDate: "20/12/2024", status: "pending" },
-  { id: "2", client: "Indústria XYZ", project: "Gestão de Estoque", value: 12000, dueDate: "15/12/2024", status: "overdue" },
-  { id: "3", client: "Comércio 123", project: "Controle Financeiro", value: 6500, dueDate: "28/12/2024", status: "pending" },
-  { id: "4", client: "Serviços JKL", project: "Processos de Vendas", value: 9500, dueDate: "10/12/2024", status: "paid" },
-];
+import { useFinancial, type FinancialRecord } from "@/hooks/useFinancial";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const statusConfig = {
-  pending: { label: "A vencer", color: "bg-yellow-100 text-yellow-700" },
-  overdue: { label: "Vencido", color: "bg-red-100 text-red-700" },
-  paid: { label: "Pago", color: "bg-green-100 text-green-700" },
+  Pendente: { label: "A vencer", color: "bg-yellow-100 text-yellow-700" },
+  Vencido: { label: "Vencido", color: "bg-red-100 text-red-700" },
+  Pago: { label: "Pago", color: "bg-green-100 text-green-700" },
 };
 
 const expenseCategories = [
@@ -72,6 +67,15 @@ const expenseCategories = [
   "Operações",
   "Marketing",
   "Viagens",
+  "Outros",
+];
+
+const revenueCategories = [
+  "Consultoria",
+  "Projeto",
+  "Diagnóstico",
+  "Treinamento",
+  "Recorrente",
   "Outros",
 ];
 
@@ -97,21 +101,40 @@ const formatDateInputValue = (value?: string) => {
 const getTodayIso = () => new Date().toISOString().split("T")[0];
 
 export default function Financeiro() {
-  const { expenses, projects, addExpense, updateExpense, deleteExpense } = useData();
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [formState, setFormState] = useState({
+  const { projects, clients, contracts } = useData();
+  const {
+    receivables,
+    expenses,
+    summary,
+    loading,
+    addRecord,
+    updateRecord,
+    deleteRecord,
+    markAsPaid,
+  } = useFinancial();
+
+  const [editingExpense, setEditingExpense] = useState<FinancialRecord | null>(null);
+  const [showReceivableDialog, setShowReceivableDialog] = useState(false);
+  const [editingReceivable, setEditingReceivable] = useState<FinancialRecord | null>(null);
+
+  // Expense form state
+  const [expenseForm, setExpenseForm] = useState({
     description: "",
     category: "",
     projectId: "",
     value: "",
     date: getTodayIso(),
-    receipt: "",
   });
 
-  const totalExpenses = useMemo(
-    () => expenses.reduce((total, expense) => total + (Number(expense.value) || 0), 0),
-    [expenses]
-  );
+  // Receivable form state
+  const [receivableForm, setReceivableForm] = useState({
+    description: "",
+    category: "",
+    clientId: "",
+    projectId: "",
+    value: "",
+    dueDate: getTodayIso(),
+  });
 
   const sortedExpenses = useMemo(
     () =>
@@ -123,66 +146,189 @@ export default function Financeiro() {
     [expenses]
   );
 
-  const resetForm = () => {
-    setFormState({
+  const sortedReceivables = useMemo(
+    () =>
+      [...receivables].sort((a, b) => {
+        const timeA = a.date ? new Date(a.date).getTime() : 0;
+        const timeB = b.date ? new Date(b.date).getTime() : 0;
+        return timeA - timeB;
+      }),
+    [receivables]
+  );
+
+  const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
+
+  const resetExpenseForm = () => {
+    setExpenseForm({
       description: "",
       category: "",
       projectId: "",
       value: "",
       date: getTodayIso(),
-      receipt: "",
     });
-    setEditingId(null);
+    setEditingExpense(null);
   };
 
-  const resolveProjectName = (projectId?: string) => {
-    if (!projectId) return undefined;
-    return projects.find((project) => project.id === projectId)?.name;
+  const resetReceivableForm = () => {
+    setReceivableForm({
+      description: "",
+      category: "",
+      clientId: "",
+      projectId: "",
+      value: "",
+      dueDate: getTodayIso(),
+    });
+    setEditingReceivable(null);
+    setShowReceivableDialog(false);
   };
 
-  const handleEdit = (expense: typeof expenses[number]) => {
-    setEditingId(expense.id);
-    setFormState({
-      description: expense.description,
-      category: expense.category,
+  const handleEditExpense = (expense: FinancialRecord) => {
+    setEditingExpense(expense);
+    setExpenseForm({
+      description: expense.description || "",
+      category: expense.category || "",
       projectId: expense.projectId || "",
-      value: String(expense.value ?? ""),
+      value: String(expense.amount ?? ""),
       date: formatDateInputValue(expense.date),
-      receipt: expense.receipt || "",
     });
   };
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  const handleEditReceivable = (receivable: FinancialRecord) => {
+    setEditingReceivable(receivable);
+    setReceivableForm({
+      description: receivable.description || "",
+      category: receivable.category || "",
+      clientId: receivable.clientId || "",
+      projectId: receivable.projectId || "",
+      value: String(receivable.amount ?? ""),
+      dueDate: formatDateInputValue(receivable.date),
+    });
+    setShowReceivableDialog(true);
+  };
+
+  const handleExpenseSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!formState.description || !formState.category || !formState.value || !formState.date) {
+    if (!expenseForm.description || !expenseForm.category || !expenseForm.value || !expenseForm.date) {
       return;
     }
 
+    const project = projects.find((p) => p.id === expenseForm.projectId);
+
     const payload = {
-      description: formState.description.trim(),
-      category: formState.category,
-      projectId: formState.projectId || undefined,
-      projectName: resolveProjectName(formState.projectId || undefined),
-      value: Number(formState.value),
-      date: formState.date,
-      receipt: formState.receipt.trim() || undefined,
+      type: "despesa" as const,
+      description: expenseForm.description.trim(),
+      category: expenseForm.category,
+      projectId: expenseForm.projectId || undefined,
+      projectName: project?.name,
+      amount: Number(expenseForm.value),
+      date: expenseForm.date,
+      status: "Pago" as const,
+      isInternal: true,
     };
 
-    if (editingId) {
-      await updateExpense(editingId, payload);
+    if (editingExpense) {
+      await updateRecord(editingExpense.id, payload);
     } else {
-      await addExpense(payload);
+      await addRecord(payload);
     }
 
-    resetForm();
+    resetExpenseForm();
   };
 
-  const handleDelete = async (id: string) => {
-    await deleteExpense(id);
+  const handleReceivableSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!receivableForm.description || !receivableForm.value || !receivableForm.dueDate) {
+      return;
+    }
+
+    const client = clients.find((c) => c.id === receivableForm.clientId);
+    const project = projects.find((p) => p.id === receivableForm.projectId);
+
+    const payload = {
+      type: "receita" as const,
+      description: receivableForm.description.trim(),
+      category: receivableForm.category || "Projeto",
+      clientId: receivableForm.clientId || undefined,
+      clientName: client?.nomeFantasia || client?.razaoSocial,
+      projectId: receivableForm.projectId || undefined,
+      projectName: project?.name,
+      amount: Number(receivableForm.value),
+      date: receivableForm.dueDate,
+      status: "Pendente" as const,
+      isInternal: false,
+    };
+
+    if (editingReceivable) {
+      await updateRecord(editingReceivable.id, payload);
+    } else {
+      await addRecord(payload);
+    }
+
+    resetReceivableForm();
   };
 
-  const isFormValid = Boolean(formState.description && formState.category && formState.value && formState.date);
+  const handleDeleteExpense = async (id: string) => {
+    await deleteRecord(id);
+  };
+
+  const handleDeleteReceivable = async (id: string) => {
+    await deleteRecord(id);
+  };
+
+  const handleMarkAsPaid = async (id: string) => {
+    await markAsPaid(id);
+  };
+
+  const getClientName = (clientId?: string) => {
+    if (!clientId) return "-";
+    const client = clients.find((c) => c.id === clientId);
+    return client?.nomeFantasia || client?.razaoSocial || "-";
+  };
+
+  const getProjectName = (projectId?: string) => {
+    if (!projectId) return "-";
+    const project = projects.find((p) => p.id === projectId);
+    return project?.name || "-";
+  };
+
+  const getReceivableStatus = (record: FinancialRecord): FinancialRecord["status"] => {
+    if (record.status === "Pago") return "Pago";
+    if (!record.date) return "Pendente";
+    const dueDate = new Date(record.date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return dueDate < today ? "Vencido" : "Pendente";
+  };
+
+  const isExpenseFormValid = Boolean(
+    expenseForm.description && expenseForm.category && expenseForm.value && expenseForm.date
+  );
+
+  const isReceivableFormValid = Boolean(
+    receivableForm.description && receivableForm.value && receivableForm.dueDate
+  );
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-semibold text-foreground">Financeiro JoIA</h1>
+          <p className="text-muted-foreground">Controle receitas, despesas e margem por projeto</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => (
+            <Card key={i}>
+              <CardContent className="p-6">
+                <Skeleton className="h-20 w-full" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -197,10 +343,9 @@ export default function Financeiro() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Receita Mensal</p>
-                <p className="text-2xl font-bold">R$ 45.800</p>
-                <p className="text-xs text-green-600 flex items-center gap-1 mt-1">
-                  <TrendingUp className="h-3 w-3" />
-                  +12% vs mês anterior
+                <p className="text-2xl font-bold">{formatCurrency(summary.totalRevenue)}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {receivables.filter((r) => r.status === "Pago").length} pagamentos recebidos
                 </p>
               </div>
               <div className="p-3 bg-accent rounded-lg">
@@ -215,8 +360,13 @@ export default function Financeiro() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">A Receber</p>
-                <p className="text-2xl font-bold">R$ 36.500</p>
-                <p className="text-xs text-muted-foreground mt-1">4 faturas pendentes</p>
+                <p className="text-2xl font-bold">{formatCurrency(summary.pendingAmount)}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {summary.pendingCount} faturas pendentes
+                  {summary.overdueCount > 0 && (
+                    <span className="text-destructive"> ({summary.overdueCount} vencidas)</span>
+                  )}
+                </p>
               </div>
               <div className="p-3 bg-muted rounded-lg">
                 <CreditCard className="h-5 w-5 text-muted-foreground" />
@@ -230,11 +380,8 @@ export default function Financeiro() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Despesas</p>
-                <p className="text-2xl font-bold">{formatCurrency(totalExpenses)}</p>
-                <p className="text-xs text-red-600 flex items-center gap-1 mt-1">
-                  <TrendingDown className="h-3 w-3" />
-                  -5% vs mês anterior
-                </p>
+                <p className="text-2xl font-bold">{formatCurrency(summary.totalExpenses)}</p>
+                <p className="text-xs text-muted-foreground mt-1">{expenses.length} lançamentos</p>
               </div>
               <div className="p-3 bg-muted rounded-lg">
                 <Receipt className="h-5 w-5 text-muted-foreground" />
@@ -248,11 +395,15 @@ export default function Financeiro() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Margem Média</p>
-                <p className="text-2xl font-bold text-accent">42%</p>
-                <p className="text-xs text-muted-foreground mt-1">Por projeto</p>
+                <p className="text-2xl font-bold text-accent">{summary.margin.toFixed(0)}%</p>
+                <p className="text-xs text-muted-foreground mt-1">Receita - Despesas</p>
               </div>
               <div className="p-3 bg-accent rounded-lg">
-                <TrendingUp className="h-5 w-5 text-accent-foreground" />
+                {summary.margin >= 0 ? (
+                  <TrendingUp className="h-5 w-5 text-accent-foreground" />
+                ) : (
+                  <TrendingDown className="h-5 w-5 text-accent-foreground" />
+                )}
               </div>
             </div>
           </CardContent>
@@ -264,41 +415,102 @@ export default function Financeiro() {
           <TabsTrigger value="receivables">Contas a Receber</TabsTrigger>
           <TabsTrigger value="expenses">Despesas</TabsTrigger>
           <TabsTrigger value="contracts">Contratos</TabsTrigger>
-          <TabsTrigger value="margin">Margem por Projeto</TabsTrigger>
         </TabsList>
 
         <TabsContent value="receivables" className="mt-4">
           <Card>
             <CardHeader>
-              <CardTitle>Contas a Receber</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle>Contas a Receber</CardTitle>
+                <Button onClick={() => setShowReceivableDialog(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Nova Receita
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Cliente</TableHead>
-                    <TableHead>Projeto</TableHead>
-                    <TableHead>Valor</TableHead>
-                    <TableHead>Vencimento</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {receivables.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell className="font-medium">{item.client}</TableCell>
-                      <TableCell>{item.project}</TableCell>
-                      <TableCell>{formatCurrency(item.value)}</TableCell>
-                      <TableCell>{item.dueDate}</TableCell>
-                      <TableCell>
-                        <Badge className={statusConfig[item.status].color} variant="outline">
-                          {statusConfig[item.status].label}
-                        </Badge>
-                      </TableCell>
+              {sortedReceivables.length === 0 ? (
+                <div className="py-10 text-center text-muted-foreground">
+                  Nenhuma conta a receber cadastrada.
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Cliente</TableHead>
+                      <TableHead>Projeto</TableHead>
+                      <TableHead>Descrição</TableHead>
+                      <TableHead>Valor</TableHead>
+                      <TableHead>Vencimento</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {sortedReceivables.map((item) => {
+                      const status = getReceivableStatus(item);
+                      return (
+                        <TableRow key={item.id}>
+                          <TableCell className="font-medium">{getClientName(item.clientId)}</TableCell>
+                          <TableCell>{getProjectName(item.projectId)}</TableCell>
+                          <TableCell>{item.description || "-"}</TableCell>
+                          <TableCell>{formatCurrency(item.amount)}</TableCell>
+                          <TableCell>{formatDate(item.date)}</TableCell>
+                          <TableCell>
+                            <Badge className={statusConfig[status || "Pendente"].color} variant="outline">
+                              {statusConfig[status || "Pendente"].label}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-2">
+                              {status !== "Pago" && (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleMarkAsPaid(item.id)}
+                                  title="Marcar como pago"
+                                >
+                                  <Check className="h-4 w-4 text-green-600" />
+                                </Button>
+                              )}
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleEditReceivable(item)}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button type="button" variant="ghost" size="icon">
+                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Excluir receita</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Tem certeza que deseja excluir esta receita? Essa ação não pode ser desfeita.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => handleDeleteReceivable(item.id)}>
+                                      Excluir
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -306,18 +518,18 @@ export default function Financeiro() {
         <TabsContent value="expenses" className="mt-4 space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>{editingId ? "Editar despesa" : "Registrar nova despesa"}</CardTitle>
+              <CardTitle>{editingExpense ? "Editar despesa" : "Registrar nova despesa"}</CardTitle>
             </CardHeader>
             <CardContent>
-              <form className="grid gap-4" onSubmit={handleSubmit}>
+              <form className="grid gap-4" onSubmit={handleExpenseSubmit}>
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="expense-description">Descrição</Label>
                     <Input
                       id="expense-description"
-                      value={formState.description}
+                      value={expenseForm.description}
                       onChange={(event) =>
-                        setFormState((prev) => ({ ...prev, description: event.target.value }))
+                        setExpenseForm((prev) => ({ ...prev, description: event.target.value }))
                       }
                       placeholder="Ex: Licença de software"
                     />
@@ -325,8 +537,8 @@ export default function Financeiro() {
                   <div className="space-y-2">
                     <Label htmlFor="expense-category">Categoria</Label>
                     <Select
-                      value={formState.category}
-                      onValueChange={(value) => setFormState((prev) => ({ ...prev, category: value }))}
+                      value={expenseForm.category}
+                      onValueChange={(value) => setExpenseForm((prev) => ({ ...prev, category: value }))}
                     >
                       <SelectTrigger id="expense-category">
                         <SelectValue placeholder="Selecione" />
@@ -346,9 +558,9 @@ export default function Financeiro() {
                   <div className="space-y-2">
                     <Label htmlFor="expense-project">Projeto (opcional)</Label>
                     <Select
-                      value={formState.projectId || "none"}
+                      value={expenseForm.projectId || "none"}
                       onValueChange={(value) =>
-                        setFormState((prev) => ({
+                        setExpenseForm((prev) => ({
                           ...prev,
                           projectId: value === "none" ? "" : value,
                         }))
@@ -372,9 +584,9 @@ export default function Financeiro() {
                     <Input
                       id="expense-date"
                       type="date"
-                      value={formState.date}
+                      value={expenseForm.date}
                       onChange={(event) =>
-                        setFormState((prev) => ({ ...prev, date: event.target.value }))
+                        setExpenseForm((prev) => ({ ...prev, date: event.target.value }))
                       }
                     />
                   </div>
@@ -385,36 +597,24 @@ export default function Financeiro() {
                       type="number"
                       min="0"
                       step="0.01"
-                      value={formState.value}
+                      value={expenseForm.value}
                       onChange={(event) =>
-                        setFormState((prev) => ({ ...prev, value: event.target.value }))
+                        setExpenseForm((prev) => ({ ...prev, value: event.target.value }))
                       }
                       placeholder="0,00"
                     />
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="expense-receipt">Comprovante (link opcional)</Label>
-                  <Input
-                    id="expense-receipt"
-                    value={formState.receipt}
-                    onChange={(event) =>
-                      setFormState((prev) => ({ ...prev, receipt: event.target.value }))
-                    }
-                    placeholder="https://..."
-                  />
-                </div>
-
                 <div className="flex flex-wrap gap-2">
-                  <Button type="submit" disabled={!isFormValid}>
-                    {editingId ? "Salvar alterações" : "Registrar despesa"}
+                  <Button type="submit" disabled={!isExpenseFormValid}>
+                    {editingExpense ? "Salvar alterações" : "Registrar despesa"}
                   </Button>
-                  {editingId ? (
-                    <Button type="button" variant="ghost" onClick={resetForm}>
+                  {editingExpense && (
+                    <Button type="button" variant="ghost" onClick={resetExpenseForm}>
                       Cancelar edição
                     </Button>
-                  ) : null}
+                  )}
                 </div>
               </form>
             </CardContent>
@@ -424,9 +624,7 @@ export default function Financeiro() {
             <CardHeader>
               <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
                 <CardTitle>Despesas registradas</CardTitle>
-                <span className="text-sm text-muted-foreground">
-                  Total: {formatCurrency(totalExpenses)}
-                </span>
+                <span className="text-sm text-muted-foreground">Total: {formatCurrency(totalExpenses)}</span>
               </div>
             </CardHeader>
             <CardContent>
@@ -443,7 +641,6 @@ export default function Financeiro() {
                       <TableHead>Projeto</TableHead>
                       <TableHead>Data</TableHead>
                       <TableHead>Valor</TableHead>
-                      <TableHead>Comprovante</TableHead>
                       <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -452,34 +649,16 @@ export default function Financeiro() {
                       <TableRow key={expense.id}>
                         <TableCell className="font-medium">{expense.description}</TableCell>
                         <TableCell>{expense.category}</TableCell>
-                        <TableCell>
-                          {expense.projectName ||
-                            projects.find((project) => project.id === expense.projectId)?.name ||
-                            "Sem projeto"}
-                        </TableCell>
+                        <TableCell>{getProjectName(expense.projectId)}</TableCell>
                         <TableCell>{formatDate(expense.date)}</TableCell>
-                        <TableCell>{formatCurrency(expense.value)}</TableCell>
-                        <TableCell>
-                          {expense.receipt ? (
-                            <a
-                              href={expense.receipt}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-primary underline underline-offset-4"
-                            >
-                              Ver comprovante
-                            </a>
-                          ) : (
-                            "-"
-                          )}
-                        </TableCell>
+                        <TableCell>{formatCurrency(expense.amount)}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
                             <Button
                               type="button"
                               variant="ghost"
                               size="icon"
-                              onClick={() => handleEdit(expense)}
+                              onClick={() => handleEditExpense(expense)}
                             >
                               <Pencil className="h-4 w-4" />
                             </Button>
@@ -493,13 +672,13 @@ export default function Financeiro() {
                                 <AlertDialogHeader>
                                   <AlertDialogTitle>Excluir despesa</AlertDialogTitle>
                                   <AlertDialogDescription>
-                                    Tem certeza que deseja excluir a despesa "{expense.description}"?
-                                    Essa ação não pode ser desfeita.
+                                    Tem certeza que deseja excluir a despesa "{expense.description}"? Essa ação não pode
+                                    ser desfeita.
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
                                   <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                  <AlertDialogAction onClick={() => handleDelete(expense.id)}>
+                                  <AlertDialogAction onClick={() => handleDeleteExpense(expense.id)}>
                                     Excluir
                                   </AlertDialogAction>
                                 </AlertDialogFooter>
@@ -518,20 +697,168 @@ export default function Financeiro() {
 
         <TabsContent value="contracts" className="mt-4">
           <Card>
-            <CardContent className="p-6 text-center text-muted-foreground">
-              Módulo de contratos em desenvolvimento...
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="margin" className="mt-4">
-          <Card>
-            <CardContent className="p-6 text-center text-muted-foreground">
-              Análise de margem por projeto em desenvolvimento...
+            <CardHeader>
+              <CardTitle>Contratos Ativos</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {contracts.length === 0 ? (
+                <div className="py-10 text-center text-muted-foreground">
+                  Nenhum contrato cadastrado ainda.
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Cliente</TableHead>
+                      <TableHead>Projeto</TableHead>
+                      <TableHead>Valor</TableHead>
+                      <TableHead>Início</TableHead>
+                      <TableHead>Término</TableHead>
+                      <TableHead>Tipo</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {contracts.map((contract) => (
+                      <TableRow key={contract.id}>
+                        <TableCell className="font-medium">{contract.clientName || getClientName(contract.clientId)}</TableCell>
+                        <TableCell>{contract.projectName || getProjectName(contract.projectId)}</TableCell>
+                        <TableCell>{formatCurrency(contract.value)}</TableCell>
+                        <TableCell>{formatDate(contract.startDate)}</TableCell>
+                        <TableCell>{formatDate(contract.endDate)}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">
+                            {contract.billingType === "mensal"
+                              ? "Mensal"
+                              : contract.billingType === "parcela"
+                                ? "Parcelado"
+                                : "Projeto"}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Dialog for adding/editing receivable */}
+      <Dialog open={showReceivableDialog} onOpenChange={setShowReceivableDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingReceivable ? "Editar Receita" : "Nova Receita"}</DialogTitle>
+          </DialogHeader>
+          <form className="grid gap-4" onSubmit={handleReceivableSubmit}>
+            <div className="space-y-2">
+              <Label htmlFor="receivable-description">Descrição</Label>
+              <Input
+                id="receivable-description"
+                value={receivableForm.description}
+                onChange={(e) => setReceivableForm((prev) => ({ ...prev, description: e.target.value }))}
+                placeholder="Ex: Parcela 1/3 do projeto"
+              />
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="receivable-client">Cliente</Label>
+                <Select
+                  value={receivableForm.clientId || "none"}
+                  onValueChange={(value) =>
+                    setReceivableForm((prev) => ({ ...prev, clientId: value === "none" ? "" : value }))
+                  }
+                >
+                  <SelectTrigger id="receivable-client">
+                    <SelectValue placeholder="Selecione" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sem cliente</SelectItem>
+                    {clients.map((client) => (
+                      <SelectItem key={client.id} value={client.id}>
+                        {client.nomeFantasia || client.razaoSocial}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="receivable-project">Projeto</Label>
+                <Select
+                  value={receivableForm.projectId || "none"}
+                  onValueChange={(value) =>
+                    setReceivableForm((prev) => ({ ...prev, projectId: value === "none" ? "" : value }))
+                  }
+                >
+                  <SelectTrigger id="receivable-project">
+                    <SelectValue placeholder="Selecione" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sem projeto</SelectItem>
+                    {projects.map((project) => (
+                      <SelectItem key={project.id} value={project.id}>
+                        {project.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="space-y-2">
+                <Label htmlFor="receivable-category">Categoria</Label>
+                <Select
+                  value={receivableForm.category || "Projeto"}
+                  onValueChange={(value) => setReceivableForm((prev) => ({ ...prev, category: value }))}
+                >
+                  <SelectTrigger id="receivable-category">
+                    <SelectValue placeholder="Selecione" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {revenueCategories.map((category) => (
+                      <SelectItem key={category} value={category}>
+                        {category}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="receivable-value">Valor</Label>
+                <Input
+                  id="receivable-value"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={receivableForm.value}
+                  onChange={(e) => setReceivableForm((prev) => ({ ...prev, value: e.target.value }))}
+                  placeholder="0,00"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="receivable-dueDate">Vencimento</Label>
+                <Input
+                  id="receivable-dueDate"
+                  type="date"
+                  value={receivableForm.dueDate}
+                  onChange={(e) => setReceivableForm((prev) => ({ ...prev, dueDate: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="ghost" onClick={resetReceivableForm}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={!isReceivableFormValid}>
+                {editingReceivable ? "Salvar" : "Adicionar"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
