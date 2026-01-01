@@ -223,9 +223,9 @@ interface DataContextType {
 
   // Leads
   leads: Lead[];
-  addLead: (lead: Omit<Lead, "id" | "createdAt">) => void;
-  updateLead: (id: string, lead: Partial<Lead>) => void;
-  deleteLead: (id: string) => void;
+  addLead: (lead: Omit<Lead, "id" | "createdAt">) => Promise<Lead>;
+  updateLead: (id: string, lead: Partial<Lead>) => Promise<Lead | undefined>;
+  deleteLead: (id: string) => Promise<void>;
 
   // Diagnostics
   diagnostics: Diagnostic[];
@@ -249,9 +249,9 @@ interface DataContextType {
 
   // Content
   contentItems: ContentItem[];
-  addContentItem: (item: Omit<ContentItem, "id" | "createdAt">) => void;
-  updateContentItem: (id: string, item: Partial<ContentItem>) => void;
-  deleteContentItem: (id: string) => void;
+  addContentItem: (item: Omit<ContentItem, "id" | "createdAt">) => Promise<ContentItem>;
+  updateContentItem: (id: string, item: Partial<ContentItem>) => Promise<ContentItem | undefined>;
+  deleteContentItem: (id: string) => Promise<void>;
 
   // Contracts
   contracts: Contract[];
@@ -502,9 +502,9 @@ const mapSupabaseLeadToLegacy = (lead: LeadRow): Lead => ({
   phone: lead.phone || undefined,
   source: lead.source || "Inbound",
   status: (lead.status?.toLowerCase() as Lead["status"]) || "new",
-  value: 0,
-  nextAction: lead.notes || "",
-  nextActionDate: undefined,
+  value: (lead as { value?: number }).value || 0,
+  nextAction: (lead as { next_action?: string }).next_action || "",
+  nextActionDate: (lead as { next_action_date?: string }).next_action_date || undefined,
   notes: lead.notes || undefined,
   createdAt: formatDateFromIso(lead.created_at),
 });
@@ -2977,51 +2977,82 @@ export function DataProvider({ children }: { children: ReactNode }) {
     },
 
     leads,
-    addLead: (lead) => {
-      const newLead = { ...lead, id: generateId(), createdAt: getDate() };
-      
-      void (async () => {
-        try {
-          const payload = {
-            name: newLead.contact,
-            company: newLead.company || null,
-            email: newLead.email || null,
-            phone: newLead.phone || null,
-            source: newLead.source || null,
-            status: newLead.status ? newLead.status.charAt(0).toUpperCase() + newLead.status.slice(1) : "Novo",
-            notes: newLead.notes || newLead.nextAction || null,
-          };
-          const created = await createSupabaseLead(payload);
-          setLeads((prev) => prev.map((l) => l.id === newLead.id ? mapSupabaseLeadToLegacy(created) : l));
-        } catch (error) {
-          console.error("Error creating lead:", error);
-        }
-      })();
+    addLead: async (lead) => {
+      const payload = {
+        name: lead.contact,
+        company: lead.company || null,
+        email: lead.email || null,
+        phone: lead.phone || null,
+        source: lead.source || null,
+        status: lead.status ? lead.status.charAt(0).toUpperCase() + lead.status.slice(1) : "Novo",
+        notes: lead.notes || null,
+        value: lead.value || 0,
+        next_action: lead.nextAction || null,
+        next_action_date: lead.nextActionDate || null,
+      };
 
-      setLeads((prev) => [...prev, newLead]);
+      try {
+        const created = await createSupabaseLead(payload as Parameters<typeof createSupabaseLead>[0]);
+        const normalized = mapSupabaseLeadToLegacy(created);
+        setLeads((prev) => [...prev, normalized]);
+        return normalized;
+      } catch (error) {
+        const message = (error as Error).message || "Erro ao criar lead";
+        toast({
+          title: "Não foi possível criar o lead",
+          description: message,
+          variant: "destructive",
+        });
+        throw error;
+      }
     },
-    updateLead: (id, lead) => {
-      setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, ...lead } : l)));
-      
-      void (async () => {
-        try {
-          const payload: Record<string, unknown> = {};
-          if (lead.contact !== undefined) payload.name = lead.contact;
-          if (lead.company !== undefined) payload.company = lead.company;
-          if (lead.email !== undefined) payload.email = lead.email;
-          if (lead.phone !== undefined) payload.phone = lead.phone;
-          if (lead.source !== undefined) payload.source = lead.source;
-          if (lead.status !== undefined) payload.status = lead.status ? lead.status.charAt(0).toUpperCase() + lead.status.slice(1) : null;
-          if (lead.notes !== undefined) payload.notes = lead.notes;
-          await updateSupabaseLead(id, payload);
-        } catch (error) {
-          console.error("Error updating lead:", error);
-        }
-      })();
+    updateLead: async (id, lead) => {
+      const payload: Record<string, unknown> = {};
+      if (lead.contact !== undefined) payload.name = lead.contact;
+      if (lead.company !== undefined) payload.company = lead.company;
+      if (lead.email !== undefined) payload.email = lead.email;
+      if (lead.phone !== undefined) payload.phone = lead.phone;
+      if (lead.source !== undefined) payload.source = lead.source;
+      if (lead.status !== undefined) payload.status = lead.status ? lead.status.charAt(0).toUpperCase() + lead.status.slice(1) : null;
+      if (lead.notes !== undefined) payload.notes = lead.notes;
+      if (lead.value !== undefined) payload.value = lead.value;
+      if (lead.nextAction !== undefined) payload.next_action = lead.nextAction;
+      if (lead.nextActionDate !== undefined) payload.next_action_date = lead.nextActionDate || null;
+
+      try {
+        const updated = await updateSupabaseLead(id, payload);
+        let normalized: Lead | undefined;
+        setLeads((prev) =>
+          prev.map((l) => {
+            if (l.id !== id) return l;
+            normalized = { ...l, ...mapSupabaseLeadToLegacy(updated) };
+            return normalized;
+          })
+        );
+        return normalized;
+      } catch (error) {
+        const message = (error as Error).message || "Erro ao atualizar lead";
+        toast({
+          title: "Não foi possível atualizar o lead",
+          description: message,
+          variant: "destructive",
+        });
+        throw error;
+      }
     },
-    deleteLead: (id) => {
-      setLeads((prev) => prev.filter((l) => l.id !== id));
-      void deleteSupabaseLead(id).catch((e) => console.error("Error deleting lead:", e));
+    deleteLead: async (id) => {
+      try {
+        await deleteSupabaseLead(id);
+        setLeads((prev) => prev.filter((l) => l.id !== id));
+      } catch (error) {
+        const message = (error as Error).message || "Erro ao remover lead";
+        toast({
+          title: "Não foi possível remover o lead",
+          description: message,
+          variant: "destructive",
+        });
+        throw error;
+      }
     },
 
     templates,
@@ -3140,47 +3171,72 @@ export function DataProvider({ children }: { children: ReactNode }) {
     createActionPlan,
 
     contentItems,
-    addContentItem: (item) => {
-      const newItem = { ...item, id: generateId(), createdAt: getDate() };
-      
-      void (async () => {
-        try {
-          const payload = {
-            title: newItem.title,
-            type: newItem.type || null,
-            status: newItem.status || "idea",
-            scheduled_date: toSupabaseDate(newItem.publishDate),
-            tags: newItem.tags || [],
-          };
-          const created = await createSupabaseContentItem(payload);
-          setContentItems((prev) => prev.map((i) => i.id === newItem.id ? mapSupabaseContentItemToLegacy(created) : i));
-        } catch (error) {
-          console.error("Error creating content item:", error);
-        }
-      })();
+    addContentItem: async (item) => {
+      const payload = {
+        title: item.title,
+        type: item.type || null,
+        status: item.status || "idea",
+        scheduled_date: toSupabaseDate(item.publishDate),
+        tags: item.tags || [],
+      };
 
-      setContentItems((prev) => [...prev, newItem]);
+      try {
+        const created = await createSupabaseContentItem(payload);
+        const normalized = mapSupabaseContentItemToLegacy(created);
+        setContentItems((prev) => [...prev, normalized]);
+        return normalized;
+      } catch (error) {
+        const message = (error as Error).message || "Erro ao criar conteúdo";
+        toast({
+          title: "Não foi possível criar o conteúdo",
+          description: message,
+          variant: "destructive",
+        });
+        throw error;
+      }
     },
-    updateContentItem: (id, item) => {
-      setContentItems((prev) => prev.map((i) => (i.id === id ? { ...i, ...item } : i)));
-      
-      void (async () => {
-        try {
-          const payload: Record<string, unknown> = {};
-          if (item.title !== undefined) payload.title = item.title;
-          if (item.type !== undefined) payload.type = item.type;
-          if (item.status !== undefined) payload.status = item.status;
-          if (item.publishDate !== undefined) payload.scheduled_date = toSupabaseDate(item.publishDate);
-          if (item.tags !== undefined) payload.tags = item.tags;
-          await updateSupabaseContentItem(id, payload);
-        } catch (error) {
-          console.error("Error updating content item:", error);
-        }
-      })();
+    updateContentItem: async (id, item) => {
+      const payload: Record<string, unknown> = {};
+      if (item.title !== undefined) payload.title = item.title;
+      if (item.type !== undefined) payload.type = item.type;
+      if (item.status !== undefined) payload.status = item.status;
+      if (item.publishDate !== undefined) payload.scheduled_date = toSupabaseDate(item.publishDate);
+      if (item.tags !== undefined) payload.tags = item.tags;
+
+      try {
+        const updated = await updateSupabaseContentItem(id, payload);
+        let normalized: ContentItem | undefined;
+        setContentItems((prev) =>
+          prev.map((i) => {
+            if (i.id !== id) return i;
+            normalized = { ...i, ...mapSupabaseContentItemToLegacy(updated) };
+            return normalized;
+          })
+        );
+        return normalized;
+      } catch (error) {
+        const message = (error as Error).message || "Erro ao atualizar conteúdo";
+        toast({
+          title: "Não foi possível atualizar o conteúdo",
+          description: message,
+          variant: "destructive",
+        });
+        throw error;
+      }
     },
-    deleteContentItem: (id) => {
-      setContentItems((prev) => prev.filter((i) => i.id !== id));
-      void deleteSupabaseContentItem(id).catch((e) => console.error("Error deleting content item:", e));
+    deleteContentItem: async (id) => {
+      try {
+        await deleteSupabaseContentItem(id);
+        setContentItems((prev) => prev.filter((i) => i.id !== id));
+      } catch (error) {
+        const message = (error as Error).message || "Erro ao remover conteúdo";
+        toast({
+          title: "Não foi possível remover o conteúdo",
+          description: message,
+          variant: "destructive",
+        });
+        throw error;
+      }
     },
 
     contracts,

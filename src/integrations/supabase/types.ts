@@ -706,11 +706,14 @@ export type Database = {
           email: string | null
           id: string
           name: string
+          next_action: string | null
+          next_action_date: string | null
           notes: string | null
           phone: string | null
           source: string | null
           status: string | null
           updated_at: string
+          value: number | null
         }
         Insert: {
           assigned_to?: string | null
@@ -719,11 +722,14 @@ export type Database = {
           email?: string | null
           id?: string
           name: string
+          next_action?: string | null
+          next_action_date?: string | null
           notes?: string | null
           phone?: string | null
           source?: string | null
           status?: string | null
           updated_at?: string
+          value?: number | null
         }
         Update: {
           assigned_to?: string | null
@@ -732,11 +738,14 @@ export type Database = {
           email?: string | null
           id?: string
           name?: string
+          next_action?: string | null
+          next_action_date?: string | null
           notes?: string | null
           phone?: string | null
           source?: string | null
           status?: string | null
           updated_at?: string
+          value?: number | null
         }
         Relationships: []
       }
