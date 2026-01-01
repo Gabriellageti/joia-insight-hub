@@ -14,6 +14,47 @@ export type Database = {
   }
   public: {
     Tables: {
+      client_contacts: {
+        Row: {
+          client_id: string
+          created_at: string
+          email: string | null
+          id: string
+          is_primary: boolean | null
+          name: string
+          phone: string | null
+          role: string | null
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          email?: string | null
+          id?: string
+          is_primary?: boolean | null
+          name: string
+          phone?: string | null
+          role?: string | null
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          email?: string | null
+          id?: string
+          is_primary?: boolean | null
+          name?: string
+          phone?: string | null
+          role?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_contacts_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clients: {
         Row: {
           cnpj: string | null
@@ -55,6 +96,155 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      content_items: {
+        Row: {
+          author: string | null
+          content: string | null
+          created_at: string
+          id: string
+          platform: string | null
+          scheduled_date: string | null
+          status: string | null
+          tags: string[] | null
+          title: string
+          type: string | null
+          updated_at: string
+        }
+        Insert: {
+          author?: string | null
+          content?: string | null
+          created_at?: string
+          id?: string
+          platform?: string | null
+          scheduled_date?: string | null
+          status?: string | null
+          tags?: string[] | null
+          title: string
+          type?: string | null
+          updated_at?: string
+        }
+        Update: {
+          author?: string | null
+          content?: string | null
+          created_at?: string
+          id?: string
+          platform?: string | null
+          scheduled_date?: string | null
+          status?: string | null
+          tags?: string[] | null
+          title?: string
+          type?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      contracts: {
+        Row: {
+          billing_type: string | null
+          client_id: string | null
+          created_at: string
+          end_date: string | null
+          id: string
+          installments: Json | null
+          project_id: string | null
+          start_date: string | null
+          status: string | null
+          title: string
+          updated_at: string
+          value: number | null
+        }
+        Insert: {
+          billing_type?: string | null
+          client_id?: string | null
+          created_at?: string
+          end_date?: string | null
+          id?: string
+          installments?: Json | null
+          project_id?: string | null
+          start_date?: string | null
+          status?: string | null
+          title: string
+          updated_at?: string
+          value?: number | null
+        }
+        Update: {
+          billing_type?: string | null
+          client_id?: string | null
+          created_at?: string
+          end_date?: string | null
+          id?: string
+          installments?: Json | null
+          project_id?: string | null
+          start_date?: string | null
+          status?: string | null
+          title?: string
+          updated_at?: string
+          value?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contracts_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contracts_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      deliverables: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          description: string | null
+          due_date: string | null
+          id: string
+          project_id: string
+          responsible: string | null
+          status: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          project_id: string
+          responsible?: string | null
+          status?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          project_id?: string
+          responsible?: string | null
+          status?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deliverables_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       diagnostic_templates: {
         Row: {
@@ -640,6 +830,82 @@ export type Database = {
         }
         Relationships: []
       }
+      opportunities: {
+        Row: {
+          client_id: string | null
+          created_at: string
+          description: string | null
+          diagnostic_id: string | null
+          effort: string | null
+          estimated_value: number | null
+          evidence_type: string | null
+          id: string
+          priority: string | null
+          project_id: string | null
+          source: string | null
+          status: string | null
+          title: string
+          type: string | null
+          updated_at: string
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string
+          description?: string | null
+          diagnostic_id?: string | null
+          effort?: string | null
+          estimated_value?: number | null
+          evidence_type?: string | null
+          id?: string
+          priority?: string | null
+          project_id?: string | null
+          source?: string | null
+          status?: string | null
+          title: string
+          type?: string | null
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string
+          description?: string | null
+          diagnostic_id?: string | null
+          effort?: string | null
+          estimated_value?: number | null
+          evidence_type?: string | null
+          id?: string
+          priority?: string | null
+          project_id?: string | null
+          source?: string | null
+          status?: string | null
+          title?: string
+          type?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "opportunities_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunities_diagnostic_id_fkey"
+            columns: ["diagnostic_id"]
+            isOneToOne: false
+            referencedRelation: "diagnostics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunities_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       playbooks: {
         Row: {
           category: string | null
@@ -705,6 +971,53 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      project_audit_logs: {
+        Row: {
+          action: string
+          created_at: string
+          field_changed: string | null
+          id: string
+          justification: string | null
+          new_value: string | null
+          old_value: string | null
+          project_id: string | null
+          user_id: string | null
+          user_name: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          field_changed?: string | null
+          id?: string
+          justification?: string | null
+          new_value?: string | null
+          old_value?: string | null
+          project_id?: string | null
+          user_id?: string | null
+          user_name?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          field_changed?: string | null
+          id?: string
+          justification?: string | null
+          new_value?: string | null
+          old_value?: string | null
+          project_id?: string | null
+          user_id?: string | null
+          user_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_audit_logs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       projects: {
         Row: {
