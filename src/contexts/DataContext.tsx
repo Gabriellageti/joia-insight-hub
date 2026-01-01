@@ -2691,19 +2691,95 @@ export function DataProvider({ children }: { children: ReactNode }) {
     opportunities,
     addOpportunity: (opportunity) => {
       const newOpportunity = normalizeOpportunity({ ...opportunity, id: generateId(), createdAt: getDate() });
+      
+      void (async () => {
+        try {
+          const payload = {
+            title: newOpportunity.description || "Oportunidade",
+            description: newOpportunity.description,
+            project_id: newOpportunity.projectId || null,
+            client_id: newOpportunity.clientId || null,
+            type: newOpportunity.type,
+            estimated_value: newOpportunity.estimatedValue,
+            priority: newOpportunity.confidence,
+            status: newOpportunity.status,
+            source: newOpportunity.source,
+            evidence_type: newOpportunity.evidenceType,
+          };
+          const created = await createSupabaseOpportunity(payload);
+          setOpportunities((prev) => prev.map((o) => o.id === newOpportunity.id ? mapSupabaseOpportunityToLegacy(created) : o));
+        } catch (error) {
+          console.error("Error creating opportunity:", error);
+        }
+      })();
+
       setOpportunities((prev) => [...prev, newOpportunity]);
       return newOpportunity;
     },
-    updateOpportunity: (id, opportunity) =>
-      setOpportunities((prev) => prev.map((opp) => (opp.id === id ? normalizeOpportunity({ ...opp, ...opportunity, updatedAt: getDate() }) : opp))),
-    deleteOpportunity: (id) => setOpportunities((prev) => prev.filter((opp) => opp.id !== id)),
+    updateOpportunity: (id, opportunity) => {
+      setOpportunities((prev) => prev.map((opp) => (opp.id === id ? normalizeOpportunity({ ...opp, ...opportunity, updatedAt: getDate() }) : opp)));
+      
+      void (async () => {
+        try {
+          const payload: Record<string, unknown> = {};
+          if (opportunity.description !== undefined) payload.description = opportunity.description;
+          if (opportunity.type !== undefined) payload.type = opportunity.type;
+          if (opportunity.estimatedValue !== undefined) payload.estimated_value = opportunity.estimatedValue;
+          if (opportunity.status !== undefined) payload.status = opportunity.status;
+          if (opportunity.confidence !== undefined) payload.priority = opportunity.confidence;
+          if (opportunity.evidenceType !== undefined) payload.evidence_type = opportunity.evidenceType;
+          await updateSupabaseOpportunity(id, payload);
+        } catch (error) {
+          console.error("Error updating opportunity:", error);
+        }
+      })();
+    },
+    deleteOpportunity: (id) => {
+      setOpportunities((prev) => prev.filter((opp) => opp.id !== id));
+      void deleteSupabaseOpportunity(id).catch((e) => console.error("Error deleting opportunity:", e));
+    },
 
     deliverables,
-    addDeliverable: (deliverable) =>
-      setDeliverables((prev) => [...prev, { ...deliverable, id: generateId(), createdAt: getDate() }]),
-    updateDeliverable: (id, deliverable) =>
-      setDeliverables((prev) => prev.map((d) => (d.id === id ? { ...d, ...deliverable } : d))),
-    deleteDeliverable: (id) => setDeliverables((prev) => prev.filter((d) => d.id !== id)),
+    addDeliverable: (deliverable) => {
+      const newDeliverable = { ...deliverable, id: generateId(), createdAt: getDate() };
+      
+      void (async () => {
+        try {
+          const payload = {
+            project_id: newDeliverable.projectId,
+            title: newDeliverable.title,
+            description: null,
+            status: newDeliverable.status,
+            due_date: toSupabaseDate(newDeliverable.dueDate),
+          };
+          const created = await createSupabaseDeliverable(payload);
+          setDeliverables((prev) => prev.map((d) => d.id === newDeliverable.id ? mapSupabaseDeliverableToLegacy(created) : d));
+        } catch (error) {
+          console.error("Error creating deliverable:", error);
+        }
+      })();
+
+      setDeliverables((prev) => [...prev, newDeliverable]);
+    },
+    updateDeliverable: (id, deliverable) => {
+      setDeliverables((prev) => prev.map((d) => (d.id === id ? { ...d, ...deliverable } : d)));
+      
+      void (async () => {
+        try {
+          const payload: Record<string, unknown> = {};
+          if (deliverable.title !== undefined) payload.title = deliverable.title;
+          if (deliverable.status !== undefined) payload.status = deliverable.status;
+          if (deliverable.dueDate !== undefined) payload.due_date = toSupabaseDate(deliverable.dueDate);
+          await updateSupabaseDeliverable(id, payload);
+        } catch (error) {
+          console.error("Error updating deliverable:", error);
+        }
+      })();
+    },
+    deleteDeliverable: (id) => {
+      setDeliverables((prev) => prev.filter((d) => d.id !== id));
+      void deleteSupabaseDeliverable(id).catch((e) => console.error("Error deleting deliverable:", e));
+    },
 
     meetings,
     addMeeting: (meeting) =>
@@ -2713,11 +2789,53 @@ export function DataProvider({ children }: { children: ReactNode }) {
     deleteMeeting: (id) => setMeetings((prev) => prev.filter((m) => m.id !== id)),
 
     indicators,
-    addIndicator: (indicator) =>
-      setIndicators((prev) => [...prev, { ...indicator, id: generateId(), createdAt: getDate() }]),
-    updateIndicator: (id, indicator) =>
-      setIndicators((prev) => prev.map((i) => (i.id === id ? { ...i, ...indicator } : i))),
-    deleteIndicator: (id) => setIndicators((prev) => prev.filter((i) => i.id !== id)),
+    addIndicator: (indicator) => {
+      const newIndicator = { ...indicator, id: generateId(), createdAt: getDate() };
+      
+      void (async () => {
+        try {
+          const payload = {
+            name: newIndicator.name,
+            category: newIndicator.category || null,
+            unit: newIndicator.unit || null,
+            frequency: newIndicator.frequency || null,
+            target_value: newIndicator.targetValue ?? null,
+            current_value: newIndicator.currentValue ?? null,
+            project_id: newIndicator.projectId || null,
+            trend: newIndicator.trend || "stable",
+          };
+          const created = await createSupabaseIndicator(payload);
+          setIndicators((prev) => prev.map((i) => i.id === newIndicator.id ? mapSupabaseIndicatorToLegacy(created) : i));
+        } catch (error) {
+          console.error("Error creating indicator:", error);
+        }
+      })();
+
+      setIndicators((prev) => [...prev, newIndicator]);
+    },
+    updateIndicator: (id, indicator) => {
+      setIndicators((prev) => prev.map((i) => (i.id === id ? { ...i, ...indicator } : i)));
+      
+      void (async () => {
+        try {
+          const payload: Record<string, unknown> = {};
+          if (indicator.name !== undefined) payload.name = indicator.name;
+          if (indicator.category !== undefined) payload.category = indicator.category;
+          if (indicator.unit !== undefined) payload.unit = indicator.unit;
+          if (indicator.frequency !== undefined) payload.frequency = indicator.frequency;
+          if (indicator.targetValue !== undefined) payload.target_value = indicator.targetValue;
+          if (indicator.currentValue !== undefined) payload.current_value = indicator.currentValue;
+          if (indicator.trend !== undefined) payload.trend = indicator.trend;
+          await updateSupabaseIndicator(id, payload);
+        } catch (error) {
+          console.error("Error updating indicator:", error);
+        }
+      })();
+    },
+    deleteIndicator: (id) => {
+      setIndicators((prev) => prev.filter((i) => i.id !== id));
+      void deleteSupabaseIndicator(id).catch((e) => console.error("Error deleting indicator:", e));
+    },
 
     documents,
     addDocument: (document) =>
@@ -2859,9 +2977,52 @@ export function DataProvider({ children }: { children: ReactNode }) {
     },
 
     leads,
-    addLead: (lead) => setLeads((prev) => [...prev, { ...lead, id: generateId(), createdAt: getDate() }]),
-    updateLead: (id, lead) => setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, ...lead } : l))),
-    deleteLead: (id) => setLeads((prev) => prev.filter((l) => l.id !== id)),
+    addLead: (lead) => {
+      const newLead = { ...lead, id: generateId(), createdAt: getDate() };
+      
+      void (async () => {
+        try {
+          const payload = {
+            name: newLead.contact,
+            company: newLead.company || null,
+            email: newLead.email || null,
+            phone: newLead.phone || null,
+            source: newLead.source || null,
+            status: newLead.status ? newLead.status.charAt(0).toUpperCase() + newLead.status.slice(1) : "Novo",
+            notes: newLead.notes || newLead.nextAction || null,
+          };
+          const created = await createSupabaseLead(payload);
+          setLeads((prev) => prev.map((l) => l.id === newLead.id ? mapSupabaseLeadToLegacy(created) : l));
+        } catch (error) {
+          console.error("Error creating lead:", error);
+        }
+      })();
+
+      setLeads((prev) => [...prev, newLead]);
+    },
+    updateLead: (id, lead) => {
+      setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, ...lead } : l)));
+      
+      void (async () => {
+        try {
+          const payload: Record<string, unknown> = {};
+          if (lead.contact !== undefined) payload.name = lead.contact;
+          if (lead.company !== undefined) payload.company = lead.company;
+          if (lead.email !== undefined) payload.email = lead.email;
+          if (lead.phone !== undefined) payload.phone = lead.phone;
+          if (lead.source !== undefined) payload.source = lead.source;
+          if (lead.status !== undefined) payload.status = lead.status ? lead.status.charAt(0).toUpperCase() + lead.status.slice(1) : null;
+          if (lead.notes !== undefined) payload.notes = lead.notes;
+          await updateSupabaseLead(id, payload);
+        } catch (error) {
+          console.error("Error updating lead:", error);
+        }
+      })();
+    },
+    deleteLead: (id) => {
+      setLeads((prev) => prev.filter((l) => l.id !== id));
+      void deleteSupabaseLead(id).catch((e) => console.error("Error deleting lead:", e));
+    },
 
     templates,
     templatesLoading,
@@ -2979,18 +3140,96 @@ export function DataProvider({ children }: { children: ReactNode }) {
     createActionPlan,
 
     contentItems,
-    addContentItem: (item) =>
-      setContentItems((prev) => [...prev, { ...item, id: generateId(), createdAt: getDate() }]),
-    updateContentItem: (id, item) =>
-      setContentItems((prev) => prev.map((i) => (i.id === id ? { ...i, ...item } : i))),
-    deleteContentItem: (id) => setContentItems((prev) => prev.filter((i) => i.id !== id)),
+    addContentItem: (item) => {
+      const newItem = { ...item, id: generateId(), createdAt: getDate() };
+      
+      void (async () => {
+        try {
+          const payload = {
+            title: newItem.title,
+            type: newItem.type || null,
+            status: newItem.status || "idea",
+            scheduled_date: toSupabaseDate(newItem.publishDate),
+            tags: newItem.tags || [],
+          };
+          const created = await createSupabaseContentItem(payload);
+          setContentItems((prev) => prev.map((i) => i.id === newItem.id ? mapSupabaseContentItemToLegacy(created) : i));
+        } catch (error) {
+          console.error("Error creating content item:", error);
+        }
+      })();
+
+      setContentItems((prev) => [...prev, newItem]);
+    },
+    updateContentItem: (id, item) => {
+      setContentItems((prev) => prev.map((i) => (i.id === id ? { ...i, ...item } : i)));
+      
+      void (async () => {
+        try {
+          const payload: Record<string, unknown> = {};
+          if (item.title !== undefined) payload.title = item.title;
+          if (item.type !== undefined) payload.type = item.type;
+          if (item.status !== undefined) payload.status = item.status;
+          if (item.publishDate !== undefined) payload.scheduled_date = toSupabaseDate(item.publishDate);
+          if (item.tags !== undefined) payload.tags = item.tags;
+          await updateSupabaseContentItem(id, payload);
+        } catch (error) {
+          console.error("Error updating content item:", error);
+        }
+      })();
+    },
+    deleteContentItem: (id) => {
+      setContentItems((prev) => prev.filter((i) => i.id !== id));
+      void deleteSupabaseContentItem(id).catch((e) => console.error("Error deleting content item:", e));
+    },
 
     contracts,
-    addContract: (contract) =>
-      setContracts((prev) => [...prev, { ...contract, id: generateId(), createdAt: getDate() }]),
-    updateContract: (id, contract) =>
-      setContracts((prev) => prev.map((c) => (c.id === id ? { ...c, ...contract } : c))),
-    deleteContract: (id) => setContracts((prev) => prev.filter((c) => c.id !== id)),
+    addContract: (contract) => {
+      const newContract = { ...contract, id: generateId(), createdAt: getDate() };
+      
+      void (async () => {
+        try {
+          const payload = {
+            title: newContract.projectName || "Contrato",
+            client_id: newContract.clientId || null,
+            project_id: newContract.projectId || null,
+            value: newContract.value || null,
+            start_date: toSupabaseDate(newContract.startDate),
+            end_date: toSupabaseDate(newContract.endDate),
+            status: "ativo",
+            billing_type: newContract.billingType || null,
+            installments: newContract.installments || [],
+          };
+          const created = await createSupabaseContract(payload);
+          setContracts((prev) => prev.map((c) => c.id === newContract.id ? mapSupabaseContractToLegacy(created) : c));
+        } catch (error) {
+          console.error("Error creating contract:", error);
+        }
+      })();
+
+      setContracts((prev) => [...prev, newContract]);
+    },
+    updateContract: (id, contract) => {
+      setContracts((prev) => prev.map((c) => (c.id === id ? { ...c, ...contract } : c)));
+      
+      void (async () => {
+        try {
+          const payload: Record<string, unknown> = {};
+          if (contract.value !== undefined) payload.value = contract.value;
+          if (contract.startDate !== undefined) payload.start_date = toSupabaseDate(contract.startDate);
+          if (contract.endDate !== undefined) payload.end_date = toSupabaseDate(contract.endDate);
+          if (contract.billingType !== undefined) payload.billing_type = contract.billingType;
+          if (contract.installments !== undefined) payload.installments = contract.installments;
+          await updateSupabaseContract(id, payload);
+        } catch (error) {
+          console.error("Error updating contract:", error);
+        }
+      })();
+    },
+    deleteContract: (id) => {
+      setContracts((prev) => prev.filter((c) => c.id !== id));
+      void deleteSupabaseContract(id).catch((e) => console.error("Error deleting contract:", e));
+    },
 
     expenses,
     addExpense: async (expense) => {
@@ -3069,6 +3308,21 @@ export function DataProvider({ children }: { children: ReactNode }) {
     projectAuditLogs,
     addProjectAuditLog: (entry) => {
       const newEntry = { ...entry, id: generateId(), createdAt: getDate() };
+      
+      void (async () => {
+        try {
+          const payload = {
+            project_id: newEntry.projectId || null,
+            action: newEntry.message,
+            user_name: currentUserName,
+            user_id: user?.id || null,
+          };
+          await createSupabaseAuditLog(payload);
+        } catch (error) {
+          console.error("Error creating audit log:", error);
+        }
+      })();
+
       setProjectAuditLogs((prev) => [...prev, newEntry]);
       return newEntry;
     },
@@ -3076,12 +3330,48 @@ export function DataProvider({ children }: { children: ReactNode }) {
     clientContacts,
     addClientContact: (contact) => {
       const newContact = { ...contact, id: generateId() };
+      
+      void (async () => {
+        try {
+          const payload = {
+            client_id: newContact.clientId,
+            name: newContact.name,
+            role: newContact.role || null,
+            email: newContact.email || null,
+            phone: newContact.phone || null,
+            is_primary: newContact.hasPortalAccess || false,
+          };
+          const created = await createSupabaseClientContact(payload);
+          setClientContacts((prev) => prev.map((c) => c.id === newContact.id ? mapSupabaseClientContactToLegacy(created) : c));
+        } catch (error) {
+          console.error("Error creating client contact:", error);
+        }
+      })();
+
       setClientContacts((prev) => [...prev, newContact]);
       return newContact;
     },
-    updateClientContact: (id, contact) =>
-      setClientContacts((prev) => prev.map((c) => (c.id === id ? { ...c, ...contact } : c))),
-    deleteClientContact: (id) => setClientContacts((prev) => prev.filter((c) => c.id !== id)),
+    updateClientContact: (id, contact) => {
+      setClientContacts((prev) => prev.map((c) => (c.id === id ? { ...c, ...contact } : c)));
+      
+      void (async () => {
+        try {
+          const payload: Record<string, unknown> = {};
+          if (contact.name !== undefined) payload.name = contact.name;
+          if (contact.role !== undefined) payload.role = contact.role;
+          if (contact.email !== undefined) payload.email = contact.email;
+          if (contact.phone !== undefined) payload.phone = contact.phone;
+          if (contact.hasPortalAccess !== undefined) payload.is_primary = contact.hasPortalAccess;
+          await updateSupabaseClientContact(id, payload);
+        } catch (error) {
+          console.error("Error updating client contact:", error);
+        }
+      })();
+    },
+    deleteClientContact: (id) => {
+      setClientContacts((prev) => prev.filter((c) => c.id !== id));
+      void deleteSupabaseClientContact(id).catch((e) => console.error("Error deleting client contact:", e));
+    },
   };
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
