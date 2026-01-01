@@ -102,6 +102,60 @@ import {
   updateDiagnostic as updateSupabaseDiagnostic,
   type DiagnosticRow,
 } from "@/integrations/supabase/diagnostics";
+import {
+  createIndicator as createSupabaseIndicator,
+  deleteIndicator as deleteSupabaseIndicator,
+  listIndicators,
+  updateIndicator as updateSupabaseIndicator,
+  type IndicatorRow,
+} from "@/integrations/supabase/indicators";
+import {
+  createLead as createSupabaseLead,
+  deleteLead as deleteSupabaseLead,
+  listLeads,
+  updateLead as updateSupabaseLead,
+  type LeadRow,
+} from "@/integrations/supabase/leads";
+import {
+  createOpportunity as createSupabaseOpportunity,
+  deleteOpportunity as deleteSupabaseOpportunity,
+  listOpportunities,
+  updateOpportunity as updateSupabaseOpportunity,
+  type OpportunityRow,
+} from "@/integrations/supabase/opportunities";
+import {
+  createDeliverable as createSupabaseDeliverable,
+  deleteDeliverable as deleteSupabaseDeliverable,
+  listDeliverables,
+  updateDeliverable as updateSupabaseDeliverable,
+  type DeliverableRow,
+} from "@/integrations/supabase/deliverables";
+import {
+  createContentItem as createSupabaseContentItem,
+  deleteContentItem as deleteSupabaseContentItem,
+  listContentItems,
+  updateContentItem as updateSupabaseContentItem,
+  type ContentItemRow,
+} from "@/integrations/supabase/content-items";
+import {
+  createContract as createSupabaseContract,
+  deleteContract as deleteSupabaseContract,
+  listContracts,
+  updateContract as updateSupabaseContract,
+  type ContractRow,
+} from "@/integrations/supabase/contracts";
+import {
+  createClientContact as createSupabaseClientContact,
+  deleteClientContact as deleteSupabaseClientContact,
+  listClientContacts,
+  updateClientContact as updateSupabaseClientContact,
+  type ClientContactRow,
+} from "@/integrations/supabase/client-contacts";
+import {
+  createAuditLog as createSupabaseAuditLog,
+  listAuditLogs,
+  type AuditLogRow,
+} from "@/integrations/supabase/audit-logs";
 import type { Database } from "@/integrations/supabase/types";
 
 interface DataContextType {
@@ -419,6 +473,116 @@ const buildSupabasePlaybookUpdate = (playbook: Playbook): Database["public"]["Ta
   category: playbook.area || null,
   content: serializePlaybookContent(playbook),
   updated_at: new Date().toISOString(),
+});
+
+// Mapping functions for new Supabase integrations
+
+const mapSupabaseIndicatorToLegacy = (indicator: IndicatorRow): Indicator => ({
+  id: indicator.id,
+  name: indicator.name,
+  category: indicator.category || "",
+  unit: indicator.unit || "",
+  frequency: (indicator.frequency as Indicator["frequency"]) || "Mensal",
+  source: "planilha",
+  targetValue: indicator.target_value ? Number(indicator.target_value) : undefined,
+  currentValue: indicator.current_value ? Number(indicator.current_value) : undefined,
+  trend: (indicator.trend as Indicator["trend"]) || "stable",
+  projectId: indicator.project_id || undefined,
+  projectName: "",
+  responsible: "",
+  values: [],
+  createdAt: formatDateFromIso(indicator.created_at),
+});
+
+const mapSupabaseLeadToLegacy = (lead: LeadRow): Lead => ({
+  id: lead.id,
+  company: lead.company || "",
+  contact: lead.name,
+  email: lead.email || undefined,
+  phone: lead.phone || undefined,
+  source: lead.source || "Inbound",
+  status: (lead.status?.toLowerCase() as Lead["status"]) || "new",
+  value: 0,
+  nextAction: lead.notes || "",
+  nextActionDate: undefined,
+  notes: lead.notes || undefined,
+  createdAt: formatDateFromIso(lead.created_at),
+});
+
+const mapSupabaseOpportunityToLegacy = (opp: OpportunityRow): Opportunity => {
+  const validStatuses: Opportunity["status"][] = ["Identificado", "Em validação", "Em execução", "Resgatado"];
+  const validTypes: Opportunity["type"][] = ["Receita incremental", "Redução de custos", "Eficiência operacional", "Risco evitado", "Outro"];
+  
+  return {
+    id: opp.id,
+    projectId: opp.project_id || "",
+    clientId: opp.client_id || "",
+    status: validStatuses.includes(opp.status as Opportunity["status"]) ? (opp.status as Opportunity["status"]) : "Identificado",
+    type: validTypes.includes(opp.type as Opportunity["type"]) ? (opp.type as Opportunity["type"]) : "Outro",
+    description: opp.description || "",
+    estimatedValue: opp.estimated_value ? Number(opp.estimated_value) : null,
+    confidence: (opp.priority as Opportunity["confidence"]) || "media",
+    evidenceType: (opp.evidence_type as Opportunity["evidenceType"]) || "a_coletar",
+    evidenceReference: "",
+    responsibleUserId: null,
+    createdAt: formatDateFromIso(opp.created_at),
+    updatedAt: formatDateFromIso(opp.updated_at),
+    source: (opp.source as Opportunity["source"]) || "manual",
+  };
+};
+
+const mapSupabaseDeliverableToLegacy = (del: DeliverableRow): ProjectDeliverable => ({
+  id: del.id,
+  projectId: del.project_id,
+  title: del.title,
+  status: (del.status as ProjectDeliverable["status"]) || "pending",
+  dueDate: del.due_date || undefined,
+  createdAt: formatDateFromIso(del.created_at),
+});
+
+const mapSupabaseContentItemToLegacy = (item: ContentItemRow): ContentItem => {
+  const validTypes: ContentItem["type"][] = ["Artigo", "Case", "Post", "Webinar", "Video"];
+  return {
+    id: item.id,
+    title: item.title,
+    type: validTypes.includes(item.type as ContentItem["type"]) ? (item.type as ContentItem["type"]) : "Artigo",
+    status: (item.status as ContentItem["status"]) || "idea",
+    publishDate: item.scheduled_date || undefined,
+    tags: item.tags || [],
+    createdAt: formatDateFromIso(item.created_at),
+  };
+};
+
+const mapSupabaseContractToLegacy = (contract: ContractRow): Contract => ({
+  id: contract.id,
+  clientId: contract.client_id || "",
+  clientName: "",
+  projectId: contract.project_id || undefined,
+  projectName: undefined,
+  value: contract.value ? Number(contract.value) : 0,
+  startDate: contract.start_date || "",
+  endDate: contract.end_date || "",
+  billingType: (contract.billing_type as Contract["billingType"]) || "mensal",
+  installments: (contract.installments as Contract["installments"]) || [],
+  createdAt: formatDateFromIso(contract.created_at),
+});
+
+const mapSupabaseClientContactToLegacy = (contact: ClientContactRow): ClientContact => ({
+  id: contact.id,
+  clientId: contact.client_id,
+  name: contact.name,
+  role: contact.role || "",
+  area: "Diretoria",
+  phone: contact.phone || "",
+  email: contact.email || "",
+  hasPortalAccess: false,
+});
+
+const mapSupabaseAuditLogToLegacy = (log: AuditLogRow): ProjectAuditLogEntry => ({
+  id: log.id,
+  projectId: log.project_id || "",
+  message: log.action + (log.field_changed ? `: ${log.field_changed}` : ""),
+  createdAt: formatDateFromIso(log.created_at),
 });
 
 // Tipos de despesas agora são definidos em expenses.ts
@@ -1539,20 +1703,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [projectsLoading, setProjectsLoading] = useState(true);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [tasksLoading, setTasksLoading] = useState(true);
-  const [opportunities, setOpportunities] = useLocalStorage<Opportunity[]>(
-    "joia_opportunities",
-    initialOpportunities
-  );
-  const [deliverables, setDeliverables] = useLocalStorage<ProjectDeliverable[]>(
-    "joia_deliverables",
-    initialDeliverables
-  );
-  const [meetings, setMeetings] = useLocalStorage<Meeting[]>("joia_meetings", initialMeetings);
-  const [indicators, setIndicators] = useLocalStorage<Indicator[]>("joia_indicators", initialIndicators);
-  const [documents, setDocuments] = useLocalStorage<Document[]>("joia_documents", []);
+  const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
+  const [deliverables, setDeliverables] = useState<ProjectDeliverable[]>([]);
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [indicators, setIndicators] = useState<Indicator[]>([]);
+  const [documents, setDocuments] = useState<Document[]>([]);
   const [playbooks, setPlaybooks] = useState<Playbook[]>(initialPlaybooks);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [leads, setLeads] = useLocalStorage<Lead[]>("joia_leads", initialLeads);
+  const [leads, setLeads] = useState<Lead[]>([]);
   const [templates, setTemplates] = useState<DiagnosticTemplate[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
   const [templatesError, setTemplatesError] = useState<string | null>(null);
@@ -1561,17 +1719,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
     []
   );
   const [diagnostics, setDiagnostics] = useState<Diagnostic[]>(initialDiagnostics);
-  const [contentItems, setContentItems] = useLocalStorage<ContentItem[]>("joia_content", initialContentItems);
-  const [contracts, setContracts] = useLocalStorage<Contract[]>("joia_contracts", []);
-  const [expenses, setExpenses] = useLocalStorage<Expense[]>("joia_expenses", []);
-  const [projectAuditLogs, setProjectAuditLogs] = useLocalStorage<ProjectAuditLogEntry[]>(
-    "joia_project_audit_logs",
-    initialProjectAuditLogs
-  );
-  const [clientContacts, setClientContacts] = useLocalStorage<ClientContact[]>(
-    "joia_client_contacts",
-    initialClientContacts
-  );
+  const [contentItems, setContentItems] = useState<ContentItem[]>([]);
+  const [contracts, setContracts] = useState<Contract[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [projectAuditLogs, setProjectAuditLogs] = useState<ProjectAuditLogEntry[]>([]);
+  const [clientContacts, setClientContacts] = useState<ClientContact[]>([]);
 
   useEffect(() => {
     const fetchClients = async () => {
@@ -1737,6 +1889,166 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
     fetchEmployees();
   }, [toast, user]);
+
+  // Fetch indicators from Supabase
+  useEffect(() => {
+    if (!user) {
+      setIndicators([]);
+      return;
+    }
+
+    const fetchIndicatorsData = async () => {
+      try {
+        const data = await listIndicators();
+        setIndicators(data.map(mapSupabaseIndicatorToLegacy));
+      } catch (error) {
+        console.error("Error fetching indicators:", error);
+        setIndicators([]);
+      }
+    };
+
+    fetchIndicatorsData();
+  }, [user]);
+
+  // Fetch leads from Supabase
+  useEffect(() => {
+    if (!user) {
+      setLeads([]);
+      return;
+    }
+
+    const fetchLeadsData = async () => {
+      try {
+        const data = await listLeads();
+        setLeads(data.map(mapSupabaseLeadToLegacy));
+      } catch (error) {
+        console.error("Error fetching leads:", error);
+        setLeads([]);
+      }
+    };
+
+    fetchLeadsData();
+  }, [user]);
+
+  // Fetch opportunities from Supabase
+  useEffect(() => {
+    if (!user) {
+      setOpportunities([]);
+      return;
+    }
+
+    const fetchOpportunitiesData = async () => {
+      try {
+        const data = await listOpportunities();
+        setOpportunities(data.map(mapSupabaseOpportunityToLegacy));
+      } catch (error) {
+        console.error("Error fetching opportunities:", error);
+        setOpportunities([]);
+      }
+    };
+
+    fetchOpportunitiesData();
+  }, [user]);
+
+  // Fetch deliverables from Supabase
+  useEffect(() => {
+    if (!user) {
+      setDeliverables([]);
+      return;
+    }
+
+    const fetchDeliverablesData = async () => {
+      try {
+        const data = await listDeliverables();
+        setDeliverables(data.map(mapSupabaseDeliverableToLegacy));
+      } catch (error) {
+        console.error("Error fetching deliverables:", error);
+        setDeliverables([]);
+      }
+    };
+
+    fetchDeliverablesData();
+  }, [user]);
+
+  // Fetch content items from Supabase
+  useEffect(() => {
+    if (!user) {
+      setContentItems([]);
+      return;
+    }
+
+    const fetchContentItemsData = async () => {
+      try {
+        const data = await listContentItems();
+        setContentItems(data.map(mapSupabaseContentItemToLegacy));
+      } catch (error) {
+        console.error("Error fetching content items:", error);
+        setContentItems([]);
+      }
+    };
+
+    fetchContentItemsData();
+  }, [user]);
+
+  // Fetch contracts from Supabase
+  useEffect(() => {
+    if (!user) {
+      setContracts([]);
+      return;
+    }
+
+    const fetchContractsData = async () => {
+      try {
+        const data = await listContracts();
+        setContracts(data.map(mapSupabaseContractToLegacy));
+      } catch (error) {
+        console.error("Error fetching contracts:", error);
+        setContracts([]);
+      }
+    };
+
+    fetchContractsData();
+  }, [user]);
+
+  // Fetch client contacts from Supabase
+  useEffect(() => {
+    if (!user) {
+      setClientContacts([]);
+      return;
+    }
+
+    const fetchClientContactsData = async () => {
+      try {
+        const data = await listClientContacts();
+        setClientContacts(data.map(mapSupabaseClientContactToLegacy));
+      } catch (error) {
+        console.error("Error fetching client contacts:", error);
+        setClientContacts([]);
+      }
+    };
+
+    fetchClientContactsData();
+  }, [user]);
+
+  // Fetch audit logs from Supabase
+  useEffect(() => {
+    if (!user) {
+      setProjectAuditLogs([]);
+      return;
+    }
+
+    const fetchAuditLogsData = async () => {
+      try {
+        const data = await listAuditLogs();
+        setProjectAuditLogs(data.map(mapSupabaseAuditLogToLegacy));
+      } catch (error) {
+        console.error("Error fetching audit logs:", error);
+        setProjectAuditLogs([]);
+      }
+    };
+
+    fetchAuditLogsData();
+  }, [user]);
 
   // Normaliza projetos legados para novos campos de progresso
   useEffect(() => {
