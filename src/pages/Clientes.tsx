@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Filter, Pencil, Plus, Search, Trash } from "lucide-react";
+import { Filter, Pencil, Plus, Route, Search, Trash } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -175,6 +175,11 @@ export default function Clientes() {
                     </TableCell>
 
                     <TableCell className="text-right space-x-2">
+                      <Button variant="ghost" size="icon" asChild aria-label="Ver jornada do cliente">
+                        <Link to={`/clientes/${client.id}/jornada`}>
+                          <Route className="h-4 w-4" />
+                        </Link>
+                      </Button>
                       <Button variant="ghost" size="icon" onClick={() => handleEdit(client.id)} aria-label="Editar cliente">
                         <Pencil className="h-4 w-4" />
                       </Button>
