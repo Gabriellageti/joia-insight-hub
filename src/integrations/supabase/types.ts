@@ -55,6 +55,100 @@ export type Database = {
           },
         ]
       }
+      client_journey_events: {
+        Row: {
+          client_id: string
+          created_at: string
+          created_by: string | null
+          diagnostic_id: string | null
+          document_id: string | null
+          event_description: string | null
+          event_title: string
+          event_type: string
+          id: string
+          meeting_id: string | null
+          metadata: Json | null
+          phase: string
+          project_id: string | null
+          task_id: string | null
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          created_by?: string | null
+          diagnostic_id?: string | null
+          document_id?: string | null
+          event_description?: string | null
+          event_title: string
+          event_type: string
+          id?: string
+          meeting_id?: string | null
+          metadata?: Json | null
+          phase?: string
+          project_id?: string | null
+          task_id?: string | null
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          diagnostic_id?: string | null
+          document_id?: string | null
+          event_description?: string | null
+          event_title?: string
+          event_type?: string
+          id?: string
+          meeting_id?: string | null
+          metadata?: Json | null
+          phase?: string
+          project_id?: string | null
+          task_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_journey_events_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_journey_events_diagnostic_id_fkey"
+            columns: ["diagnostic_id"]
+            isOneToOne: false
+            referencedRelation: "diagnostics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_journey_events_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_journey_events_meeting_id_fkey"
+            columns: ["meeting_id"]
+            isOneToOne: false
+            referencedRelation: "meetings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_journey_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_journey_events_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clients: {
         Row: {
           cnpj: string | null

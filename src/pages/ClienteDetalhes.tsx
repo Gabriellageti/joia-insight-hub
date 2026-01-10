@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useData } from "@/contexts/DataContext";
+import { useClientJourney } from "@/hooks/useClientJourney";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -9,7 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ArrowLeft, Building2, MapPin, PhoneCall, Shield, Trash, Rocket, FileSearch } from "lucide-react";
+import { ArrowLeft, Building2, MapPin, PhoneCall, Shield, Trash, Rocket, FileSearch, Route, ChevronRight } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { isPastDate } from "@/lib/dates";
 import { ClientDialog } from "@/components/dialogs/ClientDialog";
@@ -17,6 +18,18 @@ import { DiagnosticDialog } from "@/components/dialogs/DiagnosticDialog";
 import { toast } from "sonner";
 
 const riskColors = { low: "bg-green-500/10 text-green-700", medium: "bg-yellow-500/10 text-yellow-700", high: "bg-red-500/10 text-red-700" };
+const phaseColors: Record<string, string> = {
+  onboarding: 'bg-blue-500',
+  definition: 'bg-amber-500',
+  execution: 'bg-green-500',
+  validation: 'bg-purple-500',
+};
+const phaseNames: Record<string, string> = {
+  onboarding: 'Onboarding',
+  definition: 'Definição',
+  execution: 'Execução',
+  validation: 'Validação',
+};
 const riskLabels = { low: "Baixo", medium: "Médio", high: "Alto" };
 const getInitials = (value?: string) => value?.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase() || "--";
 
@@ -38,6 +51,10 @@ export default function ClienteDetalhes() {
   const client = useMemo(() => clients.find((c) => c.id === id), [clients, id]);
   const clientProjects = useMemo(() => projects.filter((project) => project.clientId === id), [projects, id]);
   const contacts = useMemo(() => clientContacts.filter((contact) => contact.clientId === id), [clientContacts, id]);
+  
+  // Hook de jornada do cliente
+  const { currentPhase, phases, overallProgress } = useClientJourney(id);
+  const currentPhaseInfo = phases.find(p => p.id === currentPhase);
   
   // Verificar se já existe kickoff para este cliente
   const kickoffTemplate = templates.find((t) => t.name?.toLowerCase().includes("kickoff"));
@@ -167,6 +184,10 @@ export default function ClienteDetalhes() {
           <Badge variant={client.status === "ativo" ? "default" : "secondary"}>
             {client.status === "ativo" ? "Ativo" : "Inativo"}
           </Badge>
+          <Button variant="outline" onClick={() => navigate(`/clientes/${id}/jornada`)}>
+            <Route className="h-4 w-4 mr-2" />
+            Ver Jornada
+          </Button>
           <Button variant="outline" onClick={() => setDialogOpen(true)}>
             Editar
           </Button>
@@ -176,6 +197,34 @@ export default function ClienteDetalhes() {
           </Button>
         </div>
       </div>
+
+      {/* Card de Fase Atual da Jornada */}
+      <Card className="border-primary/20 cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate(`/clientes/${id}/jornada`)}>
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className={`w-12 h-12 rounded-full ${phaseColors[currentPhase]} flex items-center justify-center`}>
+                <Route className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Fase atual da jornada</p>
+                <p className="text-lg font-semibold">{phaseNames[currentPhase]}</p>
+                <p className="text-sm text-muted-foreground">
+                  {currentPhaseInfo?.description}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="text-right">
+                <p className="text-2xl font-bold text-primary">{overallProgress}%</p>
+                <p className="text-xs text-muted-foreground">progresso geral</p>
+              </div>
+              <ChevronRight className="h-5 w-5 text-muted-foreground" />
+            </div>
+          </div>
+          <Progress value={overallProgress} className="h-2 mt-4" />
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <Card className="xl:col-span-2">

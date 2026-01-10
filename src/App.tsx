@@ -24,6 +24,7 @@ import Configuracoes from "./pages/Configuracoes";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import ClienteDetalhes from "./pages/ClienteDetalhes";
+import ClienteJornada from "./pages/ClienteJornada";
 import DiagnosticoDetalhe from "./pages/DiagnosticoDetalhe";
 import TemplatesList from "./pages/templates/TemplatesList";
 import TemplateCreate from "./pages/templates/TemplateCreate";
@@ -53,6 +54,7 @@ const App = () => (
                           <Route path="/" element={<Dashboard />} />
                           <Route path="/clientes" element={<Clientes />} />
                           <Route path="/clientes/:id" element={<ClienteDetalhes />} />
+                          <Route path="/clientes/:id/jornada" element={<ClienteJornada />} />
                           <Route path="/projetos" element={<Projetos />} />
                           <Route path="/diagnostico" element={<Diagnostico />} />
                           <Route path="/diagnosticos/:id" element={<DiagnosticoDetalhe />} />
