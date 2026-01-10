@@ -13,9 +13,10 @@ interface MeetingDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   meeting?: MeetingData | null;
+  onSuccess?: (meeting: { id: string; title: string }) => void;
 }
 
-export function MeetingDialog({ open, onOpenChange, meeting }: MeetingDialogProps) {
+export function MeetingDialog({ open, onOpenChange, meeting, onSuccess }: MeetingDialogProps) {
   const { addMeeting, updateMeeting } = useMeetings();
   const { projects, clients } = useData();
   const [loading, setLoading] = useState(false);
@@ -121,8 +122,16 @@ export function MeetingDialog({ open, onOpenChange, meeting }: MeetingDialogProp
         await updateMeeting(meeting.id, meetingData);
         toast.success("Reunião atualizada com sucesso");
       } else {
-        await addMeeting(meetingData);
+        const created = await addMeeting(meetingData);
         toast.success("Reunião criada com sucesso");
+        
+        // Call onSuccess callback
+        if (created) {
+          onSuccess?.({
+            id: created.id,
+            title: meetingData.title,
+          });
+        }
       }
       onOpenChange(false);
     } catch (error) {

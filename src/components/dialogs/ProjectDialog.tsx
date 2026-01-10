@@ -121,12 +121,14 @@ interface ProjectDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   project?: Project | null;
+  onSuccess?: (project: { id: string; name: string; clientId: string }) => void;
 }
 
 export function ProjectDialog({
   open,
   onOpenChange,
   project,
+  onSuccess,
 }: ProjectDialogProps) {
   const {
     addProject,
@@ -478,6 +480,13 @@ export function ProjectDialog({
           seedStructure: autoStructure,
         });
         toast.success("Projeto criado com sucesso");
+        
+        // Call onSuccess callback with project info (id will be set later via refresh)
+        onSuccess?.({
+          id: '', // New project - id not available yet
+          name: payload.name,
+          clientId: payload.clientId,
+        });
       }
 
       onOpenChange(false);

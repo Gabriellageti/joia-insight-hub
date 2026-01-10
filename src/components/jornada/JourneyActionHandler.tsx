@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Client, Project, Diagnostic, DiagnosticTemplate } from '@/types';
-import { JourneyPhase, CreateJourneyEventInput } from '@/integrations/supabase/journey-events';
+import { JourneyPhase, JourneyEventType, CreateJourneyEventInput } from '@/integrations/supabase/journey-events';
 import {
   AutomationContext,
   getProjectDefaults,
@@ -50,6 +50,9 @@ export function useJourneyActionHandler({
   const [diagnosticDefaults, setDiagnosticDefaults] = useState<DiagnosticDefaults | null>(null);
   const [meetingDefaults, setMeetingDefaults] = useState<MeetingDefaults | null>(null);
   
+  // Track action context for event registration
+  const [currentActionId, setCurrentActionId] = useState<string | null>(null);
+  
   const getContext = useCallback((): AutomationContext => {
     const clientName = client.nomeFantasia || client.razaoSocial || client.name || 'Cliente';
     const lastProject = projects[projects.length - 1];
@@ -65,9 +68,62 @@ export function useJourneyActionHandler({
     };
   }, [client, projects, diagnostics, currentPhase]);
 
+  // Register journey event based on action
+  const registerJourneyEvent = useCallback(async (
+    actionId: string,
+    entityType: 'project' | 'diagnostic' | 'meeting' | 'client',
+    entityData: { id?: string; name?: string; templateName?: string; title?: string }
+  ) => {
+    const eventTypeMap: Record<string, JourneyEventType> = {
+      project_created: 'project_created',
+      specific_projects_created: 'project_created',
+      next_area_started: 'project_created',
+      kickoff_started: 'diagnostic_started',
+      kickoff_completed: 'diagnostic_started',
+      specific_diagnostic: 'diagnostic_started',
+      assessment_presented: 'meeting_scheduled',
+      results_validated: 'meeting_scheduled',
+      contacts_registered: 'client_created', // Use client_created for contact updates
+    };
+
+    const eventType = eventTypeMap[actionId];
+    if (!eventType) return;
+
+    const eventTitles: Record<JourneyEventType, string> = {
+      client_created: `Cliente atualizado: ${client.name || 'Cliente'}`,
+      project_created: `Projeto criado: ${entityData.name || 'Novo projeto'}`,
+      diagnostic_started: `Diagnóstico iniciado: ${entityData.templateName || entityData.name || 'Novo diagnóstico'}`,
+      diagnostic_completed: 'Diagnóstico concluído',
+      meeting_scheduled: `Reunião agendada: ${entityData.title || 'Nova reunião'}`,
+      meeting_completed: 'Reunião realizada',
+      task_created: 'Tarefa criada',
+      task_completed: 'Tarefa concluída',
+      evidence_uploaded: 'Evidência enviada',
+      indicator_registered: 'Indicador registrado',
+      phase_advanced: 'Fase avançada',
+    };
+
+    try {
+      await onEventRegistered({
+        event_type: eventType,
+        event_title: eventTitles[eventType],
+        event_description: `Ação realizada através da jornada do cliente`,
+        phase: currentPhase,
+        project_id: entityType === 'project' ? entityData.id : undefined,
+        diagnostic_id: entityType === 'diagnostic' ? entityData.id : undefined,
+        meeting_id: entityType === 'meeting' ? entityData.id : undefined,
+      });
+    } catch (error) {
+      console.error('Failed to register journey event:', error);
+    }
+  }, [client.name, currentPhase, onEventRegistered]);
+
   const handleAction = useCallback((actionId: string) => {
     const dialogType = getDialogTypeForAction(actionId);
     const context = getContext();
+    
+    // Store action ID for event registration on success
+    setCurrentActionId(actionId);
     
     switch (dialogType) {
       case 'project': {
@@ -122,8 +178,38 @@ export function useJourneyActionHandler({
     setProjectDefaults(null);
     setDiagnosticDefaults(null);
     setMeetingDefaults(null);
+    setCurrentActionId(null);
     onDataRefresh();
   }, [onDataRefresh]);
+
+  // Success handlers for each dialog type
+  const handleProjectSuccess = useCallback((project: { id: string; name: string; clientId: string }) => {
+    if (currentActionId) {
+      registerJourneyEvent(currentActionId, 'project', { id: project.id, name: project.name });
+    }
+  }, [currentActionId, registerJourneyEvent]);
+
+  const handleDiagnosticSuccess = useCallback((diagnostic: { id: string; name: string; templateName?: string }) => {
+    if (currentActionId) {
+      registerJourneyEvent(currentActionId, 'diagnostic', { 
+        id: diagnostic.id, 
+        name: diagnostic.name,
+        templateName: diagnostic.templateName 
+      });
+    }
+  }, [currentActionId, registerJourneyEvent]);
+
+  const handleMeetingSuccess = useCallback((meeting: { id: string; title: string }) => {
+    if (currentActionId) {
+      registerJourneyEvent(currentActionId, 'meeting', { id: meeting.id, title: meeting.title });
+    }
+  }, [currentActionId, registerJourneyEvent]);
+
+  const handleClientSuccess = useCallback(() => {
+    if (currentActionId) {
+      registerJourneyEvent(currentActionId, 'client', {});
+    }
+  }, [currentActionId, registerJourneyEvent]);
 
   // Create pre-filled project object for ProjectDialog (partial - dialog will handle defaults)
   const prefilledProject = projectDefaults ? {
@@ -193,6 +279,7 @@ export function useJourneyActionHandler({
           if (!open) handleDialogClose();
         }}
         project={prefilledProject}
+        onSuccess={handleProjectSuccess}
       />
       
       <DiagnosticDialog
@@ -202,6 +289,7 @@ export function useJourneyActionHandler({
           if (!open) handleDialogClose();
         }}
         diagnostic={prefilledDiagnostic}
+        onSuccess={handleDiagnosticSuccess}
       />
       
       <MeetingDialog
@@ -211,13 +299,17 @@ export function useJourneyActionHandler({
           if (!open) handleDialogClose();
         }}
         meeting={prefilledMeeting}
+        onSuccess={handleMeetingSuccess}
       />
       
       <ClientDialog
         open={clientDialogOpen}
         onOpenChange={(open) => {
           setClientDialogOpen(open);
-          if (!open) handleDialogClose();
+          if (!open) {
+            handleClientSuccess();
+            handleDialogClose();
+          }
         }}
         client={client}
       />
