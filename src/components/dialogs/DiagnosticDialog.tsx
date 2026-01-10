@@ -22,6 +22,7 @@ interface DiagnosticDialogProps {
   onOpenChange: (open: boolean) => void;
   diagnostic?: Diagnostic | null;
   defaultTemplateId?: string;
+  onSuccess?: (diagnostic: { id: string; name: string; templateName?: string }) => void;
 }
 
 interface SelectOption {
@@ -88,7 +89,7 @@ const toInputDateValue = (value?: string) => {
   return parsed.toISOString().slice(0, 10);
 };
 
-export function DiagnosticDialog({ open, onOpenChange, diagnostic, defaultTemplateId }: DiagnosticDialogProps) {
+export function DiagnosticDialog({ open, onOpenChange, diagnostic, defaultTemplateId, onSuccess }: DiagnosticDialogProps) {
   const navigate = useNavigate();
   const { projects, clients, templates, applyDiagnostic, updateDiagnostic, addProjectAuditLog, duplicateDiagnostic } = useData();
   const { user } = useAuth();
@@ -230,6 +231,14 @@ export function DiagnosticDialog({ open, onOpenChange, diagnostic, defaultTempla
 
       const created = await applyDiagnostic(payload);
       toast.success("Diagnóstico criado com sucesso");
+      
+      // Call onSuccess callback
+      onSuccess?.({
+        id: created.id,
+        name: payload.name,
+        templateName: formData.templateName,
+      });
+      
       onOpenChange(false);
       if (navigateAfterCreate) {
         navigate(`/diagnosticos/${created.id}`);
