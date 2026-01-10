@@ -414,15 +414,19 @@ export function ProjectDialog({
       }
     }
 
-    const normalizedOpportunities = opportunityDrafts
-      .map((opportunity) => ({
-        ...opportunity,
-        description: opportunity.description.trim(),
-      }))
-      .filter((opportunity) => opportunity.description.length > 0);
+    const trimmedOpportunities = opportunityDrafts.map((opportunity) => ({
+      ...opportunity,
+      description: opportunity.description.trim(),
+    }));
+
+    const normalizedOpportunities = trimmedOpportunities.filter(
+      (opportunity) => opportunity.description.length > 0,
+    );
 
     if (normalizedOpportunities.length === 0) {
-      toast.error("Adicione pelo menos uma oportunidade de 'Dinheiro na mesa'");
+      toast.error(
+        "Preencha a descrição de pelo menos uma oportunidade de 'Dinheiro na mesa'",
+      );
       return;
     }
 
