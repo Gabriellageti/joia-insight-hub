@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Client, Project, Diagnostic, DiagnosticTemplate } from '@/types';
 import { JourneyPhase, JourneyEventType, CreateJourneyEventInput } from '@/integrations/supabase/journey-events';
@@ -261,64 +261,74 @@ export function useJourneyActionHandler({
     }
   }, [currentActionId, registerJourneyEvent]);
 
-  // Create pre-filled project object for ProjectDialog
-  const prefilledProject = projectDefaults ? {
-    id: '',
-    name: projectDefaults.name,
-    clientId: projectDefaults.clientId,
-    clientName: projectDefaults.clientName,
-    objective: projectDefaults.objective,
-    phase: projectDefaults.phase,
-    status: 'green' as const,
-    progress: 0,
-    progressOverrideEnabled: false,
-    manualProgress: null,
-    responsible: '',
-    startDate: '',
-    estimatedDuration: '8w' as const,
-    forecastEndDate: '',
-    endDate: '',
-    createdAt: new Date().toISOString(),
-  } : null;
+  // Create pre-filled project object for ProjectDialog (memoized to avoid re-renders)
+  const prefilledProject = useMemo(() => {
+    if (!projectDefaults) return null;
+    return {
+      id: '',
+      name: projectDefaults.name,
+      clientId: projectDefaults.clientId,
+      clientName: projectDefaults.clientName,
+      objective: projectDefaults.objective,
+      phase: projectDefaults.phase,
+      status: 'green' as const,
+      progress: 0,
+      progressOverrideEnabled: false,
+      manualProgress: null,
+      responsible: '',
+      startDate: '',
+      estimatedDuration: '8w' as const,
+      forecastEndDate: '',
+      endDate: '',
+      createdAt: '',
+    };
+  }, [projectDefaults]);
 
-  // Create pre-filled diagnostic object for DiagnosticDialog
-  const prefilledDiagnostic = diagnosticDefaults ? {
-    id: '',
-    name: diagnosticDefaults.name,
-    projectId: diagnosticDefaults.projectId,
-    projectName: diagnosticDefaults.projectName,
-    clientId: diagnosticDefaults.clientId,
-    clientName: diagnosticDefaults.clientName,
-    templateId: diagnosticDefaults.templateId,
-    templateName: diagnosticDefaults.templateName,
-    status: 'draft' as const,
-    progress: 0,
-    opportunities: 0,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    totalQuestions: 0,
-    answeredQuestions: 0,
-  } : null;
+  // Create pre-filled diagnostic object for DiagnosticDialog (memoized)
+  const prefilledDiagnostic = useMemo(() => {
+    if (!diagnosticDefaults) return null;
+    return {
+      id: '',
+      name: diagnosticDefaults.name,
+      projectId: diagnosticDefaults.projectId,
+      projectName: diagnosticDefaults.projectName,
+      clientId: diagnosticDefaults.clientId,
+      clientName: diagnosticDefaults.clientName,
+      templateId: diagnosticDefaults.templateId,
+      templateName: diagnosticDefaults.templateName,
+      status: 'draft' as const,
+      progress: 0,
+      opportunities: 0,
+      createdAt: '',
+      updatedAt: '',
+      totalQuestions: 0,
+      answeredQuestions: 0,
+    };
+  }, [diagnosticDefaults]);
 
   // Create pre-filled meeting object for MeetingDialog  
-  const prefilledMeeting = meetingDefaults ? {
-    id: '',
-    title: meetingDefaults.title,
-    projectId: meetingDefaults.projectId,
-    projectName: meetingDefaults.projectName,
-    clientId: meetingDefaults.clientId,
-    clientName: meetingDefaults.clientName,
-    agenda: meetingDefaults.agenda,
-    status: 'scheduled' as const,
-    date: new Date().toISOString(),
-    time: '10:00',
-    type: meetingDefaults.type,
-    participants: [],
-    duration: '60',
-    location: '',
-    hasMinutes: false,
-    createdAt: new Date().toISOString(),
-  } : null;
+  // Create pre-filled meeting object for MeetingDialog (memoized)
+  const prefilledMeeting = useMemo(() => {
+    if (!meetingDefaults) return null;
+    return {
+      id: '',
+      title: meetingDefaults.title,
+      projectId: meetingDefaults.projectId,
+      projectName: meetingDefaults.projectName,
+      clientId: meetingDefaults.clientId,
+      clientName: meetingDefaults.clientName,
+      agenda: meetingDefaults.agenda,
+      status: 'scheduled' as const,
+      date: '',
+      time: '10:00',
+      type: meetingDefaults.type,
+      participants: [],
+      duration: '60',
+      location: '',
+      hasMinutes: false,
+      createdAt: '',
+    };
+  }, [meetingDefaults]);
 
   const renderDialogs = () => (
     <>

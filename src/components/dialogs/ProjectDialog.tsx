@@ -169,24 +169,29 @@ export function ProjectDialog({
     autoStructure: true,
   });
 
+  // Compute a stable initialization key based on whether we're editing, prefilling or creating
   const initKey = open
     ? project?.id
       ? `edit:${project.id}`
       : project
-        ? `prefill:${project.clientId}:${project.name}`
+        ? `prefill:${project.clientId}`
         : "new"
     : "closed";
 
   const initializedKeyRef = useRef<string | null>(null);
+  const projectSnapshotRef = useRef<typeof project>(null);
 
   useEffect(() => {
     if (!open) {
       initializedKeyRef.current = null;
+      projectSnapshotRef.current = null;
       return;
     }
 
+    // Avoid re-initialization if already initialized for this key
     if (initializedKeyRef.current === initKey) return;
     initializedKeyRef.current = initKey;
+    projectSnapshotRef.current = project;
 
     // Editing an existing persisted project
     if (project?.id) {
@@ -280,7 +285,7 @@ export function ProjectDialog({
       forecastAdjustedManually: false,
       autoStructure: true,
     });
-  }, [open, initKey, project, user, opportunities]);
+  }, [open, initKey, user, opportunities]);
 
   useEffect(() => {
     if (formData.forecastAdjustedManually) return;
