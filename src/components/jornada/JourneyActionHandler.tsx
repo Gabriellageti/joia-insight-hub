@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Client, Project, Diagnostic, DiagnosticTemplate } from '@/types';
 import { JourneyPhase, JourneyEventType, CreateJourneyEventInput } from '@/integrations/supabase/journey-events';
@@ -44,12 +44,17 @@ export function useJourneyActionHandler({
   const [diagnosticDialogOpen, setDiagnosticDialogOpen] = useState(false);
   const [meetingDialogOpen, setMeetingDialogOpen] = useState(false);
   const [clientDialogOpen, setClientDialogOpen] = useState(false);
-  
+
   // Pre-filled data states
   const [projectDefaults, setProjectDefaults] = useState<ProjectDefaults | null>(null);
   const [diagnosticDefaults, setDiagnosticDefaults] = useState<DiagnosticDefaults | null>(null);
   const [meetingDefaults, setMeetingDefaults] = useState<MeetingDefaults | null>(null);
-  
+
+  // Batch project creation state (AreaSuggestionCard)
+  const [projectBatchAreas, setProjectBatchAreas] = useState<string[] | null>(null);
+  const [projectBatchIndex, setProjectBatchIndex] = useState(0);
+  const reopenNextProjectRef = useRef(false);
+
   // Track action context for event registration
   const [currentActionId, setCurrentActionId] = useState<string | null>(null);
   
@@ -170,6 +175,28 @@ export function useJourneyActionHandler({
     }
   }, [getContext, templates, projects, client.id, navigate]);
 
+  const buildProjectDefaultsForArea = useCallback((area: string): ProjectDefaults => {
+    const context = getContext();
+    return {
+      clientId: context.clientId,
+      clientName: context.clientName,
+      name: `Projeto ${area} - ${context.clientName}`,
+      objective: `Atacar oportunidades de ${area} identificadas no Kickoff`,
+      phase: 'Diagnóstico',
+    };
+  }, [getContext]);
+
+  const startProjectBatch = useCallback((areas: string[]) => {
+    const normalized = areas.map((a) => a.trim()).filter(Boolean);
+    if (normalized.length === 0) return;
+
+    setProjectBatchAreas(normalized);
+    setProjectBatchIndex(0);
+    setCurrentActionId('specific_projects_created');
+    setProjectDefaults(buildProjectDefaultsForArea(normalized[0]));
+    setProjectDialogOpen(true);
+  }, [buildProjectDefaultsForArea]);
+
   const handleDialogClose = useCallback(() => {
     setProjectDialogOpen(false);
     setDiagnosticDialogOpen(false);
@@ -178,6 +205,9 @@ export function useJourneyActionHandler({
     setProjectDefaults(null);
     setDiagnosticDefaults(null);
     setMeetingDefaults(null);
+    setProjectBatchAreas(null);
+    setProjectBatchIndex(0);
+    reopenNextProjectRef.current = false;
     setCurrentActionId(null);
     onDataRefresh();
   }, [onDataRefresh]);
@@ -187,7 +217,27 @@ export function useJourneyActionHandler({
     if (currentActionId) {
       registerJourneyEvent(currentActionId, 'project', { id: project.id, name: project.name });
     }
-  }, [currentActionId, registerJourneyEvent]);
+
+    if (projectBatchAreas && projectBatchAreas.length > 0) {
+      const hasNext = projectBatchIndex < projectBatchAreas.length - 1;
+      if (hasNext) {
+        const nextIndex = projectBatchIndex + 1;
+        setProjectBatchIndex(nextIndex);
+        setProjectDefaults(buildProjectDefaultsForArea(projectBatchAreas[nextIndex]));
+        reopenNextProjectRef.current = true;
+      } else {
+        // End of batch - cleanup will happen on close
+        setProjectBatchAreas(null);
+        setProjectBatchIndex(0);
+      }
+    }
+  }, [
+    currentActionId,
+    registerJourneyEvent,
+    projectBatchAreas,
+    projectBatchIndex,
+    buildProjectDefaultsForArea,
+  ]);
 
   const handleDiagnosticSuccess = useCallback((diagnostic: { id: string; name: string; templateName?: string }) => {
     if (currentActionId) {
@@ -211,7 +261,7 @@ export function useJourneyActionHandler({
     }
   }, [currentActionId, registerJourneyEvent]);
 
-  // Create pre-filled project object for ProjectDialog (partial - dialog will handle defaults)
+  // Create pre-filled project object for ProjectDialog
   const prefilledProject = projectDefaults ? {
     id: '',
     name: projectDefaults.name,
@@ -222,10 +272,10 @@ export function useJourneyActionHandler({
     status: 'green' as const,
     progress: 0,
     progressOverrideEnabled: false,
-    manualProgress: 0,
+    manualProgress: null,
     responsible: '',
-    startDate: new Date().toISOString().split('T')[0],
-    estimatedDurationWeeks: 4,
+    startDate: '',
+    estimatedDuration: '8w' as const,
     forecastEndDate: '',
     endDate: '',
     createdAt: new Date().toISOString(),
@@ -276,7 +326,14 @@ export function useJourneyActionHandler({
         open={projectDialogOpen}
         onOpenChange={(open) => {
           setProjectDialogOpen(open);
-          if (!open) handleDialogClose();
+          if (!open) {
+            if (reopenNextProjectRef.current) {
+              reopenNextProjectRef.current = false;
+              setTimeout(() => setProjectDialogOpen(true), 0);
+              return;
+            }
+            handleDialogClose();
+          }
         }}
         project={prefilledProject}
         onSuccess={handleProjectSuccess}
@@ -319,5 +376,6 @@ export function useJourneyActionHandler({
   return {
     handleAction,
     renderDialogs,
+    startProjectBatch,
   };
 }
