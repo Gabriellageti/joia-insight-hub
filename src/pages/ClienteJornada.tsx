@@ -9,13 +9,17 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useClientJourney } from "@/hooks/useClientJourney";
 import { useData } from "@/contexts/DataContext";
 import { JourneyTimeline, PhaseChecklist, NextActionsCard } from "@/components/jornada";
+import { useJourneyActionHandler } from "@/components/jornada/JourneyActionHandler";
 
 export default function ClienteJornada() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { clients } = useData();
+  const { clients, projects, diagnostics, templates } = useData();
   
   const client = clients.find(c => c.id === id);
+  const clientProjects = projects.filter(p => p.clientId === id);
+  const clientDiagnostics = diagnostics.filter(d => d.clientId === id);
+  
   const {
     events,
     loading,
@@ -24,8 +28,22 @@ export default function ClienteJornada() {
     phases,
     suggestedActions,
     overallProgress,
+    registerEvent,
     refresh,
   } = useClientJourney(id);
+  
+  // Only initialize handler if client exists
+  const actionHandler = client ? useJourneyActionHandler({
+    client,
+    projects: clientProjects,
+    diagnostics: clientDiagnostics,
+    templates,
+    currentPhase,
+    onEventRegistered: async (input) => {
+      await registerEvent(input);
+    },
+    onDataRefresh: refresh,
+  }) : null;
 
   if (!client) {
     return (
@@ -156,20 +174,7 @@ export default function ClienteJornada() {
         <div className="space-y-4">
           <NextActionsCard 
             actions={suggestedActions}
-            onActionClick={(actionId) => {
-              // Navigate to appropriate section based on action
-              if (actionId === 'kickoff_started' || actionId === 'kickoff_completed') {
-                navigate('/diagnostico');
-              } else if (actionId === 'project_created' || actionId === 'specific_projects_created') {
-                navigate('/projetos');
-              } else if (actionId === 'assessment_presented') {
-                navigate('/reunioes');
-              } else if (actionId.includes('task')) {
-                navigate('/plano-acao');
-              } else if (actionId === 'indicators_registered') {
-                navigate('/indicadores');
-              }
-            }}
+            onActionClick={actionHandler?.handleAction}
           />
 
           {/* Quick Links */}
@@ -217,6 +222,9 @@ export default function ClienteJornada() {
           <AlertDescription>{error.message}</AlertDescription>
         </Alert>
       )}
+      
+      {/* Dialogs for automated actions */}
+      {actionHandler?.renderDialogs()}
     </div>
   );
 }
