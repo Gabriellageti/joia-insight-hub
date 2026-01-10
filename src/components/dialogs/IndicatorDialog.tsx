@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +16,7 @@ interface IndicatorDialogProps {
 
 export function IndicatorDialog({ open, onOpenChange, indicator }: IndicatorDialogProps) {
   const { addIndicator, updateIndicator, projects } = useData();
+  const isEditing = Boolean(indicator?.id);
   const [formData, setFormData] = useState({
     name: "",
     category: "Financeiro",
@@ -79,7 +80,7 @@ export function IndicatorDialog({ open, onOpenChange, indicator }: IndicatorDial
       return;
     }
 
-    if (indicator) {
+    if (isEditing && indicator?.id) {
       updateIndicator(indicator.id, formData);
       toast.success("Indicador atualizado com sucesso");
     } else {
@@ -93,7 +94,10 @@ export function IndicatorDialog({ open, onOpenChange, indicator }: IndicatorDial
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>{indicator ? "Editar Indicador" : "Novo Indicador"}</DialogTitle>
+          <DialogTitle>{isEditing ? "Editar Indicador" : "Novo Indicador"}</DialogTitle>
+          <DialogDescription className="sr-only">
+            Formulário de indicador com categoria, meta e vínculo a projeto.
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
           <div className="grid grid-cols-2 gap-4 py-4">
@@ -212,7 +216,7 @@ export function IndicatorDialog({ open, onOpenChange, indicator }: IndicatorDial
               Cancelar
             </Button>
             <Button type="submit" className="bg-accent text-accent-foreground hover:bg-accent/90">
-              {indicator ? "Salvar" : "Criar"}
+              {isEditing ? "Salvar" : "Criar"}
             </Button>
           </DialogFooter>
         </form>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,6 +20,9 @@ export function MeetingDialog({ open, onOpenChange, meeting, onSuccess }: Meetin
   const { addMeeting, updateMeeting } = useMeetings();
   const { projects, clients } = useData();
   const [loading, setLoading] = useState(false);
+
+  const isEditing = Boolean(meeting?.id);
+
   const [formData, setFormData] = useState({
     title: "",
     projectId: "",
@@ -118,13 +121,13 @@ export function MeetingDialog({ open, onOpenChange, meeting, onSuccess }: Meetin
 
     setLoading(true);
     try {
-      if (meeting) {
+      if (isEditing && meeting?.id) {
         await updateMeeting(meeting.id, meetingData);
         toast.success("Reunião atualizada com sucesso");
       } else {
         const created = await addMeeting(meetingData);
         toast.success("Reunião criada com sucesso");
-        
+
         // Call onSuccess callback
         if (created) {
           onSuccess?.({
@@ -145,7 +148,10 @@ export function MeetingDialog({ open, onOpenChange, meeting, onSuccess }: Meetin
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{meeting ? "Editar Reunião" : "Nova Reunião"}</DialogTitle>
+          <DialogTitle>{isEditing ? "Editar Reunião" : "Nova Reunião"}</DialogTitle>
+          <DialogDescription className="sr-only">
+            Formulário de reunião com data, hora e participantes.
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
           <div className="grid grid-cols-2 gap-4 py-4">
@@ -291,7 +297,7 @@ export function MeetingDialog({ open, onOpenChange, meeting, onSuccess }: Meetin
               Cancelar
             </Button>
             <Button type="submit" className="bg-accent text-accent-foreground hover:bg-accent/90" disabled={loading}>
-              {loading ? "Salvando..." : meeting ? "Salvar" : "Criar"}
+              {loading ? "Salvando..." : isEditing ? "Salvar" : "Criar"}
             </Button>
           </DialogFooter>
         </form>

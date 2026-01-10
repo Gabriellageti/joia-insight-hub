@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,6 +19,7 @@ interface TaskDialogProps {
 
 export function TaskDialog({ open, onOpenChange, task }: TaskDialogProps) {
   const { addTask, updateTask, projects, clients } = useData();
+  const isEditing = Boolean(task?.id);
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -116,7 +117,7 @@ export function TaskDialog({ open, onOpenChange, task }: TaskDialogProps) {
       return;
     }
 
-    if (task) {
+    if (isEditing && task?.id) {
       updateTask(task.id, formData);
       toast.success("Tarefa atualizada com sucesso");
     } else {
@@ -130,7 +131,10 @@ export function TaskDialog({ open, onOpenChange, task }: TaskDialogProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{task ? "Editar Tarefa" : "Nova Tarefa"}</DialogTitle>
+          <DialogTitle>{isEditing ? "Editar Tarefa" : "Nova Tarefa"}</DialogTitle>
+          <DialogDescription className="sr-only">
+            Formulário de tarefa com projeto, prioridade e detalhes 5W2H.
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
           <div className="grid grid-cols-2 gap-4 py-4">
@@ -291,7 +295,7 @@ export function TaskDialog({ open, onOpenChange, task }: TaskDialogProps) {
               Cancelar
             </Button>
             <Button type="submit" className="bg-accent text-accent-foreground hover:bg-accent/90">
-              {task ? "Salvar" : "Criar"}
+              {isEditing ? "Salvar" : "Criar"}
             </Button>
           </DialogFooter>
         </form>

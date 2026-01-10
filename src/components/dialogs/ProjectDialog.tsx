@@ -4,6 +4,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -169,10 +170,12 @@ export function ProjectDialog({
     autoStructure: true,
   });
 
+  const isEditing = Boolean(project?.id);
+
   // Compute a stable initialization key based on whether we're editing, prefilling or creating
   const initKey = open
-    ? project?.id
-      ? `edit:${project.id}`
+    ? isEditing
+      ? `edit:${project!.id}`
       : project
         ? `prefill:${project.clientId}`
         : "new"
@@ -499,33 +502,33 @@ export function ProjectDialog({
       responsibleUserId: payload.responsibleUserId || null,
     }));
 
-    try {
-      if (project) {
-        await updateProject(project.id, payload);
+      try {
+        if (project?.id) {
+          await updateProject(project.id, payload);
 
-        const existing = opportunities.filter(
-          (opportunity) => opportunity.projectId === project.id,
-        );
+          const existing = opportunities.filter(
+            (opportunity) => opportunity.projectId === project.id,
+          );
 
-        parsedOpportunities.forEach((opportunity) => {
-          if (opportunity.id) {
-            updateOpportunity(opportunity.id, opportunity);
-          } else {
-            addOpportunity({
-              ...opportunity,
-              projectId: project.id,
-              clientId: payload.clientId,
-            });
-          }
-        });
+          parsedOpportunities.forEach((opportunity) => {
+            if (opportunity.id) {
+              updateOpportunity(opportunity.id, opportunity);
+            } else {
+              addOpportunity({
+                ...opportunity,
+                projectId: project.id,
+                clientId: payload.clientId,
+              });
+            }
+          });
 
-        existing.forEach((opportunity) => {
-          if (!parsedOpportunities.some((draft) => draft.id === opportunity.id)) {
-            deleteOpportunity(opportunity.id);
-          }
-        });
-        toast.success("Projeto atualizado com sucesso");
-      } else {
+          existing.forEach((opportunity) => {
+            if (!parsedOpportunities.some((draft) => draft.id === opportunity.id)) {
+              deleteOpportunity(opportunity.id);
+            }
+          });
+          toast.success("Projeto atualizado com sucesso");
+        } else {
         await addProject(payload, {
           opportunities: parsedOpportunities.map((opportunity) => ({
             ...opportunity,
@@ -555,11 +558,11 @@ export function ProjectDialog({
   )?.role;
   const canForceStatus =
     !userRole || ["admin_joia", "gestor_projetos"].includes(userRole);
-  const statusSummary = project
+  const statusSummary = isEditing
     ? {
-        color: statusColors[project.status],
-        description: project.statusReason || "Status calculado automaticamente",
-        source: project.statusSource || "calculated",
+        color: statusColors[project!.status],
+        description: project!.statusReason || "Status calculado automaticamente",
+        source: project!.statusSource || "calculated",
       }
     : {
         color: statusColors.green,
@@ -572,9 +575,10 @@ export function ProjectDialog({
       <DialogContent className="max-h-[90vh] max-w-3xl p-0 flex flex-col overflow-y-auto">
         <form onSubmit={handleSubmit} className="flex h-full flex-col">
           <DialogHeader className="px-6 pt-6">
-            <DialogTitle>
-              {project ? "Editar Projeto" : "Novo Projeto"}
-            </DialogTitle>
+            <DialogTitle>{isEditing ? "Editar Projeto" : "Novo Projeto"}</DialogTitle>
+            <DialogDescription className="sr-only">
+              Formulário de projeto com informações básicas, responsável e oportunidades.
+            </DialogDescription>
           </DialogHeader>
 
           <ScrollArea className="flex-1 px-6 pb-6 max-h-[calc(90vh-72px)] overflow-y-auto">
@@ -1299,7 +1303,7 @@ export function ProjectDialog({
               type="submit"
               className="bg-accent text-accent-foreground hover:bg-accent/90"
             >
-              {project ? "Salvar" : "Criar"}
+              {isEditing ? "Salvar" : "Criar"}
             </Button>
           </DialogFooter>
         </form>

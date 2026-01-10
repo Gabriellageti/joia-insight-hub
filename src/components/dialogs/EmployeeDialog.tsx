@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +16,7 @@ interface EmployeeDialogProps {
 
 export function EmployeeDialog({ open, onOpenChange, employee }: EmployeeDialogProps) {
   const { addEmployee, updateEmployee } = useData();
+  const isEditing = Boolean(employee?.id);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -69,7 +70,7 @@ export function EmployeeDialog({ open, onOpenChange, employee }: EmployeeDialogP
     }
 
     try {
-      if (employee) {
+      if (isEditing && employee?.id) {
         await updateEmployee(employee.id, formData);
         toast.success("Colaborador atualizado com sucesso");
       } else {
@@ -86,7 +87,10 @@ export function EmployeeDialog({ open, onOpenChange, employee }: EmployeeDialogP
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>{employee ? "Editar Colaborador" : "Novo Colaborador"}</DialogTitle>
+          <DialogTitle>{isEditing ? "Editar Colaborador" : "Novo Colaborador"}</DialogTitle>
+          <DialogDescription className="sr-only">
+            Formulário de colaborador interno com função e status.
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
           <div className="grid grid-cols-2 gap-4 py-4">
@@ -164,7 +168,7 @@ export function EmployeeDialog({ open, onOpenChange, employee }: EmployeeDialogP
               Cancelar
             </Button>
             <Button type="submit" className="bg-accent text-accent-foreground hover:bg-accent/90">
-              {employee ? "Salvar" : "Criar"}
+              {isEditing ? "Salvar" : "Criar"}
             </Button>
           </DialogFooter>
         </form>
