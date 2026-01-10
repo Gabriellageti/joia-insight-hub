@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -93,6 +93,8 @@ export function DiagnosticDialog({ open, onOpenChange, diagnostic, defaultTempla
   const navigate = useNavigate();
   const { projects, clients, templates, applyDiagnostic, updateDiagnostic, addProjectAuditLog, duplicateDiagnostic } = useData();
   const { user } = useAuth();
+
+  const isEditing = Boolean(diagnostic?.id);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [nameTouched, setNameTouched] = useState(false);
@@ -252,7 +254,7 @@ export function DiagnosticDialog({ open, onOpenChange, diagnostic, defaultTempla
   };
 
   const handleUpdate = async () => {
-    if (!diagnostic) return;
+    if (!isEditing || !diagnostic?.id) return;
     setIsSubmitting(true);
     try {
       updateDiagnostic(diagnostic.id, {
@@ -299,13 +301,16 @@ export function DiagnosticDialog({ open, onOpenChange, diagnostic, defaultTempla
     }
   };
 
-  const isEditingWithResponses = diagnostic?.hasResponses;
+  const isEditingWithResponses = isEditing && diagnostic?.hasResponses;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl">
         <DialogHeader>
-          <DialogTitle>{diagnostic ? "Editar diagnóstico" : "Aplicar diagnóstico"}</DialogTitle>
+          <DialogTitle>{isEditing ? "Editar diagnóstico" : "Aplicar diagnóstico"}</DialogTitle>
+          <DialogDescription className="sr-only">
+            Formulário de aplicação/edição de diagnóstico.
+          </DialogDescription>
           {isEditingWithResponses && (
             <p className="text-sm text-muted-foreground">
               Este diagnóstico já possui respostas registradas. O projeto e o template não podem ser alterados; ajuste apenas
@@ -374,7 +379,7 @@ export function DiagnosticDialog({ open, onOpenChange, diagnostic, defaultTempla
               />
             </div>
           </div>
-          {diagnostic && (
+          {isEditing && (
             <div className="space-y-2">
               <Label>Status</Label>
               <Select
@@ -392,7 +397,7 @@ export function DiagnosticDialog({ open, onOpenChange, diagnostic, defaultTempla
               </Select>
             </div>
           )}
-          {diagnostic && (
+          {isEditing && (
             <div className="space-y-2">
               <Label>Duplicar para outro projeto</Label>
               <div className="flex items-center gap-2">
@@ -419,7 +424,7 @@ export function DiagnosticDialog({ open, onOpenChange, diagnostic, defaultTempla
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
               Cancelar
             </Button>
-            {diagnostic ? (
+            {isEditing ? (
               <Button onClick={handleUpdate} disabled={isSubmitting}>
                 {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Salvar alterações

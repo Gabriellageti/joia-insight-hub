@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +16,7 @@ interface ContentItemDialogProps {
 
 export function ContentItemDialog({ open, onOpenChange, contentItem }: ContentItemDialogProps) {
   const { addContentItem, updateContentItem } = useData();
+  const isEditing = Boolean(contentItem?.id);
   const [formData, setFormData] = useState({
     title: "",
     type: "Post" as ContentItem["type"],
@@ -69,7 +70,7 @@ export function ContentItemDialog({ open, onOpenChange, contentItem }: ContentIt
     };
 
     try {
-      if (contentItem) {
+      if (isEditing && contentItem?.id) {
         await updateContentItem(contentItem.id, data);
         toast.success("Conteúdo atualizado com sucesso");
       } else {
@@ -86,7 +87,10 @@ export function ContentItemDialog({ open, onOpenChange, contentItem }: ContentIt
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>{contentItem ? "Editar Conteúdo" : "Novo Conteúdo"}</DialogTitle>
+          <DialogTitle>{isEditing ? "Editar Conteúdo" : "Novo Conteúdo"}</DialogTitle>
+          <DialogDescription className="sr-only">
+            Formulário de conteúdo com tipo, status e tags.
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
           <div className="grid gap-4 py-4">
@@ -160,7 +164,7 @@ export function ContentItemDialog({ open, onOpenChange, contentItem }: ContentIt
               Cancelar
             </Button>
             <Button type="submit" className="bg-accent text-accent-foreground hover:bg-accent/90">
-              {contentItem ? "Salvar" : "Criar"}
+              {isEditing ? "Salvar" : "Criar"}
             </Button>
           </DialogFooter>
         </form>

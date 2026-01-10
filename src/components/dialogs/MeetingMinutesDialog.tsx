@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -71,6 +71,9 @@ export function MeetingMinutesDialog({ open, onOpenChange, meeting }: MeetingMin
             <FileText className="h-5 w-5" />
             Ata da Reunião: {meeting.title}
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            Editor da ata da reunião com aplicação de templates.
+          </DialogDescription>
           <p className="text-sm text-muted-foreground">
             {meeting.date} às {meeting.time} • {meeting.projectName}
           </p>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,6 +17,7 @@ interface LeadDialogProps {
 
 export function LeadDialog({ open, onOpenChange, lead }: LeadDialogProps) {
   const { addLead, updateLead } = useData();
+  const isEditing = Boolean(lead?.id);
   const [formData, setFormData] = useState({
     company: "",
     contact: "",
@@ -73,7 +74,7 @@ export function LeadDialog({ open, onOpenChange, lead }: LeadDialogProps) {
     }
 
     try {
-      if (lead) {
+      if (isEditing && lead?.id) {
         await updateLead(lead.id, formData);
         toast.success("Lead atualizado com sucesso");
       } else {
@@ -90,7 +91,10 @@ export function LeadDialog({ open, onOpenChange, lead }: LeadDialogProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>{lead ? "Editar Lead" : "Novo Lead"}</DialogTitle>
+          <DialogTitle>{isEditing ? "Editar Lead" : "Novo Lead"}</DialogTitle>
+          <DialogDescription className="sr-only">
+            Formulário de lead com contato, status e próxima ação.
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
           <div className="grid grid-cols-2 gap-4 py-4">
@@ -206,7 +210,7 @@ export function LeadDialog({ open, onOpenChange, lead }: LeadDialogProps) {
               Cancelar
             </Button>
             <Button type="submit" className="bg-accent text-accent-foreground hover:bg-accent/90">
-              {lead ? "Salvar" : "Criar"}
+              {isEditing ? "Salvar" : "Criar"}
             </Button>
           </DialogFooter>
         </form>
