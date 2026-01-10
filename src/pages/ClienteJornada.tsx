@@ -184,13 +184,8 @@ export default function ClienteJornada() {
             <AreaSuggestionCard
               opportunities={clientOpportunities}
               onCreateProjects={(areas) => {
-                toast.info(`Criar projetos para: ${areas.join(", ")}`, {
-                  description: "Use o botão 'Criar Projeto' para cada área selecionada",
-                });
-                // For each area, trigger a project creation with pre-filled data
-                if (areas.length > 0) {
-                  actionHandler?.handleAction('specific_projects_created');
-                }
+                if (areas.length === 0) return;
+                actionHandler?.startProjectBatch?.(areas);
               }}
               onViewOpportunities={(area) => {
                 toast.info(`Oportunidades da área: ${area}`);

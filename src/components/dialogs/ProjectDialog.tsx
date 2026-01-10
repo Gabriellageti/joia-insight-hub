@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -169,8 +169,27 @@ export function ProjectDialog({
     autoStructure: true,
   });
 
+  const initKey = open
+    ? project?.id
+      ? `edit:${project.id}`
+      : project
+        ? `prefill:${project.clientId}:${project.name}`
+        : "new"
+    : "closed";
+
+  const initializedKeyRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (project) {
+    if (!open) {
+      initializedKeyRef.current = null;
+      return;
+    }
+
+    if (initializedKeyRef.current === initKey) return;
+    initializedKeyRef.current = initKey;
+
+    // Editing an existing persisted project
+    if (project?.id) {
       const projectOpportunities = opportunities.filter(
         (opportunity) => opportunity.projectId === project.id,
       );
@@ -191,31 +210,32 @@ export function ProjectDialog({
         manualProgress: project.manualProgress ?? null,
         progressJustification: project.progressJustification || "",
         statusOverrideEnabled: project.statusOverrideEnabled || false,
-        statusOverrideValue:
-          project.statusOverrideValue ?? project.status ?? null,
+        statusOverrideValue: project.statusOverrideValue ?? project.status ?? null,
         statusOverrideJustification: project.statusOverrideJustification || "",
         statusOverrideExpiresAt: project.statusOverrideExpiresAt || "",
         statusOverrideAuthor: project.statusOverrideAuthor || "",
         responsibleUserId: project.responsibleUserId || "",
-        responsibleNameLegacy:
-          project.responsibleNameLegacy || project.responsible || "",
+        responsibleNameLegacy: project.responsibleNameLegacy || project.responsible || "",
         startDate: project.startDate,
         estimatedDuration: project.estimatedDuration ?? null,
         forecastEndDate: project.forecastEndDate || project.endDate || "",
         forecastAdjustedManually:
-          project.forecastAdjustedManually ||
-          project.estimatedDuration === "manual",
+          project.forecastAdjustedManually || project.estimatedDuration === "manual",
         autoStructure: true,
       });
-    } else {
+      return;
+    }
+
+    // Prefilled "new project" draft (used by journey automation)
+    if (project && !project.id) {
       setOpportunityDrafts([defaultOpportunityDraft()]);
       setFormData({
-        name: "",
-        clientId: "",
-        clientName: "",
-        objective: "",
-        scope: "",
-        phase: "Diagnóstico",
+        name: project.name || "",
+        clientId: project.clientId || "",
+        clientName: project.clientName || "",
+        objective: project.objective || "",
+        scope: project.scope || "",
+        phase: project.phase || "Diagnóstico",
         progressOverrideEnabled: false,
         manualProgress: null,
         progressJustification: "",
@@ -223,18 +243,44 @@ export function ProjectDialog({
         statusOverrideValue: null,
         statusOverrideJustification: "",
         statusOverrideExpiresAt: "",
-        statusOverrideAuthor:
-          user?.user_metadata?.full_name || user?.email || "",
-        responsibleUserId: "",
-        responsibleNameLegacy: "",
-        startDate: "",
-        estimatedDuration: "8w",
-        forecastEndDate: "",
-        forecastAdjustedManually: false,
+        statusOverrideAuthor: user?.user_metadata?.full_name || user?.email || "",
+        responsibleUserId: project.responsibleUserId || "",
+        responsibleNameLegacy: project.responsibleNameLegacy || project.responsible || "",
+        startDate: project.startDate || "",
+        estimatedDuration: project.estimatedDuration ?? "8w",
+        forecastEndDate: project.forecastEndDate || project.endDate || "",
+        forecastAdjustedManually: project.forecastAdjustedManually || false,
         autoStructure: true,
       });
+      return;
     }
-  }, [project, open, user, opportunities]);
+
+    // Brand new project
+    setOpportunityDrafts([defaultOpportunityDraft()]);
+    setFormData({
+      name: "",
+      clientId: "",
+      clientName: "",
+      objective: "",
+      scope: "",
+      phase: "Diagnóstico",
+      progressOverrideEnabled: false,
+      manualProgress: null,
+      progressJustification: "",
+      statusOverrideEnabled: false,
+      statusOverrideValue: null,
+      statusOverrideJustification: "",
+      statusOverrideExpiresAt: "",
+      statusOverrideAuthor: user?.user_metadata?.full_name || user?.email || "",
+      responsibleUserId: "",
+      responsibleNameLegacy: "",
+      startDate: "",
+      estimatedDuration: "8w",
+      forecastEndDate: "",
+      forecastAdjustedManually: false,
+      autoStructure: true,
+    });
+  }, [open, initKey, project, user, opportunities]);
 
   useEffect(() => {
     if (formData.forecastAdjustedManually) return;
