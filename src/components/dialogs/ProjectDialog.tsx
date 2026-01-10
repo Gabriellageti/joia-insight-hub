@@ -652,31 +652,32 @@ export function ProjectDialog({
                           Nenhum responsável encontrado
                         </CommandEmpty>
                         <CommandGroup heading="Equipe interna">
-                          {eligibleUsers.map((user) => (
+                          {eligibleUsers.map((employee) => (
                             <CommandItem
-                              key={user.id}
+                              key={employee.id}
+                              value={`${employee.name}-${employee.id}`}
                               onSelect={() => {
                                 setFormData((prev) => ({
                                   ...prev,
-                                  responsibleUserId: user.id,
+                                  responsibleUserId: employee.id,
                                   responsibleNameLegacy:
-                                    prev.responsibleNameLegacy || user.name,
+                                    prev.responsibleNameLegacy || employee.name,
                                 }));
-                                setResponsibleOpen(false);
+                                setTimeout(() => setResponsibleOpen(false), 0);
                               }}
-                              className="gap-3"
+                              className="gap-3 cursor-pointer"
                             >
                               <Avatar className="h-8 w-8">
                                 <AvatarFallback className="bg-primary/10 text-primary">
-                                  {getInitials(user.name)}
+                                  {getInitials(employee.name)}
                                 </AvatarFallback>
                               </Avatar>
                               <div className="flex flex-col">
                                 <span className="text-sm font-medium">
-                                  {user.name}
+                                  {employee.name}
                                 </span>
                                 <span className="text-xs text-muted-foreground">
-                                  {user.accessRole || user.role}
+                                  {employee.accessRole || employee.role}
                                 </span>
                               </div>
                             </CommandItem>
