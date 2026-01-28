@@ -8,19 +8,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useClientJourney } from "@/hooks/useClientJourney";
 import { useData } from "@/contexts/DataContext";
-import { JourneyTimeline, PhaseChecklist, NextActionsCard, AreaSuggestionCard } from "@/components/jornada";
+import { JourneyTimeline, PhaseChecklist, NextActionsCard } from "@/components/jornada";
 import { useJourneyActionHandler } from "@/components/jornada/JourneyActionHandler";
 import { toast } from "sonner";
 
 export default function ClienteJornada() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { clients, projects, diagnostics, templates, opportunities } = useData();
+  const { clients, projects, diagnostics, templates } = useData();
   
   const client = clients.find(c => c.id === id);
   const clientProjects = projects.filter(p => p.clientId === id);
   const clientDiagnostics = diagnostics.filter(d => d.clientId === id);
-  const clientOpportunities = opportunities.filter(o => o.clientId === id);
   
   const {
     events,
@@ -178,21 +177,6 @@ export default function ClienteJornada() {
             actions={suggestedActions}
             onActionClick={actionHandler?.handleAction}
           />
-
-          {/* Area Suggestions - Show after Kickoff */}
-          {clientOpportunities.length > 0 && (
-            <AreaSuggestionCard
-              opportunities={clientOpportunities}
-              onCreateProjects={(areas) => {
-                if (areas.length === 0) return;
-                actionHandler?.startProjectBatch?.(areas);
-              }}
-              onViewOpportunities={(area) => {
-                toast.info(`Oportunidades da área: ${area}`);
-                navigate('/diagnostico');
-              }}
-            />
-          )}
 
           {/* Quick Links */}
           <Card>

@@ -117,13 +117,6 @@ import {
   type LeadRow,
 } from "@/integrations/supabase/leads";
 import {
-  createOpportunity as createSupabaseOpportunity,
-  deleteOpportunity as deleteSupabaseOpportunity,
-  listOpportunities,
-  updateOpportunity as updateSupabaseOpportunity,
-  type OpportunityRow,
-} from "@/integrations/supabase/opportunities";
-import {
   createDeliverable as createSupabaseDeliverable,
   deleteDeliverable as deleteSupabaseDeliverable,
   listDeliverables,
@@ -268,12 +261,6 @@ interface DataContextType {
   // Project audit log
   projectAuditLogs: ProjectAuditLogEntry[];
   addProjectAuditLog: (entry: Omit<ProjectAuditLogEntry, "id" | "createdAt">) => ProjectAuditLogEntry;
-
-  // Opportunities
-  opportunities: Opportunity[];
-  addOpportunity: (opportunity: Omit<Opportunity, "id" | "createdAt" | "updatedAt" | "source">) => Opportunity;
-  updateOpportunity: (id: string, opportunity: Partial<Opportunity>) => void;
-  deleteOpportunity: (id: string) => void;
 
   // Client contacts
   clientContacts: ClientContact[];
@@ -508,28 +495,6 @@ const mapSupabaseLeadToLegacy = (lead: LeadRow): Lead => ({
   notes: lead.notes || undefined,
   createdAt: formatDateFromIso(lead.created_at),
 });
-
-const mapSupabaseOpportunityToLegacy = (opp: OpportunityRow): Opportunity => {
-  const validStatuses: Opportunity["status"][] = ["Identificado", "Em validação", "Em execução", "Resgatado"];
-  const validTypes: Opportunity["type"][] = ["Receita incremental", "Redução de custos", "Eficiência operacional", "Risco evitado", "Outro"];
-  
-  return {
-    id: opp.id,
-    projectId: opp.project_id || "",
-    clientId: opp.client_id || "",
-    status: validStatuses.includes(opp.status as Opportunity["status"]) ? (opp.status as Opportunity["status"]) : "Identificado",
-    type: validTypes.includes(opp.type as Opportunity["type"]) ? (opp.type as Opportunity["type"]) : "Outro",
-    description: opp.description || "",
-    estimatedValue: opp.estimated_value ? Number(opp.estimated_value) : null,
-    confidence: (opp.priority as Opportunity["confidence"]) || "media",
-    evidenceType: (opp.evidence_type as Opportunity["evidenceType"]) || "a_coletar",
-    evidenceReference: "",
-    responsibleUserId: null,
-    createdAt: formatDateFromIso(opp.created_at),
-    updatedAt: formatDateFromIso(opp.updated_at),
-    source: (opp.source as Opportunity["source"]) || "manual",
-  };
-};
 
 const mapSupabaseDeliverableToLegacy = (del: DeliverableRow): ProjectDeliverable => ({
   id: del.id,
@@ -1930,26 +1895,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
     fetchLeadsData();
   }, [user]);
 
-  // Fetch opportunities from Supabase
-  useEffect(() => {
-    if (!user) {
-      setOpportunities([]);
-      return;
-    }
-
-    const fetchOpportunitiesData = async () => {
-      try {
-        const data = await listOpportunities();
-        setOpportunities(data.map(mapSupabaseOpportunityToLegacy));
-      } catch (error) {
-        console.error("Error fetching opportunities:", error);
-        setOpportunities([]);
-      }
-    };
-
-    fetchOpportunitiesData();
-  }, [user]);
-
   // Fetch deliverables from Supabase
   useEffect(() => {
     if (!user) {
@@ -2686,57 +2631,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
           variant: "destructive",
         });
       }
-    },
-
-    opportunities,
-    addOpportunity: (opportunity) => {
-      const newOpportunity = normalizeOpportunity({ ...opportunity, id: generateId(), createdAt: getDate() });
-      
-      void (async () => {
-        try {
-          const payload = {
-            title: newOpportunity.description || "Oportunidade",
-            description: newOpportunity.description,
-            project_id: newOpportunity.projectId || null,
-            client_id: newOpportunity.clientId || null,
-            type: newOpportunity.type,
-            estimated_value: newOpportunity.estimatedValue,
-            priority: newOpportunity.confidence,
-            status: newOpportunity.status,
-            source: newOpportunity.source,
-            evidence_type: newOpportunity.evidenceType,
-          };
-          const created = await createSupabaseOpportunity(payload);
-          setOpportunities((prev) => prev.map((o) => o.id === newOpportunity.id ? mapSupabaseOpportunityToLegacy(created) : o));
-        } catch (error) {
-          console.error("Error creating opportunity:", error);
-        }
-      })();
-
-      setOpportunities((prev) => [...prev, newOpportunity]);
-      return newOpportunity;
-    },
-    updateOpportunity: (id, opportunity) => {
-      setOpportunities((prev) => prev.map((opp) => (opp.id === id ? normalizeOpportunity({ ...opp, ...opportunity, updatedAt: getDate() }) : opp)));
-      
-      void (async () => {
-        try {
-          const payload: Record<string, unknown> = {};
-          if (opportunity.description !== undefined) payload.description = opportunity.description;
-          if (opportunity.type !== undefined) payload.type = opportunity.type;
-          if (opportunity.estimatedValue !== undefined) payload.estimated_value = opportunity.estimatedValue;
-          if (opportunity.status !== undefined) payload.status = opportunity.status;
-          if (opportunity.confidence !== undefined) payload.priority = opportunity.confidence;
-          if (opportunity.evidenceType !== undefined) payload.evidence_type = opportunity.evidenceType;
-          await updateSupabaseOpportunity(id, payload);
-        } catch (error) {
-          console.error("Error updating opportunity:", error);
-        }
-      })();
-    },
-    deleteOpportunity: (id) => {
-      setOpportunities((prev) => prev.filter((opp) => opp.id !== id));
-      void deleteSupabaseOpportunity(id).catch((e) => console.error("Error deleting opportunity:", e));
     },
 
     deliverables,
