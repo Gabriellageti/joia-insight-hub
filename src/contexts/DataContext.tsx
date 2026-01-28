@@ -50,7 +50,7 @@ import {
   isMissingTemplatesTableMessage,
   updateTemplateRecord,
 } from "@/lib/diagnostics";
-import { syncTemplatesWithSeed } from "./templateSync";
+// Template sync removed - templates are 100% database-driven
 import {
   createClient as createSupabaseClient,
   deleteClient as deleteSupabaseClient,
@@ -1636,26 +1636,7 @@ const initialClientContacts: ClientContact[] = [
   { id: "contact-2", clientId: "client-2", name: "Carlos Menezes", role: "Head Operações", area: "Diretoria", phone: "(21) 97777-4545", email: "carlos.menezes@betalog.com", hasPortalAccess: false },
 ];
 
-function useLocalStorage<T>(key: string, initialValue: T): [T, React.Dispatch<React.SetStateAction<T>>] {
-  const [storedValue, setStoredValue] = useState<T>(() => {
-    try {
-      const item = window.localStorage.getItem(key);
-      return item ? (JSON.parse(item) as T) : initialValue;
-    } catch {
-      return initialValue;
-    }
-  });
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(key, JSON.stringify(storedValue));
-    } catch (error) {
-      console.error("Error saving to localStorage:", error);
-    }
-  }, [key, storedValue]);
-
-  return [storedValue, setStoredValue];
-}
+// useLocalStorage removed - no longer used for templates
 
 export function DataProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
@@ -1679,10 +1660,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [templates, setTemplates] = useState<DiagnosticTemplate[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
   const [templatesError, setTemplatesError] = useState<string | null>(null);
-  const [removedSeedTemplateIds, setRemovedSeedTemplateIds] = useLocalStorage<string[]>(
-    "joia_removed_seed_templates",
-    []
-  );
+  // Removed localStorage for template seeds - templates are 100% database-driven
   const [diagnostics, setDiagnostics] = useState<Diagnostic[]>(initialDiagnostics);
   const [contentItems, setContentItems] = useState<ContentItem[]>([]);
   const [contracts, setContracts] = useState<Contract[]>([]);
@@ -2074,19 +2052,15 @@ export function DataProvider({ children }: { children: ReactNode }) {
     setTemplatesError(null);
 
     try {
-      const { templates: data, fromSeed } = await fetchTemplates();
-      const resolvedTemplates =
-        fromSeed && removedSeedTemplateIds.length > 0
-          ? syncTemplatesWithSeed([], data, new Set(removedSeedTemplateIds))
-          : data;
-      setTemplates(resolvedTemplates.map(normalizeTemplate));
+      const data = await fetchTemplates();
+      setTemplates(data.map(normalizeTemplate));
     } catch (error) {
       console.error(error);
       setTemplatesError((error as Error).message || "Não foi possível carregar os templates");
     } finally {
       setTemplatesLoading(false);
     }
-  }, [removedSeedTemplateIds]);
+  }, []);
 
   useEffect(() => {
     refreshTemplates();
@@ -2995,11 +2969,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
         setTemplates((prev) => prev.filter((t) => t.id !== id));
       } catch (error) {
         const message = (error as Error).message || "Erro ao remover template";
-        if (isMissingTemplatesTableMessage(message)) {
-          setRemovedSeedTemplateIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
-          setTemplates((prev) => prev.filter((t) => t.id !== id));
-          return;
-        }
+        setTemplatesError(message);
+        throw error;
         setTemplatesError(message);
         throw error;
       } finally {
