@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { useData } from "@/contexts/DataContext";
-import { Opportunity, Project } from "@/types";
+import { Project } from "@/types";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/contexts/AuthContext";
@@ -42,9 +42,10 @@ import {
   calculateForecastEndDate,
   durationLabel,
   ProjectDuration,
-  safeNumber,
 } from "@/lib/dates";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Check, ChevronsUpDown, Link2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const statusColors: Record<Project["status"], string> = {
   green: "bg-green-500",
@@ -52,63 +53,33 @@ const statusColors: Record<Project["status"], string> = {
   red: "bg-red-500",
 };
 
-const OPPORTUNITY_STATUSES: Opportunity["status"][] = [
-  "Identificado",
-  "Em validação",
-  "Em execução",
-  "Resgatado",
+const RESPONSIBLE_ROLES = [
+  "Admin",
+  "Gestor",
+  "Analista",
+  "Admin JoIA",
+  "Gestor JoIA",
+  "Analista JoIA",
+  "gestor_projetos",
+  "admin_joia",
+  "analista",
+] as const;
+
+const PHASES = [
+  "Diagnóstico",
+  "Planejamento",
+  "Execução",
+  "Acompanhamento",
+  "Encerramento",
 ];
 
-const OPPORTUNITY_TYPES: Opportunity["type"][] = [
-  "Receita incremental",
-  "Redução de custos",
-  "Eficiência operacional",
-  "Risco evitado",
-  "Outro",
+const DURATION_OPTIONS: { value: ProjectDuration; label: string }[] = [
+  { value: "2w", label: "2 semanas" },
+  { value: "4w", label: "4 semanas" },
+  { value: "8w", label: "8 semanas" },
+  { value: "3m", label: "3 meses" },
+  { value: "6m", label: "6 meses" },
 ];
-
-const CONFIDENCE_OPTIONS: Opportunity["confidence"][] = [
-  "alta",
-  "media",
-  "baixa",
-];
-
-type OpportunityDraft = {
-  id?: string;
-  type: Opportunity["type"];
-  description: string;
-  estimatedValue: string;
-  confidence: Opportunity["confidence"];
-  evidenceType: Opportunity["evidenceType"];
-  evidenceReference: string;
-  status?: Opportunity["status"];
-};
-
-const RESPONSIBLE_ROLES = ["Admin", "Gestor", "Analista", "Admin JoIA", "Gestor JoIA", "Analista JoIA", "gestor_projetos", "admin_joia", "analista"] as const;
-
-const defaultOpportunityDraft = (): OpportunityDraft => ({
-  type: "Receita incremental",
-  description: "",
-  estimatedValue: "",
-  confidence: "media",
-  evidenceType: "a_coletar",
-  evidenceReference: "",
-  status: "Identificado",
-});
-
-const mapOpportunityToDraft = (opportunity: Opportunity): OpportunityDraft => ({
-  id: opportunity.id,
-  type: opportunity.type,
-  description: opportunity.description,
-  estimatedValue:
-    typeof opportunity.estimatedValue === "number"
-      ? String(opportunity.estimatedValue)
-      : "",
-  confidence: opportunity.confidence,
-  evidenceType: opportunity.evidenceType,
-  evidenceReference: opportunity.evidenceReference || "",
-  status: opportunity.status,
-});
 
 const getInitials = (value?: string) =>
   value
@@ -131,13 +102,11 @@ export function ProjectDialog({
   project,
   onSuccess,
 }: ProjectDialogProps) {
-  const {
-    addProject,
-    updateProject,
-    clients,
-    employees,
-  } = useData();
+  const { addProject, updateProject, clients, employees } = useData();
+  const { user } = useAuth();
   const [responsibleOpen, setResponsibleOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const [formData, setFormData] = useState({
     name: "",
     clientId: "",
@@ -159,12 +128,10 @@ export function ProjectDialog({
     estimatedDuration: "8w" as ProjectDuration | null,
     forecastEndDate: "",
     forecastAdjustedManually: false,
-    autoStructure: true,
   });
 
   const isEditing = Boolean(project?.id);
 
-  // Compute a stable initialization key based on whether we're editing, prefilling or creating
   const initKey = open
     ? isEditing
       ? `edit:${project!.id}`
@@ -174,22 +141,21 @@ export function ProjectDialog({
     : "closed";
 
   const initializedKeyRef = useRef<string | null>(null);
-  const projectSnapshotRef = useRef<typeof project>(null);
 
+  // Reset form when dialog opens/closes
   useEffect(() => {
     if (!open) {
       initializedKeyRef.current = null;
-      projectSnapshotRef.current = null;
       return;
     }
 
-    // Avoid re-initialization if already initialized for this key
     if (initializedKeyRef.current === initKey) return;
     initializedKeyRef.current = initKey;
-    projectSnapshotRef.current = project;
 
-    // Editing an existing persisted project
+    const authorName = user?.user_metadata?.full_name || user?.email || "";
+
     if (project?.id) {
+      // Editing existing project
       setFormData({
         name: project.name,
         clientId: project.clientId,
@@ -204,7 +170,7 @@ export function ProjectDialog({
         statusOverrideValue: project.statusOverrideValue ?? project.status ?? null,
         statusOverrideJustification: project.statusOverrideJustification || "",
         statusOverrideExpiresAt: project.statusOverrideExpiresAt || "",
-        statusOverrideAuthor: project.statusOverrideAuthor || "",
+        statusOverrideAuthor: project.statusOverrideAuthor || authorName,
         responsibleUserId: project.responsibleUserId || "",
         responsibleNameLegacy: project.responsibleNameLegacy || project.responsible || "",
         startDate: project.startDate,
@@ -212,13 +178,9 @@ export function ProjectDialog({
         forecastEndDate: project.forecastEndDate || project.endDate || "",
         forecastAdjustedManually:
           project.forecastAdjustedManually || project.estimatedDuration === "manual",
-        autoStructure: true,
       });
-      return;
-    }
-
-    // Prefilled "new project" draft (used by journey automation)
-    if (project && !project.id) {
+    } else if (project) {
+      // Prefilled draft (from journey automation)
       setFormData({
         name: project.name || "",
         clientId: project.clientId || "",
@@ -233,67 +195,56 @@ export function ProjectDialog({
         statusOverrideValue: null,
         statusOverrideJustification: "",
         statusOverrideExpiresAt: "",
-        statusOverrideAuthor: user?.user_metadata?.full_name || user?.email || "",
+        statusOverrideAuthor: authorName,
         responsibleUserId: project.responsibleUserId || "",
         responsibleNameLegacy: project.responsibleNameLegacy || project.responsible || "",
         startDate: project.startDate || "",
         estimatedDuration: project.estimatedDuration ?? "8w",
         forecastEndDate: project.forecastEndDate || project.endDate || "",
         forecastAdjustedManually: project.forecastAdjustedManually || false,
-        autoStructure: true,
       });
-      return;
+    } else {
+      // Brand new project
+      setFormData({
+        name: "",
+        clientId: "",
+        clientName: "",
+        objective: "",
+        scope: "",
+        phase: "Diagnóstico",
+        progressOverrideEnabled: false,
+        manualProgress: null,
+        progressJustification: "",
+        statusOverrideEnabled: false,
+        statusOverrideValue: null,
+        statusOverrideJustification: "",
+        statusOverrideExpiresAt: "",
+        statusOverrideAuthor: authorName,
+        responsibleUserId: "",
+        responsibleNameLegacy: "",
+        startDate: "",
+        estimatedDuration: "8w",
+        forecastEndDate: "",
+        forecastAdjustedManually: false,
+      });
     }
+  }, [open, initKey, project, user]);
 
-    // Brand new project
-    setOpportunityDrafts([defaultOpportunityDraft()]);
-    setFormData({
-      name: "",
-      clientId: "",
-      clientName: "",
-      objective: "",
-      scope: "",
-      phase: "Diagnóstico",
-      progressOverrideEnabled: false,
-      manualProgress: null,
-      progressJustification: "",
-      statusOverrideEnabled: false,
-      statusOverrideValue: null,
-      statusOverrideJustification: "",
-      statusOverrideExpiresAt: "",
-      statusOverrideAuthor: user?.user_metadata?.full_name || user?.email || "",
-      responsibleUserId: "",
-      responsibleNameLegacy: "",
-      startDate: "",
-      estimatedDuration: "8w",
-      forecastEndDate: "",
-      forecastAdjustedManually: false,
-      autoStructure: true,
-    });
-  }, [open, initKey, user, opportunities]);
-
+  // Auto-calculate forecast end date
   useEffect(() => {
     if (formData.forecastAdjustedManually) return;
     const forecast = calculateForecastEndDate(
       formData.startDate,
-      formData.estimatedDuration as ProjectDuration | null,
+      formData.estimatedDuration as ProjectDuration | null
     );
     setFormData((prev) =>
-      prev.forecastEndDate === forecast
-        ? prev
-        : { ...prev, forecastEndDate: forecast },
+      prev.forecastEndDate === forecast ? prev : { ...prev, forecastEndDate: forecast }
     );
-  }, [
-    formData.startDate,
-    formData.estimatedDuration,
-    formData.forecastAdjustedManually,
-  ]);
+  }, [formData.startDate, formData.estimatedDuration, formData.forecastAdjustedManually]);
 
   const handleClientChange = (clientId: string) => {
     const client = clients.find((c) => c.id === clientId);
-    const clientDisplayName = client
-      ? client.nomeFantasia || client.razaoSocial
-      : "";
+    const clientDisplayName = client ? client.nomeFantasia || client.razaoSocial : "";
     setFormData((prev) => ({
       ...prev,
       clientId,
@@ -306,58 +257,33 @@ export function ProjectDialog({
       (employee) =>
         employee.status === "active" &&
         RESPONSIBLE_ROLES.includes(
-          (employee.accessRole || employee.role) as "Admin" | "Gestor" | "Analista",
-        ),
+          (employee.accessRole || employee.role) as (typeof RESPONSIBLE_ROLES)[number]
+        )
     )
     .sort((a, b) => a.name.localeCompare(b.name));
 
   const selectedResponsible = eligibleUsers.find(
-    (employee) => employee.id === formData.responsibleUserId,
+    (employee) => employee.id === formData.responsibleUserId
   );
-
-  const handleOpportunityChange = (
-    index: number,
-    field: keyof OpportunityDraft,
-    value: string,
-  ) => {
-    setOpportunityDrafts((prev) =>
-      prev.map((opportunity, idx) =>
-        idx === index ? { ...opportunity, [field]: value } : opportunity,
-      ),
-    );
-  };
-
-  const addOpportunityDraftRow = () => {
-    setOpportunityDrafts((prev) => [...prev, defaultOpportunityDraft()]);
-  };
-
-  const removeOpportunityDraft = (index: number) => {
-    setOpportunityDrafts((prev) =>
-      prev.length === 1 ? prev : prev.filter((_, idx) => idx !== index),
-    );
-  };
 
   const handleLinkResponsible = () => {
     if (selectedResponsible || !formData.responsibleNameLegacy) return;
-    const match = eligibleUsers.find((user) =>
-      user.name
-        .toLowerCase()
-        .includes(formData.responsibleNameLegacy.toLowerCase()),
+    const match = eligibleUsers.find((emp) =>
+      emp.name.toLowerCase().includes(formData.responsibleNameLegacy.toLowerCase())
     );
 
     if (match) {
       setFormData((prev) => ({ ...prev, responsibleUserId: match.id }));
       toast.success(`Responsável vinculado a ${match.name}`);
     } else {
-      toast.error(
-        "Nenhum colaborador compatível encontrado para o responsável legado",
-      );
+      toast.error("Nenhum colaborador compatível encontrado");
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Validation
     if (!formData.name.trim()) {
       toast.error("Nome do projeto é obrigatório");
       return;
@@ -367,14 +293,12 @@ export function ProjectDialog({
       return;
     }
     if (!formData.responsibleUserId) {
-      toast.error("Selecione um responsável interno para o projeto");
+      toast.error("Selecione um responsável interno");
       return;
     }
+
     if (formData.progressOverrideEnabled) {
-      if (
-        formData.manualProgress === null ||
-        Number.isNaN(Number(formData.manualProgress))
-      ) {
+      if (formData.manualProgress === null || Number.isNaN(Number(formData.manualProgress))) {
         toast.error("Informe um progresso manual válido entre 0 e 100");
         return;
       }
@@ -399,29 +323,7 @@ export function ProjectDialog({
       }
     }
 
-    const trimmedOpportunities = opportunityDrafts.map((opportunity) => ({
-      ...opportunity,
-      description: opportunity.description.trim(),
-    }));
-
-    const normalizedOpportunities = trimmedOpportunities.filter(
-      (opportunity) => opportunity.description.length > 0,
-    );
-
-    if (normalizedOpportunities.length === 0) {
-      toast.error(
-        "Preencha a descrição de pelo menos uma oportunidade de 'Dinheiro na mesa'",
-      );
-      return;
-    }
-
-    const invalidOpportunity = normalizedOpportunities.find(
-      (opportunity) => !opportunity.confidence || !opportunity.type,
-    );
-    if (invalidOpportunity) {
-      toast.error("Preencha tipo, confiança e descrição das oportunidades");
-      return;
-    }
+    setIsSubmitting(true);
 
     const statusOverrideAuthor =
       formData.statusOverrideAuthor ||
@@ -431,31 +333,29 @@ export function ProjectDialog({
 
     const forecastFromDuration = calculateForecastEndDate(
       formData.startDate,
-      formData.estimatedDuration as ProjectDuration | null,
+      formData.estimatedDuration as ProjectDuration | null
     );
 
     const resolvedForecast = formData.forecastAdjustedManually
       ? formData.forecastEndDate
       : forecastFromDuration || formData.forecastEndDate;
 
-    const responsibleName =
-      selectedResponsible?.name || formData.responsibleNameLegacy || "";
-
-    const { autoStructure, forecastAdjustedManually, ...restFormData } =
-      formData;
+    const responsibleName = selectedResponsible?.name || formData.responsibleNameLegacy || "";
 
     const payload = {
-      ...restFormData,
-      manualProgress: formData.progressOverrideEnabled
-        ? Number(formData.manualProgress)
-        : null,
+      name: formData.name.trim(),
+      clientId: formData.clientId,
+      clientName: formData.clientName,
+      objective: formData.objective.trim(),
+      scope: formData.scope.trim(),
+      phase: formData.phase,
+      progressOverrideEnabled: formData.progressOverrideEnabled,
+      manualProgress: formData.progressOverrideEnabled ? Number(formData.manualProgress) : null,
       progressJustification: formData.progressOverrideEnabled
         ? formData.progressJustification.trim()
         : "",
       statusOverrideEnabled: formData.statusOverrideEnabled,
-      statusOverrideValue: formData.statusOverrideEnabled
-        ? formData.statusOverrideValue
-        : null,
+      statusOverrideValue: formData.statusOverrideEnabled ? formData.statusOverrideValue : null,
       statusOverrideJustification: formData.statusOverrideEnabled
         ? formData.statusOverrideJustification.trim()
         : "",
@@ -463,832 +363,445 @@ export function ProjectDialog({
         formData.statusOverrideEnabled && formData.statusOverrideExpiresAt
           ? formData.statusOverrideExpiresAt
           : undefined,
-      statusOverrideAuthor: formData.statusOverrideEnabled
-        ? statusOverrideAuthor
-        : "",
-      responsible: responsibleName,
+      statusOverrideAuthor: formData.statusOverrideEnabled ? statusOverrideAuthor : "",
+      responsibleUserId: formData.responsibleUserId,
       responsibleNameLegacy: formData.responsibleNameLegacy || responsibleName,
-      estimatedDuration: forecastAdjustedManually
-        ? "manual"
-        : restFormData.estimatedDuration,
-      forecastAdjustedManually,
+      responsible: responsibleName,
+      startDate: formData.startDate,
+      estimatedDuration: formData.forecastAdjustedManually ? "manual" : formData.estimatedDuration,
+      forecastAdjustedManually: formData.forecastAdjustedManually,
       forecastEndDate: resolvedForecast,
       endDate: resolvedForecast,
     };
 
-    const parsedOpportunities = normalizedOpportunities.map((opportunity) => ({
-      ...opportunity,
-      estimatedValue: safeNumber(opportunity.estimatedValue),
-      evidenceReference: opportunity.evidenceReference.trim(),
-      status: opportunity.status || "Identificado",
-      responsibleUserId: payload.responsibleUserId || null,
-    }));
-
-      try {
-        if (project?.id) {
-          await updateProject(project.id, payload);
-
-          const existing = opportunities.filter(
-            (opportunity) => opportunity.projectId === project.id,
-          );
-
-          parsedOpportunities.forEach((opportunity) => {
-            if (opportunity.id) {
-              updateOpportunity(opportunity.id, opportunity);
-            } else {
-              addOpportunity({
-                ...opportunity,
-                projectId: project.id,
-                clientId: payload.clientId,
-              });
-            }
-          });
-
-          existing.forEach((opportunity) => {
-            if (!parsedOpportunities.some((draft) => draft.id === opportunity.id)) {
-              deleteOpportunity(opportunity.id);
-            }
-          });
-          toast.success("Projeto atualizado com sucesso");
-        } else {
-        await addProject(payload, {
-          opportunities: parsedOpportunities.map((opportunity) => ({
-            ...opportunity,
-            clientId: payload.clientId,
-            projectId: "", // Will be set by addProject
-          })),
-          seedStructure: autoStructure,
-        });
-        toast.success("Projeto criado com sucesso");
-        
-        // Call onSuccess callback with project info (id will be set later via refresh)
-        onSuccess?.({
-          id: '', // New project - id not available yet
-          name: payload.name,
-          clientId: payload.clientId,
-        });
+    try {
+      if (isEditing && project?.id) {
+        await updateProject(project.id, payload);
+        toast.success("Projeto atualizado com sucesso!");
+        onSuccess?.({ id: project.id, name: payload.name, clientId: payload.clientId });
+      } else {
+        await addProject(payload);
+        toast.success("Projeto criado com sucesso!");
+        // For new projects, we don't have the ID immediately, so we pass the form data
+        onSuccess?.({ id: "", name: payload.name, clientId: payload.clientId });
       }
-
       onOpenChange(false);
-    } catch {
-      // Erros já são tratados/exibidos no DataContext
+    } catch (error) {
+      console.error("Erro ao salvar projeto:", error);
+      toast.error("Erro ao salvar projeto. Tente novamente.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const userRole = (
-    user?.user_metadata as Record<string, string | undefined> | undefined
-  )?.role;
-  const canForceStatus =
-    !userRole || ["admin_joia", "gestor_projetos"].includes(userRole);
-  const statusSummary = isEditing
-    ? {
-        color: statusColors[project!.status],
-        description: project!.statusReason || "Status calculado automaticamente",
-        source: project!.statusSource || "calculated",
-      }
-    : {
-        color: statusColors.green,
-        description: "Status será calculado automaticamente após salvar",
-        source: "calculated",
-      };
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-3xl p-0 flex flex-col overflow-y-auto">
-        <form onSubmit={handleSubmit} className="flex h-full flex-col">
-          <DialogHeader className="px-6 pt-6">
-            <DialogTitle>{isEditing ? "Editar Projeto" : "Novo Projeto"}</DialogTitle>
-            <DialogDescription className="sr-only">
-              Formulário de projeto com informações básicas, responsável e oportunidades.
-            </DialogDescription>
-          </DialogHeader>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+        <DialogHeader>
+          <DialogTitle>{isEditing ? "Editar Projeto" : "Novo Projeto"}</DialogTitle>
+          <DialogDescription>
+            {isEditing
+              ? "Atualize as informações do projeto"
+              : "Preencha os dados para criar um novo projeto"}
+          </DialogDescription>
+        </DialogHeader>
 
-          <ScrollArea className="flex-1 px-6 pb-6 max-h-[calc(90vh-72px)] overflow-y-auto">
-            <div className="grid grid-cols-2 gap-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Nome do Projeto *</Label>
-                <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) =>
-                    setFormData({ ...formData, name: e.target.value })
-                  }
-                  placeholder="Nome do projeto"
-                />
-              </div>
+        <ScrollArea className="flex-1 pr-4">
+          <form id="project-form" onSubmit={handleSubmit} className="space-y-6 py-4">
+            {/* Basic Info */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-medium text-muted-foreground">Informações Básicas</h3>
 
-              <div className="space-y-2">
-                <Label htmlFor="client">Cliente *</Label>
-                <Select
-                  value={formData.clientId}
-                  onValueChange={handleClientChange}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o cliente" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {clients
-                      .filter((c) => c.status === "ativo")
-                      .map((client) => (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">
+                    Nome do Projeto <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="name"
+                    value={formData.name}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+                    placeholder="Ex: Diagnóstico Operacional"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="client">
+                    Cliente <span className="text-destructive">*</span>
+                  </Label>
+                  <Select value={formData.clientId} onValueChange={handleClientChange}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o cliente" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clients.map((client) => (
                         <SelectItem key={client.id} value={client.id}>
                           {client.nomeFantasia || client.razaoSocial}
                         </SelectItem>
                       ))}
-                  </SelectContent>
-                </Select>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
-              <div className="col-span-2 space-y-2">
+              <div className="space-y-2">
                 <Label htmlFor="objective">Objetivo</Label>
                 <Textarea
                   id="objective"
                   value={formData.objective}
-                  onChange={(e) =>
-                    setFormData({ ...formData, objective: e.target.value })
-                  }
-                  placeholder="Objetivo do projeto"
+                  onChange={(e) => setFormData((prev) => ({ ...prev, objective: e.target.value }))}
+                  placeholder="Descreva o objetivo principal do projeto"
                   rows={2}
                 />
               </div>
 
-              <div className="col-span-2 space-y-2">
+              <div className="space-y-2">
                 <Label htmlFor="scope">Escopo</Label>
                 <Textarea
                   id="scope"
                   value={formData.scope}
-                  onChange={(e) =>
-                    setFormData({ ...formData, scope: e.target.value })
-                  }
-                  placeholder="Escopo do projeto"
+                  onChange={(e) => setFormData((prev) => ({ ...prev, scope: e.target.value }))}
+                  placeholder="Descreva o escopo do projeto"
                   rows={2}
                 />
               </div>
+            </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="phase">Fase</Label>
-                <Select
-                  value={formData.phase}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, phase: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Diagnóstico">Diagnóstico</SelectItem>
-                    <SelectItem value="Quick wins">Quick wins</SelectItem>
-                    <SelectItem value="Estruturação">Estruturação</SelectItem>
-                    <SelectItem value="Cultura e treinamento">
-                      Cultura e treinamento
-                    </SelectItem>
-                    <SelectItem value="Acompanhamento">
-                      Acompanhamento
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            {/* Responsible & Phase */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-medium text-muted-foreground">Responsável e Fase</h3>
 
-              <div className="space-y-2">
-                <Label>Responsável *</Label>
-                <Popover
-                  open={responsibleOpen}
-                  onOpenChange={setResponsibleOpen}
-                >
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className="w-full justify-between"
-                      type="button"
-                    >
-                      {selectedResponsible ? (
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-8 w-8">
-                            <AvatarFallback className="bg-primary text-primary-foreground">
-                              {getInitials(selectedResponsible.name)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="text-left">
-                            <p className="font-medium leading-none">
-                              {selectedResponsible.name}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {selectedResponsible.accessRole ||
-                                selectedResponsible.role}
-                            </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>
+                    Responsável <span className="text-destructive">*</span>
+                  </Label>
+                  <Popover open={responsibleOpen} onOpenChange={setResponsibleOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={responsibleOpen}
+                        className="w-full justify-between"
+                      >
+                        {selectedResponsible ? (
+                          <div className="flex items-center gap-2">
+                            <Avatar className="h-6 w-6">
+                              <AvatarFallback className="text-xs">
+                                {getInitials(selectedResponsible.name)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span>{selectedResponsible.name}</span>
                           </div>
-                        </div>
-                      ) : (
-                        <span className="text-sm text-muted-foreground">
-                          Selecione um responsável interno
-                        </span>
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[320px] p-0">
-                    <Command>
-                      <CommandInput placeholder="Buscar responsável..." />
-                      <CommandList>
-                        <CommandEmpty>
-                          Nenhum responsável encontrado
-                        </CommandEmpty>
-                        <CommandGroup heading="Equipe interna">
-                          {eligibleUsers.map((employee) => (
-                            <CommandItem
-                              key={employee.id}
-                              value={`${employee.name}-${employee.id}`}
-                              onSelect={() => {
-                                setFormData((prev) => ({
-                                  ...prev,
-                                  responsibleUserId: employee.id,
-                                  responsibleNameLegacy:
-                                    prev.responsibleNameLegacy || employee.name,
-                                }));
-                                setTimeout(() => setResponsibleOpen(false), 0);
-                              }}
-                              className="gap-3 cursor-pointer"
-                            >
-                              <Avatar className="h-8 w-8">
-                                <AvatarFallback className="bg-primary/10 text-primary">
-                                  {getInitials(employee.name)}
-                                </AvatarFallback>
-                              </Avatar>
-                              <div className="flex flex-col">
-                                <span className="text-sm font-medium">
-                                  {employee.name}
-                                </span>
-                                <span className="text-xs text-muted-foreground">
-                                  {employee.accessRole || employee.role}
-                                </span>
-                              </div>
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
+                        ) : (
+                          <span className="text-muted-foreground">Selecione...</span>
+                        )}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-full p-0" align="start">
+                      <Command>
+                        <CommandInput placeholder="Buscar colaborador..." />
+                        <CommandList>
+                          <CommandEmpty>Nenhum colaborador encontrado</CommandEmpty>
+                          <CommandGroup>
+                            {eligibleUsers.map((employee) => (
+                              <CommandItem
+                                key={employee.id}
+                                value={employee.name}
+                                onSelect={() => {
+                                  setFormData((prev) => ({
+                                    ...prev,
+                                    responsibleUserId: employee.id,
+                                  }));
+                                  setResponsibleOpen(false);
+                                }}
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    formData.responsibleUserId === employee.id
+                                      ? "opacity-100"
+                                      : "opacity-0"
+                                  )}
+                                />
+                                <Avatar className="h-6 w-6 mr-2">
+                                  <AvatarFallback className="text-xs">
+                                    {getInitials(employee.name)}
+                                  </AvatarFallback>
+                                </Avatar>
+                                {employee.name}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
 
-                {!selectedResponsible && formData.responsibleNameLegacy && (
-                  <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                    <span>
-                      Responsável legado: {formData.responsibleNameLegacy}
-                    </span>
-                    <Button
-                      type="button"
-                      variant="link"
-                      className="h-auto px-0 text-xs"
-                      onClick={handleLinkResponsible}
-                    >
-                      Vincular responsável
-                    </Button>
-                  </div>
-                )}
-              </div>
+                  {formData.responsibleNameLegacy && !selectedResponsible && (
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-xs text-muted-foreground">
+                        Legado: {formData.responsibleNameLegacy}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleLinkResponsible}
+                        className="h-6 text-xs"
+                      >
+                        <Link2 className="h-3 w-3 mr-1" />
+                        Vincular
+                      </Button>
+                    </div>
+                  )}
+                </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="startDate">Data Início</Label>
-                <Input
-                  id="startDate"
-                  value={formData.startDate}
-                  onChange={(e) =>
-                    setFormData({ ...formData, startDate: e.target.value })
-                  }
-                  placeholder="dd/mm/aaaa"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Duração estimada</Label>
-                {formData.forecastAdjustedManually ? (
-                  <div className="flex items-center justify-between rounded-md border border-dashed border-border px-3 py-2 text-sm text-muted-foreground">
-                    <span>Duração definida manualmente</span>
-                    <Badge variant="outline">
-                      {durationLabel(formData.estimatedDuration)}
-                    </Badge>
-                  </div>
-                ) : (
+                <div className="space-y-2">
+                  <Label htmlFor="phase">Fase Atual</Label>
                   <Select
-                    value={
-                      (formData.estimatedDuration as
-                        | ProjectDuration
-                        | undefined) || undefined
-                    }
-                    onValueChange={(value: ProjectDuration) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        estimatedDuration: value,
-                      }))
-                    }
+                    value={formData.phase}
+                    onValueChange={(value) => setFormData((prev) => ({ ...prev, phase: value }))}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Selecione a duração" />
+                      <SelectValue placeholder="Selecione a fase" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="2w">2 semanas</SelectItem>
-                      <SelectItem value="4w">4 semanas</SelectItem>
-                      <SelectItem value="8w">8 semanas</SelectItem>
-                      <SelectItem value="3m">3 meses</SelectItem>
-                      <SelectItem value="6m">6 meses</SelectItem>
+                      {PHASES.map((phase) => (
+                        <SelectItem key={phase} value={phase}>
+                          {phase}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
-                )}
-                <p className="text-xs text-muted-foreground">
-                  Usada para calcular a previsão de término.
-                </p>
+                </div>
               </div>
+            </div>
 
-              <div className="col-span-2 space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="forecastEndDate">Previsão de fim</Label>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Switch
-                      id="forecastManual"
-                      checked={formData.forecastAdjustedManually}
-                      onCheckedChange={(checked) =>
+            {/* Dates */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-medium text-muted-foreground">Datas e Prazos</h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="startDate">Data de Início</Label>
+                  <Input
+                    id="startDate"
+                    type="date"
+                    value={formData.startDate}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, startDate: e.target.value }))
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="duration">Duração Estimada</Label>
+                  <Select
+                    value={formData.forecastAdjustedManually ? "manual" : (formData.estimatedDuration || "")}
+                    onValueChange={(value) => {
+                      if (value === "manual") {
                         setFormData((prev) => ({
                           ...prev,
-                          forecastAdjustedManually: checked,
-                          estimatedDuration: checked
-                            ? "manual"
-                            : prev.estimatedDuration || "8w",
-                        }))
+                          forecastAdjustedManually: true,
+                          estimatedDuration: null,
+                        }));
+                      } else {
+                        setFormData((prev) => ({
+                          ...prev,
+                          forecastAdjustedManually: false,
+                          estimatedDuration: value as ProjectDuration,
+                        }));
                       }
-                    />
-                    <span>Ajustar manualmente</span>
-                  </div>
-                </div>
-                <Input
-                  id="forecastEndDate"
-                  value={formData.forecastEndDate}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      forecastEndDate: e.target.value,
-                    })
-                  }
-                  placeholder="dd/mm/aaaa"
-                  readOnly={!formData.forecastAdjustedManually}
-                />
-              </div>
-
-              <div className="col-span-2 flex items-center gap-3 rounded-md border border-dashed border-border p-3">
-                <Switch
-                  id="autoStructure"
-                  checked={formData.autoStructure}
-                  onCheckedChange={(checked) =>
-                    setFormData((prev) => ({ ...prev, autoStructure: checked }))
-                  }
-                />
-                <div>
-                  <Label
-                    htmlFor="autoStructure"
-                    className="text-sm font-medium"
+                    }}
                   >
-                    Criar estrutura automática
-                  </Label>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {DURATION_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                      <SelectItem value="manual">Definir manualmente</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="forecastEndDate">Previsão de Término</Label>
+                  <Input
+                    id="forecastEndDate"
+                    type="date"
+                    value={formData.forecastEndDate}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        forecastEndDate: e.target.value,
+                        forecastAdjustedManually: true,
+                      }))
+                    }
+                    disabled={!formData.forecastAdjustedManually && !!formData.estimatedDuration}
+                  />
+                  {!formData.forecastAdjustedManually && formData.estimatedDuration && (
+                    <p className="text-xs text-muted-foreground">
+                      Calculado automaticamente ({durationLabel(formData.estimatedDuration)})
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Progress Override */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-medium">Sobrescrever Progresso</h3>
                   <p className="text-xs text-muted-foreground">
-                    Gera tarefas iniciais no Kanban com base na fase selecionada
-                    e data de início.
+                    Definir progresso manualmente ao invés de calcular por tarefas
                   </p>
                 </div>
+                <Switch
+                  checked={formData.progressOverrideEnabled}
+                  onCheckedChange={(checked) =>
+                    setFormData((prev) => ({ ...prev, progressOverrideEnabled: checked }))
+                  }
+                />
               </div>
 
-              <div className="col-span-2 space-y-4 rounded-lg border border-border p-4">
-                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-foreground">
-                      Saúde do projeto
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Calculada automaticamente a partir de tarefas, evidências,
-                      reuniões, finanças e KPIs.
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <span
-                      className={`h-2 w-2 rounded-full ${statusSummary.color}`}
-                    />
-                    <span className="text-foreground">
-                      {statusSummary.description}
-                    </span>
-                    <Badge variant="outline" className="text-xs">
-                      {statusSummary.source === "manual"
-                        ? "Manual"
-                        : "Automático"}
-                    </Badge>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <div className="flex items-center gap-3">
-                    <Switch
-                      id="statusOverride"
-                      checked={formData.statusOverrideEnabled}
-                      disabled={!canForceStatus}
-                      onCheckedChange={(checked) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          statusOverrideEnabled: checked,
-                          statusOverrideValue: checked
-                            ? prev.statusOverrideValue ||
-                              project?.status ||
-                              "green"
-                            : null,
-                          statusOverrideJustification: checked
-                            ? prev.statusOverrideJustification
-                            : "",
-                          statusOverrideExpiresAt: checked
-                            ? prev.statusOverrideExpiresAt
-                            : "",
-                          statusOverrideAuthor: checked
-                            ? prev.statusOverrideAuthor ||
-                              user?.user_metadata?.full_name ||
-                              user?.email ||
-                              ""
-                            : "",
-                        }))
-                      }
-                    />
-                    <div>
-                      <Label
-                        htmlFor="statusOverride"
-                        className="text-sm font-medium"
-                      >
-                        Forçar status
-                      </Label>
-                      <p className="text-xs text-muted-foreground">
-                        Disponível para Admin/Gestor. Adicione justificativa e
-                        prazo de expiração opcional.
-                      </p>
-                    </div>
-                  </div>
-
-                  {formData.statusOverrideEnabled && (
-                    <div className="space-y-2">
-                      <Label htmlFor="statusOverrideValue">
-                        Seleção manual
-                      </Label>
-                      <Select
-                        value={formData.statusOverrideValue || undefined}
-                        onValueChange={(value: Project["status"]) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            statusOverrideValue: value,
-                          }))
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Escolha o status" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="green">Verde</SelectItem>
-                          <SelectItem value="yellow">Amarelo</SelectItem>
-                          <SelectItem value="red">Vermelho</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-
-                  {formData.statusOverrideEnabled && (
-                    <div className="space-y-2">
-                      <Label htmlFor="statusOverrideJustification">
-                        Justificativa do status
-                      </Label>
-                      <Textarea
-                        id="statusOverrideJustification"
-                        value={formData.statusOverrideJustification}
-                        onChange={(e) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            statusOverrideJustification: e.target.value,
-                          }))
-                        }
-                        placeholder="Explique por que o status foi ajustado manualmente"
-                        rows={3}
-                      />
-                    </div>
-                  )}
-
-                  {formData.statusOverrideEnabled && (
-                    <div className="space-y-2">
-                      <Label htmlFor="statusOverrideExpiresAt">
-                        Expiração do override (opcional)
-                      </Label>
-                      <Input
-                        id="statusOverrideExpiresAt"
-                        type="date"
-                        value={formData.statusOverrideExpiresAt}
-                        onChange={(e) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            statusOverrideExpiresAt: e.target.value,
-                          }))
-                        }
-                      />
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="col-span-2 space-y-4 rounded-lg border border-border p-4">
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-medium text-foreground">
-                      Detalhes Avançados
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Ajuste a forma de calcular o progresso e registre
-                      justificativas de override.
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <Switch
-                      id="progressOverride"
-                      checked={formData.progressOverrideEnabled}
-                      onCheckedChange={(checked) =>
-                        setFormData({
-                          ...formData,
-                          progressOverrideEnabled: checked,
-                          manualProgress: checked
-                            ? (formData.manualProgress ?? 0)
-                            : null,
-                          progressJustification: checked
-                            ? formData.progressJustification
-                            : "",
-                        })
-                      }
-                    />
-                    <Label
-                      htmlFor="progressOverride"
-                      className="text-sm font-medium"
-                    >
-                      Sobrescrever progresso
-                    </Label>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {formData.progressOverrideEnabled && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pl-4 border-l-2 border-muted">
                   <div className="space-y-2">
-                    <Label htmlFor="manualProgress">Progresso manual (%)</Label>
+                    <Label htmlFor="manualProgress">Progresso Manual (%)</Label>
                     <Input
                       id="manualProgress"
                       type="number"
-                      min="0"
-                      max="100"
+                      min={0}
+                      max={100}
                       value={formData.manualProgress ?? ""}
                       onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          manualProgress:
-                            e.target.value === ""
-                              ? null
-                              : Number(e.target.value),
-                        })
+                        setFormData((prev) => ({
+                          ...prev,
+                          manualProgress: e.target.value ? Number(e.target.value) : null,
+                        }))
                       }
-                      placeholder="Informe o percentual"
-                      disabled={!formData.progressOverrideEnabled}
+                      placeholder="0-100"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="progressJustification">Justificativa</Label>
+                    <Input
+                      id="progressJustification"
+                      value={formData.progressJustification}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          progressJustification: e.target.value,
+                        }))
+                      }
+                      placeholder="Motivo da sobrescrita"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Status Override */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-medium">Sobrescrever Status</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Definir status manualmente (semáforo)
+                  </p>
+                </div>
+                <Switch
+                  checked={formData.statusOverrideEnabled}
+                  onCheckedChange={(checked) =>
+                    setFormData((prev) => ({ ...prev, statusOverrideEnabled: checked }))
+                  }
+                />
+              </div>
+
+              {formData.statusOverrideEnabled && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pl-4 border-l-2 border-muted">
+                  <div className="space-y-2">
+                    <Label>Status</Label>
+                    <Select
+                      value={formData.statusOverrideValue || ""}
+                      onValueChange={(value) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          statusOverrideValue: value as Project["status"],
+                        }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(["green", "yellow", "red"] as const).map((status) => (
+                          <SelectItem key={status} value={status}>
+                            <div className="flex items-center gap-2">
+                              <div className={cn("w-3 h-3 rounded-full", statusColors[status])} />
+                              {status === "green" && "Verde (OK)"}
+                              {status === "yellow" && "Amarelo (Atenção)"}
+                              {status === "red" && "Vermelho (Crítico)"}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="statusJustification">Justificativa</Label>
+                    <Input
+                      id="statusJustification"
+                      value={formData.statusOverrideJustification}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          statusOverrideJustification: e.target.value,
+                        }))
+                      }
+                      placeholder="Motivo da sobrescrita"
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="progressJustification">Justificativa</Label>
-                    <Textarea
-                      id="progressJustification"
-                      value={formData.progressJustification}
+                    <Label htmlFor="statusExpires">Expira em</Label>
+                    <Input
+                      id="statusExpires"
+                      type="date"
+                      value={formData.statusOverrideExpiresAt}
                       onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          progressJustification: e.target.value,
-                        })
+                        setFormData((prev) => ({
+                          ...prev,
+                          statusOverrideExpiresAt: e.target.value,
+                        }))
                       }
-                      placeholder="Explique o motivo do valor manual"
-                      disabled={!formData.progressOverrideEnabled}
-                      rows={formData.progressOverrideEnabled ? 3 : 2}
                     />
-                  </div>
-                </div>
-              </div>
-
-              <div className="col-span-2 space-y-4 rounded-lg border border-border p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-foreground">
-                      Oportunidades (Dinheiro na mesa)
-                    </p>
                     <p className="text-xs text-muted-foreground">
-                      Estruture hipóteses com tipo, confiança e valor estimado
-                      para alimentar o dashboard.
+                      Opcional: data em que o status volta a ser calculado
                     </p>
                   </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={addOpportunityDraftRow}
-                  >
-                    Adicionar oportunidade
-                  </Button>
                 </div>
-
-                <ScrollArea className="max-h-[360px] pr-2">
-                  <div className="space-y-3">
-                    {opportunityDrafts.map((opportunity, index) => (
-                      <div
-                        key={opportunity.id || `draft-${index}`}
-                        className="space-y-3 rounded-md border border-border p-3"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <Badge variant="outline">#{index + 1}</Badge>
-                            <Select
-                              value={opportunity.status || "Identificado"}
-                              onValueChange={(value: Opportunity["status"]) =>
-                                handleOpportunityChange(index, "status", value)
-                              }
-                            >
-                              <SelectTrigger className="h-7 w-[150px] text-xs">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {OPPORTUNITY_STATUSES.map((status) => (
-                                  <SelectItem key={status} value={status}>
-                                    {status}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-
-                          {opportunityDrafts.length > 1 && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="text-destructive"
-                              onClick={() => removeOpportunityDraft(index)}
-                            >
-                              Remover
-                            </Button>
-                          )}
-                        </div>
-
-                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                          <div className="space-y-2">
-                            <Label>Tipo</Label>
-                            <Select
-                              value={opportunity.type}
-                              onValueChange={(value: Opportunity["type"]) =>
-                                handleOpportunityChange(index, "type", value)
-                              }
-                            >
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {OPPORTUNITY_TYPES.map((type) => (
-                                  <SelectItem key={type} value={type}>
-                                    {type}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label>Confiança</Label>
-                            <Select
-                              value={opportunity.confidence}
-                              onValueChange={(
-                                value: Opportunity["confidence"],
-                              ) =>
-                                handleOpportunityChange(
-                                  index,
-                                  "confidence",
-                                  value,
-                                )
-                              }
-                            >
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {CONFIDENCE_OPTIONS.map((confidence) => (
-                                  <SelectItem
-                                    key={confidence}
-                                    value={confidence}
-                                  >
-                                    {confidence === "alta"
-                                      ? "Alta"
-                                      : confidence === "media"
-                                        ? "Média"
-                                        : "Baixa"}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label>Valor estimado (opcional)</Label>
-                            <Input
-                              value={opportunity.estimatedValue}
-                              onChange={(e) =>
-                                handleOpportunityChange(
-                                  index,
-                                  "estimatedValue",
-                                  e.target.value,
-                                )
-                              }
-                              placeholder="R$ 0,00"
-                            />
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label>Tipo de evidência</Label>
-                            <Select
-                              value={opportunity.evidenceType}
-                              onValueChange={(
-                                value: Opportunity["evidenceType"],
-                              ) =>
-                                handleOpportunityChange(
-                                  index,
-                                  "evidenceType",
-                                  value,
-                                )
-                              }
-                            >
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="a_coletar">
-                                  A coletar
-                                </SelectItem>
-                                <SelectItem value="upload">
-                                  Upload / anexo
-                                </SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-
-                        {opportunity.evidenceType === "upload" && (
-                          <div className="space-y-2">
-                            <Label>Evidência inicial</Label>
-                            <Input
-                              value={opportunity.evidenceReference}
-                              onChange={(e) =>
-                                handleOpportunityChange(
-                                  index,
-                                  "evidenceReference",
-                                  e.target.value,
-                                )
-                              }
-                              placeholder="Link ou nome do arquivo"
-                            />
-                          </div>
-                        )}
-
-                        <div className="space-y-2">
-                          <Label>Descrição curta *</Label>
-                          <Textarea
-                            value={opportunity.description}
-                            onChange={(e) =>
-                              handleOpportunityChange(
-                                index,
-                                "description",
-                                e.target.value,
-                              )
-                            }
-                            placeholder="Descreva a hipótese e impacto esperado"
-                            rows={2}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              </div>
+              )}
             </div>
-          </ScrollArea>
+          </form>
+        </ScrollArea>
 
-          <DialogFooter className="gap-2 border-t border-border px-6 py-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-            >
-              Cancelar
-            </Button>
-            <Button
-              type="submit"
-              className="bg-accent text-accent-foreground hover:bg-accent/90"
-            >
-              {isEditing ? "Salvar" : "Criar"}
-            </Button>
-          </DialogFooter>
-        </form>
+        <DialogFooter className="pt-4 border-t">
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            Cancelar
+          </Button>
+          <Button type="submit" form="project-form" disabled={isSubmitting}>
+            {isSubmitting ? "Salvando..." : isEditing ? "Salvar Alterações" : "Criar Projeto"}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
