@@ -1,37 +1,38 @@
 import { Diagnostic, DiagnosticTemplate } from "@/types";
 import { SuggestedNextStep } from "@/components/plano-acao";
+import { isKickoffTemplate, calculateAreaScores } from "@/lib/area-scoring";
 
-// Templates de diagnóstico padrão que podem ser sugeridos após o Kickoff
-const DIAGNOSTIC_TEMPLATES_SUGGESTIONS = [
-  {
-    templateId: "template-2",
-    templateName: "Diagnóstico de Compras JoIA",
-    priority: "alta" as const,
+// Mapeamento de área para template de diagnóstico específico
+const AREA_TEMPLATE_MAP: Record<string, { templateId: string; templateName: string; priority: "alta" | "media" | "baixa"; estimatedTime: string; description: string }> = {
+  compras: {
+    templateId: "d1111111-1111-1111-1111-111111111111",
+    templateName: "Diagnóstico de Compras",
+    priority: "alta",
     estimatedTime: "45 min",
-    description: "Avalia maturidade do setor de Compras para identificar desperdícios e oportunidades.",
+    description: "Diagnóstico detalhado da área de Compras para mapear oportunidades e gerar plano de ação.",
   },
-  {
-    templateId: "template-1",
-    templateName: "Operações SaaS",
-    priority: "media" as const,
-    estimatedTime: "30 min",
-    description: "Checklist base de governança e eficiência para operações SaaS.",
-  },
-  {
-    templateId: "template-3",
-    templateName: "Diagnóstico Financeiro",
-    priority: "alta" as const,
+  financas: {
+    templateId: "d2222222-2222-2222-2222-222222222222",
+    templateName: "Diagnóstico de Finanças",
+    priority: "alta",
     estimatedTime: "40 min",
     description: "Avaliação da saúde financeira, fluxo de caixa e controles internos.",
   },
-  {
-    templateId: "template-4",
-    templateName: "Diagnóstico de Processos",
-    priority: "media" as const,
+  estoque: {
+    templateId: "d3333333-3333-3333-3333-333333333333",
+    templateName: "Diagnóstico de Estoque",
+    priority: "alta",
     estimatedTime: "35 min",
-    description: "Mapeamento e análise de processos operacionais para identificar gargalos.",
+    description: "Análise de acurácia, movimentação e perdas de estoque.",
   },
-];
+  operacoes: {
+    templateId: "d4444444-4444-4444-4444-444444444444",
+    templateName: "Diagnóstico de Operações",
+    priority: "alta",
+    estimatedTime: "40 min",
+    description: "Mapeamento de processos operacionais, produtividade e qualidade.",
+  },
+};
 
 // Tarefas padrão que podem ser sugeridas após diagnósticos
 const STANDARD_TASKS_SUGGESTIONS = [
@@ -67,10 +68,10 @@ export function generateNextStepsSuggestions(
   existingDiagnostics: Diagnostic[]
 ): SuggestedNextStep[] {
   const suggestions: SuggestedNextStep[] = [];
-  const isKickoff = template?.name?.toLowerCase().includes("kickoff");
+  const isKickoff = template && isKickoffTemplate(template);
 
-  // Se for um Kickoff, sugerir outros diagnósticos
-  if (isKickoff) {
+  // Se for um Kickoff, sugerir o diagnóstico da área prioritária
+  if (isKickoff && template) {
     // Filtrar diagnósticos já existentes para este projeto
     const existingTemplateIds = new Set(
       existingDiagnostics
@@ -78,11 +79,12 @@ export function generateNextStepsSuggestions(
         .map((d) => d.templateId)
     );
 
-    // Adicionar sugestões de diagnósticos que ainda não foram aplicados
-    DIAGNOSTIC_TEMPLATES_SUGGESTIONS.forEach((suggestion, index) => {
+    // Usar a área prioritária calculada (se houver score)
+    // Por agora, sugerir todas as áreas que ainda não têm diagnóstico
+    for (const [area, suggestion] of Object.entries(AREA_TEMPLATE_MAP)) {
       if (!existingTemplateIds.has(suggestion.templateId)) {
         suggestions.push({
-          id: `diag-${suggestion.templateId}-${index}`,
+          id: `diag-${area}-${suggestion.templateId}`,
           title: `Aplicar ${suggestion.templateName}`,
           description: suggestion.description,
           type: "diagnostic",
@@ -92,7 +94,7 @@ export function generateNextStepsSuggestions(
           estimatedTime: suggestion.estimatedTime,
         });
       }
-    });
+    }
   }
 
   // Sempre sugerir tarefas padrão baseadas no score
@@ -146,11 +148,5 @@ export function generateNextStepsSuggestions(
   return suggestions;
 }
 
-/**
- * Verifica se o template é um Kickoff
- */
-export function isKickoffTemplate(template: DiagnosticTemplate | null): boolean {
-  if (!template) return false;
-  const name = template.name?.toLowerCase() ?? "";
-  return name.includes("kickoff") || name.includes("norte do projeto");
-}
+// Re-export isKickoffTemplate from area-scoring for backwards compatibility
+export { isKickoffTemplate } from "@/lib/area-scoring";

@@ -11,6 +11,8 @@ import {
 } from "@/types";
 import { AnswerValue, resolveAnswerValue } from "@/lib/diagnostic-evaluation";
 import { formatDatePtBR } from "@/lib/dates";
+import { isKickoffTemplate, calculateAreaScores, getAreaScoringsSummary } from "@/lib/area-scoring";
+import { generateKickoffRecommendations } from "@/lib/kickoff-recommendations";
 
 const isAnswered = (value: AnswerValue): boolean => {
   if (value === null || typeof value === "undefined") return false;
@@ -284,6 +286,13 @@ export const generateRecommendations = ({
   responsibleName?: string;
 }): ActionRecommendation[] => {
   const responsible = responsibleName || "Equipe JoIA";
+
+  // For Kickoff/Onboarding templates, use area-based scoring
+  if (isKickoffTemplate(template)) {
+    return generateKickoffRecommendations(template, answers, responsibleName);
+  }
+
+  // For other templates, use the standard scoring approach
   const actions: ActionRecommendation[] = [...generalScoreRecommendations(score, responsible)];
 
   template.sections.forEach((section) => {
