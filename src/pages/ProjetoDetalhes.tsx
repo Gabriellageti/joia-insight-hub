@@ -13,7 +13,6 @@ import {
   ProjectTasksSummary,
   ProjectDiagnosticsList,
   ProjectMeetingsList,
-  ProjectOpportunitiesList,
   ProjectDeliverablesList,
 } from "@/components/projetos";
 
@@ -28,7 +27,7 @@ const phaseColors: Record<string, string> = {
 export default function ProjetoDetalhes() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { projects, clients, tasks, diagnostics, meetings, opportunities, deliverables } =
+  const { projects, clients, tasks, diagnostics, meetings, deliverables } =
     useData();
 
   const [projectDialogOpen, setProjectDialogOpen] = useState(false);
@@ -53,11 +52,6 @@ export default function ProjetoDetalhes() {
   const projectMeetings = useMemo(
     () => meetings.filter((m) => m.projectId === id),
     [meetings, id]
-  );
-
-  const projectOpportunities = useMemo(
-    () => opportunities.filter((o) => o.projectId === id),
-    [opportunities, id]
   );
 
   const projectDeliverables = useMemo(
@@ -155,9 +149,6 @@ export default function ProjetoDetalhes() {
         <ProjectDiagnosticsList diagnostics={projectDiagnostics} project={project} />
         <ProjectMeetingsList meetings={projectMeetings} project={project} />
       </div>
-
-      {/* Oportunidades */}
-      <ProjectOpportunitiesList opportunities={projectOpportunities} />
 
       {/* Entregáveis */}
       <ProjectDeliverablesList deliverables={projectDeliverables} />

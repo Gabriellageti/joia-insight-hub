@@ -136,16 +136,8 @@ export function ProjectDialog({
     updateProject,
     clients,
     employees,
-    opportunities,
-    addOpportunity,
-    updateOpportunity,
-    deleteOpportunity,
   } = useData();
-  const { user } = useAuth();
   const [responsibleOpen, setResponsibleOpen] = useState(false);
-  const [opportunityDrafts, setOpportunityDrafts] = useState<
-    OpportunityDraft[]
-  >([defaultOpportunityDraft()]);
   const [formData, setFormData] = useState({
     name: "",
     clientId: "",
@@ -198,15 +190,6 @@ export function ProjectDialog({
 
     // Editing an existing persisted project
     if (project?.id) {
-      const projectOpportunities = opportunities.filter(
-        (opportunity) => opportunity.projectId === project.id,
-      );
-      setOpportunityDrafts(
-        projectOpportunities.length > 0
-          ? projectOpportunities.map(mapOpportunityToDraft)
-          : [defaultOpportunityDraft()],
-      );
-
       setFormData({
         name: project.name,
         clientId: project.clientId,
@@ -236,7 +219,6 @@ export function ProjectDialog({
 
     // Prefilled "new project" draft (used by journey automation)
     if (project && !project.id) {
-      setOpportunityDrafts([defaultOpportunityDraft()]);
       setFormData({
         name: project.name || "",
         clientId: project.clientId || "",
