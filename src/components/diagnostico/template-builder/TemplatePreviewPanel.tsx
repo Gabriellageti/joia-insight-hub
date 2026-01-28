@@ -129,7 +129,7 @@ export function TemplatePreviewPanel({
           <div>
             <p className="text-xs uppercase text-muted-foreground">Preview rápido</p>
             <CardTitle className="text-lg leading-tight">{name || "Template sem nome"}</CardTitle>
-            {description && <p className="text-sm text-muted-foreground mt-1">{description}</p>}
+            {description && typeof description === "string" && <p className="text-sm text-muted-foreground mt-1">{description}</p>}
           </div>
           <Badge variant={statusVariant[status]}>{status === "draft" ? "Rascunho" : status === "published" ? "Publicado" : "Arquivado"}</Badge>
         </div>
