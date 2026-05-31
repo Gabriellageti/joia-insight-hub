@@ -52,6 +52,8 @@ import {
 import { useData } from "@/contexts/DataContext";
 import { useFinancial, type FinancialRecord } from "@/hooks/useFinancial";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ContractDialog } from "@/components/dialogs/ContractDialog";
+import type { Contract } from "@/types";
 
 const statusConfig = {
   Pendente: { label: "A vencer", color: "bg-yellow-100 text-yellow-700" },
@@ -101,7 +103,7 @@ const formatDateInputValue = (value?: string) => {
 const getTodayIso = () => new Date().toISOString().split("T")[0];
 
 export default function Financeiro() {
-  const { projects, clients, contracts } = useData();
+  const { projects, clients, contracts, deleteContract } = useData();
   const {
     receivables,
     expenses,
@@ -116,6 +118,8 @@ export default function Financeiro() {
   const [editingExpense, setEditingExpense] = useState<FinancialRecord | null>(null);
   const [showReceivableDialog, setShowReceivableDialog] = useState(false);
   const [editingReceivable, setEditingReceivable] = useState<FinancialRecord | null>(null);
+  const [showContractDialog, setShowContractDialog] = useState(false);
+  const [editingContract, setEditingContract] = useState<Contract | null>(null);
 
   // Expense form state
   const [expenseForm, setExpenseForm] = useState({
@@ -698,12 +702,23 @@ export default function Financeiro() {
         <TabsContent value="contracts" className="mt-4">
           <Card>
             <CardHeader>
-              <CardTitle>Contratos Ativos</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle>Contratos Ativos</CardTitle>
+                <Button
+                  onClick={() => {
+                    setEditingContract(null);
+                    setShowContractDialog(true);
+                  }}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Novo Contrato
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               {contracts.length === 0 ? (
                 <div className="py-10 text-center text-muted-foreground">
-                  Nenhum contrato cadastrado ainda.
+                  Nenhum contrato cadastrado. Crie um para gerar cobranças automaticamente.
                 </div>
               ) : (
                 <Table>
@@ -715,27 +730,74 @@ export default function Financeiro() {
                       <TableHead>Início</TableHead>
                       <TableHead>Término</TableHead>
                       <TableHead>Tipo</TableHead>
+                      <TableHead>Parcelas</TableHead>
+                      <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {contracts.map((contract) => (
-                      <TableRow key={contract.id}>
-                        <TableCell className="font-medium">{contract.clientName || getClientName(contract.clientId)}</TableCell>
-                        <TableCell>{contract.projectName || getProjectName(contract.projectId)}</TableCell>
-                        <TableCell>{formatCurrency(contract.value)}</TableCell>
-                        <TableCell>{formatDate(contract.startDate)}</TableCell>
-                        <TableCell>{formatDate(contract.endDate)}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline">
-                            {contract.billingType === "mensal"
-                              ? "Mensal"
-                              : contract.billingType === "parcela"
-                                ? "Parcelado"
-                                : "Projeto"}
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {contracts.map((contract) => {
+                      const total = contract.installments?.length || 0;
+                      const paid = contract.installments?.filter((i) => i.status === "paid").length || 0;
+                      return (
+                        <TableRow key={contract.id}>
+                          <TableCell className="font-medium">
+                            {contract.clientName || getClientName(contract.clientId)}
+                          </TableCell>
+                          <TableCell>{contract.projectName || getProjectName(contract.projectId)}</TableCell>
+                          <TableCell>{formatCurrency(contract.value)}</TableCell>
+                          <TableCell>{formatDate(contract.startDate)}</TableCell>
+                          <TableCell>{formatDate(contract.endDate)}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline">
+                              {contract.billingType === "mensal"
+                                ? "Mensal"
+                                : contract.billingType === "parcela"
+                                  ? "Parcelado"
+                                  : "Projeto"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {total > 0 ? `${paid}/${total}` : "-"}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                  setEditingContract(contract);
+                                  setShowContractDialog(true);
+                                }}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button type="button" variant="ghost" size="icon">
+                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Excluir contrato</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Isso remove o contrato. As cobranças já geradas em Contas a Receber permanecem — exclua-as manualmente se necessário.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => deleteContract(contract.id)}>
+                                      Excluir
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               )}
@@ -859,6 +921,15 @@ export default function Financeiro() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <ContractDialog
+        open={showContractDialog}
+        onOpenChange={(open) => {
+          setShowContractDialog(open);
+          if (!open) setEditingContract(null);
+        }}
+        contract={editingContract}
+      />
     </div>
   );
 }

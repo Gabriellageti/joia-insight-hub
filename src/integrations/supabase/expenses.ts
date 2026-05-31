@@ -83,8 +83,15 @@ export async function createExpense(expense: ExpenseInsert): Promise<ExpenseRow>
 }
 
 export async function updateExpense(id: string, expense: ExpenseUpdate): Promise<ExpenseRow> {
-  const updatePayload: Record<string, unknown> = { updated_at: new Date().toISOString() };
-  
+  const updatePayload: {
+    updated_at: string;
+    amount?: number;
+    description?: string;
+    category?: string | null;
+    project_id?: string | null;
+    date?: string | null;
+  } = { updated_at: new Date().toISOString() };
+
   if (expense.value !== undefined) updatePayload.amount = expense.value;
   if (expense.description !== undefined) updatePayload.description = expense.description;
   if (expense.category !== undefined) updatePayload.category = expense.category;
