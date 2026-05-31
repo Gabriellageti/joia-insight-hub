@@ -1,5 +1,8 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useCallback, useMemo, useState } from "react";
 import {
+  BarChart3,
+  ChevronDown,
+  ChevronRight,
   CreditCard,
   DollarSign,
   Pencil,
@@ -50,11 +53,13 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Progress } from "@/components/ui/progress";
 import { useData } from "@/contexts/DataContext";
 import { useFinancial, type FinancialRecord } from "@/hooks/useFinancial";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ContractDialog } from "@/components/dialogs/ContractDialog";
 import type { Contract } from "@/types";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 const statusConfig = {
   Pendente: { label: "A vencer", color: "bg-yellow-100 text-yellow-700" },
@@ -113,12 +118,66 @@ const formatDateInputValue = (value?: string) => {
 
 const getTodayIso = () => new Date().toISOString().split("T")[0];
 
+type PeriodFilter = "all" | "current_month" | "last_30" | "year" | "custom";
+
+const parseDateValue = (value?: string) => {
+  if (!value) return null;
+  const normalized = value.includes("T") ? value : `${value}T00:00:00`;
+  const parsed = new Date(normalized);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const toIsoDate = (date: Date) => date.toISOString().split("T")[0];
+
+const getPeriodRange = (filter: PeriodFilter, customStart?: string, customEnd?: string) => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  if (filter === "all") return { start: undefined, end: undefined, label: "Todo período" };
+  if (filter === "current_month") {
+    const start = new Date(today.getFullYear(), today.getMonth(), 1);
+    const end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    return { start: toIsoDate(start), end: toIsoDate(end), label: "Mês atual" };
+  }
+  if (filter === "last_30") {
+    const start = new Date(today);
+    start.setDate(start.getDate() - 29);
+    return { start: toIsoDate(start), end: toIsoDate(today), label: "Últimos 30 dias" };
+  }
+  if (filter === "year") {
+    const start = new Date(today.getFullYear(), 0, 1);
+    const end = new Date(today.getFullYear(), 11, 31);
+    return { start: toIsoDate(start), end: toIsoDate(end), label: "Ano atual" };
+  }
+  return { start: customStart || undefined, end: customEnd || undefined, label: "Personalizado" };
+};
+
+const isDateInRange = (value: string | undefined, start?: string, end?: string) => {
+  if (!value) return false;
+  if (start && value < start) return false;
+  if (end && value > end) return false;
+  return true;
+};
+
+const getReceivableReferenceDate = (record: FinancialRecord) => record.paidAt || record.date;
+
+const parseInstallmentDescription = (description?: string) => {
+  if (!description) return null;
+  const match = description.match(/^(Mensalidade|Semanalidade|Parcela)\s+(\d+)\/(\d+)\s+-\s+(.+)$/i);
+  if (!match) return null;
+  return {
+    recurrenceLabel: match[1],
+    installmentNumber: Number(match[2]),
+    installmentTotal: Number(match[3]),
+    title: match[4].trim(),
+  };
+};
+
 export default function Financeiro() {
   const { projects, clients, contracts, deleteContract } = useData();
   const {
     receivables,
     expenses,
-    summary,
     loading,
     addRecord,
     updateRecord,
@@ -132,6 +191,10 @@ export default function Financeiro() {
   const [showContractDialog, setShowContractDialog] = useState(false);
   const [editingContract, setEditingContract] = useState<Contract | null>(null);
   const [paymentRecord, setPaymentRecord] = useState<FinancialRecord | null>(null);
+  const [periodFilter, setPeriodFilter] = useState<PeriodFilter>("all");
+  const [customStart, setCustomStart] = useState("");
+  const [customEnd, setCustomEnd] = useState("");
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
   // Expense form state
   const [expenseForm, setExpenseForm] = useState({
@@ -158,6 +221,27 @@ export default function Financeiro() {
     paymentNotes: "",
   });
 
+  const getClientName = useCallback((clientId?: string) => {
+    if (!clientId) return "-";
+    const client = clients.find((c) => c.id === clientId);
+    return client?.nomeFantasia || client?.razaoSocial || "-";
+  }, [clients]);
+
+  const getProjectName = useCallback((projectId?: string) => {
+    if (!projectId) return "-";
+    const project = projects.find((p) => p.id === projectId);
+    return project?.name || "-";
+  }, [projects]);
+
+  const getReceivableStatus = useCallback((record: FinancialRecord): FinancialRecord["status"] => {
+    if (record.status === "Pago") return "Pago";
+    if (!record.date) return "Pendente";
+    const dueDate = new Date(record.date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return dueDate < today ? "Vencido" : "Pendente";
+  }, []);
+
   const sortedExpenses = useMemo(
     () =>
       [...expenses].sort((a, b) => {
@@ -168,17 +252,207 @@ export default function Financeiro() {
     [expenses]
   );
 
+  const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
+
+  const selectedRange = useMemo(
+    () => getPeriodRange(periodFilter, customStart, customEnd),
+    [periodFilter, customStart, customEnd]
+  );
+
+  const periodReceivables = useMemo(
+    () =>
+      receivables.filter((record) =>
+        selectedRange.start || selectedRange.end
+          ? isDateInRange(getReceivableReferenceDate(record), selectedRange.start, selectedRange.end)
+          : true
+      ),
+    [receivables, selectedRange]
+  );
+
   const sortedReceivables = useMemo(
     () =>
-      [...receivables].sort((a, b) => {
+      [...periodReceivables].sort((a, b) => {
         const timeA = a.date ? new Date(a.date).getTime() : 0;
         const timeB = b.date ? new Date(b.date).getTime() : 0;
         return timeA - timeB;
       }),
-    [receivables]
+    [periodReceivables]
   );
 
-  const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
+  const periodExpenses = useMemo(
+    () =>
+      expenses.filter((record) =>
+        selectedRange.start || selectedRange.end
+          ? isDateInRange(record.date, selectedRange.start, selectedRange.end)
+          : true
+      ),
+    [expenses, selectedRange]
+  );
+
+  const dashboardSummary = useMemo(() => {
+    const today = getTodayIso();
+    const paidReceivables = periodReceivables.filter((r) => r.status === "Pago");
+    const openReceivables = periodReceivables.filter((r) => r.status !== "Pago");
+    const overdueReceivables = openReceivables.filter((r) => Boolean(r.date && r.date < today));
+    const totalRevenue = paidReceivables.reduce((sum, r) => sum + r.amount, 0);
+    const pendingAmount = openReceivables.reduce((sum, r) => sum + r.amount, 0);
+    const totalExpensesPeriod = periodExpenses.reduce((sum, r) => sum + r.amount, 0);
+    const margin = totalRevenue > 0 ? ((totalRevenue - totalExpensesPeriod) / totalRevenue) * 100 : 0;
+
+    return {
+      totalRevenue,
+      pendingAmount,
+      totalExpenses: totalExpensesPeriod,
+      margin,
+      paidCount: paidReceivables.length,
+      pendingCount: openReceivables.length,
+      overdueCount: overdueReceivables.length,
+    };
+  }, [periodExpenses, periodReceivables]);
+
+  const contractGroups = useMemo(() => {
+    const groups = new Map<
+      string,
+      {
+        key: string;
+        title: string;
+        clientId?: string;
+        clientName: string;
+        projectId?: string;
+        projectName: string;
+        recurrenceLabel: string;
+        expectedInstallments: number;
+        records: FinancialRecord[];
+      }
+    >();
+
+    for (const record of periodReceivables) {
+      const parsed = parseInstallmentDescription(record.description);
+      const title = parsed?.title || record.description || "Receita avulsa";
+      const recurrenceLabel = parsed?.recurrenceLabel || record.category || "Avulso";
+      const key = `${record.clientId || "sem-cliente"}|${record.projectId || "sem-projeto"}|${title}`;
+
+      if (!groups.has(key)) {
+        groups.set(key, {
+          key,
+          title,
+          clientId: record.clientId,
+          clientName: getClientName(record.clientId),
+          projectId: record.projectId,
+          projectName: getProjectName(record.projectId),
+          recurrenceLabel,
+          expectedInstallments: parsed?.installmentTotal || 0,
+          records: [],
+        });
+      }
+
+      const group = groups.get(key)!;
+      group.records.push(record);
+      group.expectedInstallments = Math.max(group.expectedInstallments, parsed?.installmentTotal || group.records.length);
+    }
+
+    return Array.from(groups.values())
+      .map((group) => {
+        const records = [...group.records].sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+        const paidRecords = records.filter((record) => record.status === "Pago");
+        const received = paidRecords.reduce((sum, record) => sum + record.amount, 0);
+        const total = records.reduce((sum, record) => sum + record.amount, 0);
+        const overdue = records.filter((record) => getReceivableStatus(record) === "Vencido").length;
+        const paymentOffsets = paidRecords
+          .map((record) => {
+            const dueDate = parseDateValue(record.date);
+            const paidDate = parseDateValue(record.paidAt);
+            if (!dueDate || !paidDate) return null;
+            return Math.round((paidDate.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
+          })
+          .filter((value): value is number => value !== null);
+        const averageOffset =
+          paymentOffsets.length > 0
+            ? Math.round(paymentOffsets.reduce((sum, value) => sum + value, 0) / paymentOffsets.length)
+            : 0;
+
+        return {
+          ...group,
+          records,
+          total,
+          received,
+          pending: total - received,
+          paidCount: paidRecords.length,
+          overdue,
+          progress: total > 0 ? Math.round((received / total) * 100) : 0,
+          firstDueDate: records[0]?.date,
+          lastDueDate: records[records.length - 1]?.date,
+          averageOffset,
+        };
+      })
+      .sort((a, b) => (a.firstDueDate || "").localeCompare(b.firstDueDate || ""));
+  }, [getClientName, getProjectName, getReceivableStatus, periodReceivables]);
+
+  const cashFlowData = useMemo(() => {
+    const formatter = new Intl.DateTimeFormat("pt-BR", { month: "short", year: "2-digit" });
+    const groups = new Map<string, { label: string; recebido: number; despesas: number }>();
+
+    const ensureMonth = (dateValue?: string) => {
+      const date = parseDateValue(dateValue);
+      if (!date) return null;
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+      if (!groups.has(key)) {
+        groups.set(key, { label: formatter.format(date), recebido: 0, despesas: 0 });
+      }
+      return groups.get(key)!;
+    };
+
+    periodReceivables
+      .filter((record) => record.status === "Pago")
+      .forEach((record) => {
+        const bucket = ensureMonth(record.paidAt || record.date);
+        if (bucket) bucket.recebido += record.amount;
+      });
+
+    periodExpenses.forEach((record) => {
+      const bucket = ensureMonth(record.date);
+      if (bucket) bucket.despesas += record.amount;
+    });
+
+    return Array.from(groups.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([, value]) => value);
+  }, [periodExpenses, periodReceivables]);
+
+  const clientSummaries = useMemo(() => {
+    const groups = new Map<string, { clientName: string; received: number; pending: number; overdue: number; count: number }>();
+
+    for (const record of periodReceivables) {
+      const key = record.clientId || record.clientName || "sem-cliente";
+      if (!groups.has(key)) {
+        groups.set(key, { clientName: getClientName(record.clientId), received: 0, pending: 0, overdue: 0, count: 0 });
+      }
+      const group = groups.get(key)!;
+      group.count += 1;
+      if (record.status === "Pago") {
+        group.received += record.amount;
+      } else {
+        group.pending += record.amount;
+      }
+      if (getReceivableStatus(record) === "Vencido") {
+        group.overdue += record.amount;
+      }
+    }
+
+    return Array.from(groups.values()).sort((a, b) => b.received + b.pending - (a.received + a.pending));
+  }, [getClientName, getReceivableStatus, periodReceivables]);
+
+  const toggleGroup = (key: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
 
   const resetExpenseForm = () => {
     setExpenseForm({
@@ -329,27 +603,6 @@ export default function Financeiro() {
     resetPaymentDialog();
   };
 
-  const getClientName = (clientId?: string) => {
-    if (!clientId) return "-";
-    const client = clients.find((c) => c.id === clientId);
-    return client?.nomeFantasia || client?.razaoSocial || "-";
-  };
-
-  const getProjectName = (projectId?: string) => {
-    if (!projectId) return "-";
-    const project = projects.find((p) => p.id === projectId);
-    return project?.name || "-";
-  };
-
-  const getReceivableStatus = (record: FinancialRecord): FinancialRecord["status"] => {
-    if (record.status === "Pago") return "Pago";
-    if (!record.date) return "Pendente";
-    const dueDate = new Date(record.date);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return dueDate < today ? "Vencido" : "Pendente";
-  };
-
   const isExpenseFormValid = Boolean(
     expenseForm.description && expenseForm.category && expenseForm.value && expenseForm.date
   );
@@ -385,15 +638,56 @@ export default function Financeiro() {
         <p className="text-muted-foreground">Controle receitas, despesas e margem por projeto</p>
       </div>
 
+      <div className="flex flex-col gap-3 rounded-md border border-border bg-card p-4 md:flex-row md:items-end md:justify-between">
+        <div>
+          <p className="text-sm font-medium">Período financeiro</p>
+          <p className="text-xs text-muted-foreground">
+            Os indicadores consideram recebimentos por data de pagamento e despesas por data de lançamento.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <div className="w-44">
+            <Select value={periodFilter} onValueChange={(value) => setPeriodFilter(value as PeriodFilter)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todo período</SelectItem>
+                <SelectItem value="current_month">Mês atual</SelectItem>
+                <SelectItem value="last_30">Últimos 30 dias</SelectItem>
+                <SelectItem value="year">Ano atual</SelectItem>
+                <SelectItem value="custom">Personalizado</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {periodFilter === "custom" && (
+            <>
+              <Input
+                className="w-40"
+                type="date"
+                value={customStart}
+                onChange={(event) => setCustomStart(event.target.value)}
+              />
+              <Input
+                className="w-40"
+                type="date"
+                value={customEnd}
+                onChange={(event) => setCustomEnd(event.target.value)}
+              />
+            </>
+          )}
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Receita Mensal</p>
-                <p className="text-2xl font-bold">{formatCurrency(summary.totalRevenue)}</p>
+                <p className="text-sm text-muted-foreground">Recebido</p>
+                <p className="text-2xl font-bold">{formatCurrency(dashboardSummary.totalRevenue)}</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {receivables.filter((r) => r.status === "Pago").length} pagamentos recebidos
+                  {dashboardSummary.paidCount} pagamentos em {selectedRange.label.toLowerCase()}
                 </p>
               </div>
               <div className="p-3 bg-accent rounded-lg">
@@ -408,11 +702,11 @@ export default function Financeiro() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">A Receber</p>
-                <p className="text-2xl font-bold">{formatCurrency(summary.pendingAmount)}</p>
+                <p className="text-2xl font-bold">{formatCurrency(dashboardSummary.pendingAmount)}</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {summary.pendingCount} faturas pendentes
-                  {summary.overdueCount > 0 && (
-                    <span className="text-destructive"> ({summary.overdueCount} vencidas)</span>
+                  {dashboardSummary.pendingCount} faturas pendentes
+                  {dashboardSummary.overdueCount > 0 && (
+                    <span className="text-destructive"> ({dashboardSummary.overdueCount} vencidas)</span>
                   )}
                 </p>
               </div>
@@ -428,8 +722,8 @@ export default function Financeiro() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Despesas</p>
-                <p className="text-2xl font-bold">{formatCurrency(summary.totalExpenses)}</p>
-                <p className="text-xs text-muted-foreground mt-1">{expenses.length} lançamentos</p>
+                <p className="text-2xl font-bold">{formatCurrency(dashboardSummary.totalExpenses)}</p>
+                <p className="text-xs text-muted-foreground mt-1">{periodExpenses.length} lançamentos no período</p>
               </div>
               <div className="p-3 bg-muted rounded-lg">
                 <Receipt className="h-5 w-5 text-muted-foreground" />
@@ -443,11 +737,11 @@ export default function Financeiro() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Margem Média</p>
-                <p className="text-2xl font-bold text-accent">{summary.margin.toFixed(0)}%</p>
+                <p className="text-2xl font-bold text-accent">{dashboardSummary.margin.toFixed(0)}%</p>
                 <p className="text-xs text-muted-foreground mt-1">Receita - Despesas</p>
               </div>
               <div className="p-3 bg-accent rounded-lg">
-                {summary.margin >= 0 ? (
+                {dashboardSummary.margin >= 0 ? (
                   <TrendingUp className="h-5 w-5 text-accent-foreground" />
                 ) : (
                   <TrendingDown className="h-5 w-5 text-accent-foreground" />
@@ -465,11 +759,202 @@ export default function Financeiro() {
           <TabsTrigger value="contracts">Contratos</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="receivables" className="mt-4">
+        <TabsContent value="receivables" className="mt-4 space-y-4">
+          <div className="grid gap-4 lg:grid-cols-3">
+            <Card className="lg:col-span-2">
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <BarChart3 className="h-4 w-4 text-muted-foreground" />
+                  <CardTitle>Fluxo de recebimentos</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {cashFlowData.length === 0 ? (
+                  <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">
+                    Nenhum recebimento no período selecionado.
+                  </div>
+                ) : (
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={cashFlowData}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis dataKey="label" tickLine={false} axisLine={false} />
+                        <YAxis tickLine={false} axisLine={false} tickFormatter={(value) => `R$ ${Number(value) / 1000}k`} />
+                        <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                        <Bar dataKey="recebido" name="Recebido" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="despesas" name="Despesas" fill="hsl(var(--muted-foreground))" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Clientes no período</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {clientSummaries.length === 0 ? (
+                  <div className="py-10 text-center text-sm text-muted-foreground">Nenhum cliente com lançamentos.</div>
+                ) : (
+                  clientSummaries.slice(0, 5).map((client) => (
+                    <div key={client.clientName} className="rounded-md border border-border p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-medium">{client.clientName}</p>
+                          <p className="text-xs text-muted-foreground">{client.count} lançamento(s)</p>
+                        </div>
+                        {client.overdue > 0 && <Badge className="bg-red-100 text-red-700">Atraso</Badge>}
+                      </div>
+                      <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                        <div>
+                          <p className="text-xs text-muted-foreground">Recebido</p>
+                          <p className="font-semibold">{formatCurrency(client.received)}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">A receber</p>
+                          <p className="font-semibold">{formatCurrency(client.pending)}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle>Contas a Receber</CardTitle>
+                <CardTitle>Contratos e ciclos</CardTitle>
+                <Button onClick={() => setShowReceivableDialog(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Nova Receita
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {contractGroups.length === 0 ? (
+                <div className="py-10 text-center text-muted-foreground">
+                  Nenhum contrato ou ciclo financeiro no período selecionado.
+                </div>
+              ) : (
+                contractGroups.map((group) => {
+                  const expanded = expandedGroups.has(group.key);
+                  const isSettled = group.pending <= 0 && group.records.length > 0;
+                  return (
+                    <div key={group.key} className="rounded-md border border-border">
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-3 p-4 text-left"
+                        onClick={() => toggleGroup(group.key)}
+                      >
+                        {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="truncate font-semibold">{group.title}</p>
+                            <Badge variant="outline">{group.recurrenceLabel}</Badge>
+                            {isSettled && <Badge className="bg-green-100 text-green-700">Quitado</Badge>}
+                            {group.overdue > 0 && <Badge className="bg-red-100 text-red-700">{group.overdue} atraso(s)</Badge>}
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            {group.clientName} · {group.projectName} · {formatDate(group.firstDueDate)} a {formatDate(group.lastDueDate)}
+                          </p>
+                        </div>
+                        <div className="hidden w-72 shrink-0 md:block">
+                          <div className="mb-2 flex items-center justify-between text-sm">
+                            <span>{group.paidCount}/{group.expectedInstallments || group.records.length} pagos</span>
+                            <span className="font-semibold">{group.progress}%</span>
+                          </div>
+                          <Progress value={group.progress} className="h-2" />
+                        </div>
+                        <div className="w-40 shrink-0 text-right">
+                          <p className="font-semibold">{formatCurrency(group.received)}</p>
+                          <p className="text-xs text-muted-foreground">de {formatCurrency(group.total)}</p>
+                        </div>
+                      </button>
+
+                      <div className="grid gap-3 border-t border-border px-4 py-3 md:grid-cols-4">
+                        <div>
+                          <p className="text-xs text-muted-foreground">Recebido</p>
+                          <p className="font-semibold">{formatCurrency(group.received)}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">A receber</p>
+                          <p className="font-semibold">{formatCurrency(group.pending)}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Ticket</p>
+                          <p className="font-semibold">{formatCurrency(group.records[0]?.amount || 0)}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Pontualidade média</p>
+                          <p className="font-semibold">
+                            {group.averageOffset === 0
+                              ? "No vencimento"
+                              : group.averageOffset > 0
+                                ? `${group.averageOffset} dia(s) após`
+                                : `${Math.abs(group.averageOffset)} dia(s) antes`}
+                          </p>
+                        </div>
+                      </div>
+
+                      {expanded && (
+                        <div className="border-t border-border p-4">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Parcela</TableHead>
+                                <TableHead>Valor</TableHead>
+                                <TableHead>Vencimento</TableHead>
+                                <TableHead>Pagamento</TableHead>
+                                <TableHead>Status</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {group.records.map((record) => {
+                                const status = getReceivableStatus(record);
+                                return (
+                                  <TableRow key={record.id}>
+                                    <TableCell>{record.description || "-"}</TableCell>
+                                    <TableCell>{formatCurrency(record.amount)}</TableCell>
+                                    <TableCell>{formatDate(record.date)}</TableCell>
+                                    <TableCell>
+                                      {record.paidAt ? (
+                                        <div>
+                                          <p>{formatDate(record.paidAt)}</p>
+                                          {record.paymentMethod && (
+                                            <p className="text-xs text-muted-foreground">{record.paymentMethod}</p>
+                                          )}
+                                        </div>
+                                      ) : (
+                                        "-"
+                                      )}
+                                    </TableCell>
+                                    <TableCell>
+                                      <Badge className={statusConfig[status || "Pendente"].color} variant="outline">
+                                        {statusConfig[status || "Pendente"].label}
+                                      </Badge>
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>Lançamentos detalhados</CardTitle>
                 <Button onClick={() => setShowReceivableDialog(true)}>
                   <Plus className="h-4 w-4 mr-2" />
                   Nova Receita
