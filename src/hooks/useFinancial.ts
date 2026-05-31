@@ -22,6 +22,9 @@ export interface FinancialRecord {
   amount: number;
   date?: string;
   status?: "Pendente" | "Pago" | "Vencido";
+  paidAt?: string;
+  paymentMethod?: string;
+  paymentNotes?: string;
   isInternal?: boolean;
   createdAt: string;
 }
@@ -51,6 +54,9 @@ const mapRecordToLegacy = (record: FinancialRecordRow): FinancialRecord => ({
   amount: Number(record.amount || 0),
   date: record.date || undefined,
   status: (record.status as FinancialRecord["status"]) || "Pendente",
+  paidAt: record.paid_at || undefined,
+  paymentMethod: record.payment_method || undefined,
+  paymentNotes: record.payment_notes || undefined,
   isInternal: record.is_internal || false,
   createdAt: formatDateFromIso(record.created_at),
 });
@@ -114,6 +120,9 @@ export function useFinancial() {
         amount: record.amount,
         date: record.date || null,
         status: record.status || "Pendente",
+        paid_at: record.paidAt || null,
+        payment_method: record.paymentMethod || null,
+        payment_notes: record.paymentNotes || null,
         is_internal: record.isInternal ?? true,
       };
       const created = await createFinancialRecord(payload);
@@ -140,6 +149,9 @@ export function useFinancial() {
       if (updates.amount !== undefined) payload.amount = updates.amount;
       if (updates.date !== undefined) payload.date = updates.date;
       if (updates.status !== undefined) payload.status = updates.status;
+      if (updates.paidAt !== undefined) payload.paid_at = updates.paidAt || null;
+      if (updates.paymentMethod !== undefined) payload.payment_method = updates.paymentMethod || null;
+      if (updates.paymentNotes !== undefined) payload.payment_notes = updates.paymentNotes || null;
 
       const updated = await updateFinancialRecord(id, payload);
       setRecords((prev) => prev.map((r) => (r.id === id ? mapRecordToLegacy(updated) : r)));
@@ -170,8 +182,16 @@ export function useFinancial() {
     }
   };
 
-  const markAsPaid = async (id: string) => {
-    return updateRecord(id, { status: "Pago" });
+  const markAsPaid = async (
+    id: string,
+    payment: { paidAt: string; paymentMethod?: string; paymentNotes?: string }
+  ) => {
+    return updateRecord(id, {
+      status: "Pago",
+      paidAt: payment.paidAt,
+      paymentMethod: payment.paymentMethod,
+      paymentNotes: payment.paymentNotes,
+    });
   };
 
   return {

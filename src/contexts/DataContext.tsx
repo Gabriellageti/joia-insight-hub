@@ -2971,8 +2971,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
         const message = (error as Error).message || "Erro ao remover template";
         setTemplatesError(message);
         throw error;
-        setTemplatesError(message);
-        throw error;
       } finally {
         setTemplatesLoading(false);
       }

@@ -72,18 +72,23 @@ export async function getFinancialSummary() {
 
   const { data: records, error } = await supabase
     .from("financial_records")
-    .select("*")
-    .gte("date", firstDayOfMonth)
-    .lte("date", lastDayOfMonth);
+    .select("*");
 
   if (error) throw error;
 
   const revenues = (records ?? []).filter((r) => r.type === "receita");
-  const expenses = (records ?? []).filter((r) => r.type === "despesa");
+  const expenses = (records ?? []).filter(
+    (r) => r.type === "despesa" && r.date && r.date >= firstDayOfMonth && r.date <= lastDayOfMonth
+  );
+  const paidRevenuesThisMonth = revenues.filter((r) => {
+    if (r.status !== "Pago") return false;
+    const paymentDate = r.paid_at || r.date;
+    return Boolean(paymentDate && paymentDate >= firstDayOfMonth && paymentDate <= lastDayOfMonth);
+  });
 
-  const totalRevenue = revenues.reduce((sum, r) => sum + Number(r.amount || 0), 0);
+  const totalRevenue = paidRevenuesThisMonth.reduce((sum, r) => sum + Number(r.amount || 0), 0);
   const totalExpenses = expenses.reduce((sum, r) => sum + Number(r.amount || 0), 0);
-  const pendingReceivables = revenues.filter((r) => r.status === "Pendente");
+  const pendingReceivables = revenues.filter((r) => r.status !== "Pago");
   const overdueReceivables = revenues.filter((r) => {
     if (r.status === "Pago") return false;
     if (!r.date) return false;
