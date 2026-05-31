@@ -635,6 +635,9 @@ export type Database = {
           description: string | null
           id: string
           is_internal: boolean | null
+          paid_at: string | null
+          payment_method: string | null
+          payment_notes: string | null
           project_id: string | null
           status: string | null
           type: string
@@ -649,6 +652,9 @@ export type Database = {
           description?: string | null
           id?: string
           is_internal?: boolean | null
+          paid_at?: string | null
+          payment_method?: string | null
+          payment_notes?: string | null
           project_id?: string | null
           status?: string | null
           type: string
@@ -663,6 +669,9 @@ export type Database = {
           description?: string | null
           id?: string
           is_internal?: boolean | null
+          paid_at?: string | null
+          payment_method?: string | null
+          payment_notes?: string | null
           project_id?: string | null
           status?: string | null
           type?: string
