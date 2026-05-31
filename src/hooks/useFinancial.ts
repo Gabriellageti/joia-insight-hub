@@ -6,6 +6,7 @@ import {
   getFinancialSummary,
   listFinancialRecords,
   updateFinancialRecord,
+  type FinancialRecordInsert,
   type FinancialRecordRow,
 } from "@/integrations/supabase/financial-records";
 import { useToast } from "@/components/ui/use-toast";
@@ -111,7 +112,7 @@ export function useFinancial() {
 
   const addRecord = async (record: Omit<FinancialRecord, "id" | "createdAt">) => {
     try {
-      const payload = {
+      const payload: FinancialRecordInsert = {
         client_id: record.clientId || null,
         project_id: record.projectId || null,
         type: record.type,
@@ -120,11 +121,11 @@ export function useFinancial() {
         amount: record.amount,
         date: record.date || null,
         status: record.status || "Pendente",
-        paid_at: record.paidAt || null,
-        payment_method: record.paymentMethod || null,
-        payment_notes: record.paymentNotes || null,
         is_internal: record.isInternal ?? true,
       };
+      if (record.paidAt) payload.paid_at = record.paidAt;
+      if (record.paymentMethod) payload.payment_method = record.paymentMethod;
+      if (record.paymentNotes) payload.payment_notes = record.paymentNotes;
       const created = await createFinancialRecord(payload);
       setRecords((prev) => [mapRecordToLegacy(created), ...prev]);
       await fetchData(); // Refresh summary
