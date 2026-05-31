@@ -208,6 +208,9 @@ export default function Financeiro() {
   const [detailStatusFilter, setDetailStatusFilter] = useState("all");
   const [detailContractFilter, setDetailContractFilter] = useState("all");
   const [detailSearch, setDetailSearch] = useState("");
+  const [expenseSearch, setExpenseSearch] = useState("");
+  const [expenseCategoryFilter, setExpenseCategoryFilter] = useState("all");
+  const [expenseProjectFilter, setExpenseProjectFilter] = useState("all");
 
   // Expense form state
   const [expenseForm, setExpenseForm] = useState({
@@ -255,18 +258,6 @@ export default function Financeiro() {
     return dueDate && dueDate < today ? "Vencido" : "Pendente";
   }, []);
 
-  const sortedExpenses = useMemo(
-    () =>
-      [...expenses].sort((a, b) => {
-        const timeA = a.date ? new Date(a.date).getTime() : 0;
-        const timeB = b.date ? new Date(b.date).getTime() : 0;
-        return timeB - timeA;
-      }),
-    [expenses]
-  );
-
-  const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
-
   const selectedRange = useMemo(
     () => getPeriodRange(periodFilter, customStart, customEnd),
     [periodFilter, customStart, customEnd]
@@ -292,6 +283,44 @@ export default function Financeiro() {
     [expenses, selectedRange]
   );
 
+  const expenseProjectOptions = useMemo(() => {
+    const options = new Map<string, string>();
+    for (const expense of periodExpenses) {
+      if (expense.projectId) options.set(expense.projectId, getProjectName(expense.projectId));
+    }
+    return Array.from(options.entries()).sort((a, b) => a[1].localeCompare(b[1]));
+  }, [getProjectName, periodExpenses]);
+
+  const filteredExpenses = useMemo(() => {
+    const normalizedSearch = expenseSearch.trim().toLowerCase();
+
+    return periodExpenses.filter((expense) => {
+      if (expenseCategoryFilter !== "all" && expense.category !== expenseCategoryFilter) return false;
+      if (expenseProjectFilter === "internal" && expense.projectId) return false;
+      if (expenseProjectFilter !== "all" && expenseProjectFilter !== "internal" && expense.projectId !== expenseProjectFilter) {
+        return false;
+      }
+      if (normalizedSearch) {
+        const searchable = [expense.description, expense.category, getProjectName(expense.projectId)]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        if (!searchable.includes(normalizedSearch)) return false;
+      }
+      return true;
+    });
+  }, [expenseCategoryFilter, expenseProjectFilter, expenseSearch, getProjectName, periodExpenses]);
+
+  const sortedExpenses = useMemo(
+    () =>
+      [...filteredExpenses].sort((a, b) => {
+        const timeA = parseDateValue(a.date)?.getTime() || 0;
+        const timeB = parseDateValue(b.date)?.getTime() || 0;
+        return timeB - timeA;
+      }),
+    [filteredExpenses]
+  );
+
   const dashboardSummary = useMemo(() => {
     const today = getTodayIso();
     const paidReceivables = periodReceivables.filter((r) => r.status === "Pago");
@@ -312,6 +341,52 @@ export default function Financeiro() {
       overdueCount: overdueReceivables.length,
     };
   }, [periodExpenses, periodReceivables]);
+
+  const expenseSummary = useMemo(() => {
+    const total = periodExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+    const average = periodExpenses.length > 0 ? total / periodExpenses.length : 0;
+    const internal = periodExpenses.filter((expense) => !expense.projectId).reduce((sum, expense) => sum + expense.amount, 0);
+    const projectLinked = total - internal;
+    const topExpense = [...periodExpenses].sort((a, b) => b.amount - a.amount)[0];
+
+    return {
+      total,
+      average,
+      internal,
+      projectLinked,
+      count: periodExpenses.length,
+      topExpense,
+    };
+  }, [periodExpenses]);
+
+  const expenseCategoryData = useMemo(() => {
+    const groups = new Map<string, { category: string; total: number; count: number }>();
+
+    for (const expense of periodExpenses) {
+      const category = expense.category || "Sem categoria";
+      if (!groups.has(category)) groups.set(category, { category, total: 0, count: 0 });
+      const group = groups.get(category)!;
+      group.total += expense.amount;
+      group.count += 1;
+    }
+
+    return Array.from(groups.values()).sort((a, b) => b.total - a.total);
+  }, [periodExpenses]);
+
+  const expenseProjectData = useMemo(() => {
+    const groups = new Map<string, { project: string; total: number; count: number }>();
+
+    for (const expense of periodExpenses) {
+      const key = expense.projectId || "internal";
+      const project = expense.projectId ? getProjectName(expense.projectId) : "Interno / sem projeto";
+      if (!groups.has(key)) groups.set(key, { project, total: 0, count: 0 });
+      const group = groups.get(key)!;
+      group.total += expense.amount;
+      group.count += 1;
+    }
+
+    return Array.from(groups.values()).sort((a, b) => b.total - a.total);
+  }, [getProjectName, periodExpenses]);
 
   const contractGroups = useMemo(() => {
     const groups = new Map<
@@ -1227,6 +1302,95 @@ export default function Financeiro() {
         </TabsContent>
 
         <TabsContent value="expenses" className="mt-4 space-y-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <Card>
+              <CardContent className="p-6">
+                <p className="text-sm text-muted-foreground">Despesas no período</p>
+                <p className="text-2xl font-bold">{formatCurrency(expenseSummary.total)}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{expenseSummary.count} lançamento(s)</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-6">
+                <p className="text-sm text-muted-foreground">Ticket médio</p>
+                <p className="text-2xl font-bold">{formatCurrency(expenseSummary.average)}</p>
+                <p className="mt-1 text-xs text-muted-foreground">Média por despesa</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-6">
+                <p className="text-sm text-muted-foreground">Vinculado a projetos</p>
+                <p className="text-2xl font-bold">{formatCurrency(expenseSummary.projectLinked)}</p>
+                <p className="mt-1 text-xs text-muted-foreground">Custos alocados</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-6">
+                <p className="text-sm text-muted-foreground">Maior despesa</p>
+                <p className="truncate text-2xl font-bold">
+                  {expenseSummary.topExpense ? formatCurrency(expenseSummary.topExpense.amount) : formatCurrency(0)}
+                </p>
+                <p className="mt-1 truncate text-xs text-muted-foreground">
+                  {expenseSummary.topExpense?.description || "Sem lançamento"}
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            <Card className="lg:col-span-2">
+              <CardHeader>
+                <CardTitle>Despesas por categoria</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {expenseCategoryData.length === 0 ? (
+                  <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">
+                    Nenhuma despesa no período selecionado.
+                  </div>
+                ) : (
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={expenseCategoryData}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis dataKey="category" tickLine={false} axisLine={false} />
+                        <YAxis tickLine={false} axisLine={false} tickFormatter={(value) => `R$ ${Number(value) / 1000}k`} />
+                        <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                        <Bar dataKey="total" name="Total" fill="hsl(var(--destructive))" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Alocação por projeto</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {expenseProjectData.length === 0 ? (
+                  <div className="py-10 text-center text-sm text-muted-foreground">Nenhuma alocação no período.</div>
+                ) : (
+                  expenseProjectData.slice(0, 5).map((item) => (
+                    <div key={item.project} className="rounded-md border border-border p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate font-medium">{item.project}</p>
+                          <p className="text-xs text-muted-foreground">{item.count} despesa(s)</p>
+                        </div>
+                        <p className="shrink-0 font-semibold">{formatCurrency(item.total)}</p>
+                      </div>
+                      <Progress
+                        value={expenseSummary.total > 0 ? Math.round((item.total / expenseSummary.total) * 100) : 0}
+                        className="mt-3 h-2"
+                      />
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
           <Card>
             <CardHeader>
               <CardTitle>{editingExpense ? "Editar despesa" : "Registrar nova despesa"}</CardTitle>
@@ -1335,13 +1499,78 @@ export default function Financeiro() {
             <CardHeader>
               <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
                 <CardTitle>Despesas registradas</CardTitle>
-                <span className="text-sm text-muted-foreground">Total: {formatCurrency(totalExpenses)}</span>
+                <span className="text-sm text-muted-foreground">
+                  Total filtrado: {formatCurrency(sortedExpenses.reduce((sum, expense) => sum + expense.amount, 0))}
+                </span>
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 rounded-md border border-border bg-muted/20 p-3 md:grid-cols-5">
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="expense-search">Buscar</Label>
+                  <Input
+                    id="expense-search"
+                    value={expenseSearch}
+                    onChange={(event) => setExpenseSearch(event.target.value)}
+                    placeholder="Descrição, categoria, projeto..."
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Categoria</Label>
+                  <Select value={expenseCategoryFilter} onValueChange={setExpenseCategoryFilter}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas</SelectItem>
+                      {expenseCategories.map((category) => (
+                        <SelectItem key={category} value={category}>
+                          {category}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Projeto</Label>
+                  <Select value={expenseProjectFilter} onValueChange={setExpenseProjectFilter}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      <SelectItem value="internal">Interno / sem projeto</SelectItem>
+                      {expenseProjectOptions.map(([id, name]) => (
+                        <SelectItem key={id} value={id}>
+                          {name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-end">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => {
+                      setExpenseSearch("");
+                      setExpenseCategoryFilter("all");
+                      setExpenseProjectFilter("all");
+                    }}
+                  >
+                    Limpar filtros
+                  </Button>
+                </div>
+                <div className="md:col-span-5">
+                  <span className="text-sm text-muted-foreground">
+                    {sortedExpenses.length} de {periodExpenses.length} despesa(s)
+                  </span>
+                </div>
+              </div>
+
               {sortedExpenses.length === 0 ? (
                 <div className="py-10 text-center text-muted-foreground">
-                  Nenhuma despesa cadastrada ainda.
+                  Nenhuma despesa encontrada para os filtros selecionados.
                 </div>
               ) : (
                 <Table>
