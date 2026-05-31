@@ -103,31 +103,40 @@ const formatCurrency = (value: number) => {
 
 const formatDate = (value?: string) => {
   if (!value) return "-";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleDateString("pt-BR");
+  const isoDate = value.split("T")[0];
+  const [year, month, day] = isoDate.split("-");
+  if (year && month && day) return `${day.padStart(2, "0")}/${month.padStart(2, "0")}/${year}`;
+  return value;
 };
 
 const formatDateInputValue = (value?: string) => {
   if (!value) return "";
-  if (value.includes("-")) return value;
+  if (value.includes("-")) return value.split("T")[0];
   const [day, month, year] = value.split("/");
   if (!day || !month || !year) return value;
   return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
 };
 
-const getTodayIso = () => new Date().toISOString().split("T")[0];
+const getTodayIso = () => {
+  const today = new Date();
+  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+};
 
 type PeriodFilter = "all" | "current_month" | "last_30" | "year" | "custom";
 
 const parseDateValue = (value?: string) => {
   if (!value) return null;
-  const normalized = value.includes("T") ? value : `${value}T00:00:00`;
-  const parsed = new Date(normalized);
+  const [datePart] = value.split("T");
+  const [year, month, day] = datePart.split("-").map(Number);
+  const parsed =
+    year && month && day
+      ? new Date(year, month - 1, day)
+      : new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 };
 
-const toIsoDate = (date: Date) => date.toISOString().split("T")[0];
+const toIsoDate = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 
 const getPeriodRange = (filter: PeriodFilter, customStart?: string, customEnd?: string) => {
   const today = new Date();
@@ -195,6 +204,10 @@ export default function Financeiro() {
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [detailClientFilter, setDetailClientFilter] = useState("all");
+  const [detailStatusFilter, setDetailStatusFilter] = useState("all");
+  const [detailContractFilter, setDetailContractFilter] = useState("all");
+  const [detailSearch, setDetailSearch] = useState("");
 
   // Expense form state
   const [expenseForm, setExpenseForm] = useState({
@@ -236,10 +249,10 @@ export default function Financeiro() {
   const getReceivableStatus = useCallback((record: FinancialRecord): FinancialRecord["status"] => {
     if (record.status === "Pago") return "Pago";
     if (!record.date) return "Pendente";
-    const dueDate = new Date(record.date);
+    const dueDate = parseDateValue(record.date);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    return dueDate < today ? "Vencido" : "Pendente";
+    return dueDate && dueDate < today ? "Vencido" : "Pendente";
   }, []);
 
   const sortedExpenses = useMemo(
@@ -267,16 +280,6 @@ export default function Financeiro() {
           : true
       ),
     [receivables, selectedRange]
-  );
-
-  const sortedReceivables = useMemo(
-    () =>
-      [...periodReceivables].sort((a, b) => {
-        const timeA = a.date ? new Date(a.date).getTime() : 0;
-        const timeB = b.date ? new Date(b.date).getTime() : 0;
-        return timeA - timeB;
-      }),
-    [periodReceivables]
   );
 
   const periodExpenses = useMemo(
@@ -387,6 +390,70 @@ export default function Financeiro() {
       })
       .sort((a, b) => (a.firstDueDate || "").localeCompare(b.firstDueDate || ""));
   }, [getClientName, getProjectName, getReceivableStatus, periodReceivables]);
+
+  const receivableGroupKeyById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const group of contractGroups) {
+      for (const record of group.records) {
+        map.set(record.id, group.key);
+      }
+    }
+    return map;
+  }, [contractGroups]);
+
+  const detailClientOptions = useMemo(() => {
+    const options = new Map<string, string>();
+    for (const record of periodReceivables) {
+      if (record.clientId) options.set(record.clientId, getClientName(record.clientId));
+    }
+    return Array.from(options.entries()).sort((a, b) => a[1].localeCompare(b[1]));
+  }, [getClientName, periodReceivables]);
+
+  const detailedReceivables = useMemo(() => {
+    const normalizedSearch = detailSearch.trim().toLowerCase();
+
+    return periodReceivables.filter((record) => {
+      const status = getReceivableStatus(record);
+      const groupKey = receivableGroupKeyById.get(record.id);
+
+      if (detailClientFilter !== "all" && record.clientId !== detailClientFilter) return false;
+      if (detailStatusFilter !== "all" && status !== detailStatusFilter) return false;
+      if (detailContractFilter !== "all" && groupKey !== detailContractFilter) return false;
+      if (normalizedSearch) {
+        const searchable = [
+          record.description,
+          getClientName(record.clientId),
+          getProjectName(record.projectId),
+          record.paymentMethod,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        if (!searchable.includes(normalizedSearch)) return false;
+      }
+      return true;
+    });
+  }, [
+    detailClientFilter,
+    detailContractFilter,
+    detailSearch,
+    detailStatusFilter,
+    getClientName,
+    getProjectName,
+    getReceivableStatus,
+    periodReceivables,
+    receivableGroupKeyById,
+  ]);
+
+  const sortedReceivables = useMemo(
+    () =>
+      [...detailedReceivables].sort((a, b) => {
+        const timeA = parseDateValue(a.date)?.getTime() || 0;
+        const timeB = parseDateValue(b.date)?.getTime() || 0;
+        return timeA - timeB;
+      }),
+    [detailedReceivables]
+  );
 
   const cashFlowData = useMemo(() => {
     const formatter = new Intl.DateTimeFormat("pt-BR", { month: "short", year: "2-digit" });
@@ -910,6 +977,7 @@ export default function Financeiro() {
                                 <TableHead>Vencimento</TableHead>
                                 <TableHead>Pagamento</TableHead>
                                 <TableHead>Status</TableHead>
+                                <TableHead className="text-right">Ações</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -937,6 +1005,28 @@ export default function Financeiro() {
                                         {statusConfig[status || "Pendente"].label}
                                       </Badge>
                                     </TableCell>
+                                    <TableCell className="text-right">
+                                      {status !== "Pago" ? (
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          onClick={() => openPaymentDialog(record)}
+                                        >
+                                          <Check className="mr-2 h-4 w-4" />
+                                          Registrar
+                                        </Button>
+                                      ) : (
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="icon"
+                                          onClick={() => openPaymentDialog(record)}
+                                          title="Editar baixa"
+                                        >
+                                          <Pencil className="h-4 w-4" />
+                                        </Button>
+                                      )}
+                                    </TableCell>
                                   </TableRow>
                                 );
                               })}
@@ -961,10 +1051,85 @@ export default function Financeiro() {
                 </Button>
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 rounded-md border border-border bg-muted/20 p-3 md:grid-cols-5">
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="receivable-search">Buscar</Label>
+                  <Input
+                    id="receivable-search"
+                    value={detailSearch}
+                    onChange={(event) => setDetailSearch(event.target.value)}
+                    placeholder="Cliente, contrato, parcela..."
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Cliente</Label>
+                  <Select value={detailClientFilter} onValueChange={setDetailClientFilter}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      {detailClientOptions.map(([id, name]) => (
+                        <SelectItem key={id} value={id}>
+                          {name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Status</Label>
+                  <Select value={detailStatusFilter} onValueChange={setDetailStatusFilter}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      <SelectItem value="Pendente">A vencer</SelectItem>
+                      <SelectItem value="Vencido">Vencido</SelectItem>
+                      <SelectItem value="Pago">Pago</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Contrato/ciclo</Label>
+                  <Select value={detailContractFilter} onValueChange={setDetailContractFilter}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      {contractGroups.map((group) => (
+                        <SelectItem key={group.key} value={group.key}>
+                          {group.title}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-end md:col-span-5">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => {
+                      setDetailSearch("");
+                      setDetailClientFilter("all");
+                      setDetailStatusFilter("all");
+                      setDetailContractFilter("all");
+                    }}
+                  >
+                    Limpar filtros
+                  </Button>
+                  <span className="ml-auto text-sm text-muted-foreground">
+                    {sortedReceivables.length} de {periodReceivables.length} lançamento(s)
+                  </span>
+                </div>
+              </div>
+
               {sortedReceivables.length === 0 ? (
                 <div className="py-10 text-center text-muted-foreground">
-                  Nenhuma conta a receber cadastrada.
+                  Nenhuma conta a receber encontrada para os filtros selecionados.
                 </div>
               ) : (
                 <Table>
