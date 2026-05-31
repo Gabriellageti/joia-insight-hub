@@ -808,6 +808,8 @@ export default function Financeiro() {
                             <Badge variant="outline">
                               {contract.billingType === "mensal"
                                 ? "Mensal"
+                                : contract.billingType === "semanal"
+                                  ? "Semanal"
                                 : contract.billingType === "parcela"
                                   ? "Parcelado"
                                   : "Projeto"}

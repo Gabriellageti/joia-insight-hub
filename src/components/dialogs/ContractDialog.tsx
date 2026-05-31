@@ -29,7 +29,7 @@ interface ContractDialogProps {
   contract?: Contract | null;
 }
 
-type BillingType = "mensal" | "parcela" | "projeto";
+type BillingType = "mensal" | "semanal" | "parcela" | "projeto";
 
 const generateId = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -40,6 +40,14 @@ const addMonths = (isoDate: string, months: number) => {
   const d = new Date(isoDate);
   if (Number.isNaN(d.getTime())) return isoDate;
   const target = new Date(d.getFullYear(), d.getMonth() + months, d.getDate());
+  return target.toISOString().split("T")[0];
+};
+
+const addWeeks = (isoDate: string, weeks: number) => {
+  const d = new Date(isoDate);
+  if (Number.isNaN(d.getTime())) return isoDate;
+  const target = new Date(d);
+  target.setDate(target.getDate() + weeks * 7);
   return target.toISOString().split("T")[0];
 };
 
@@ -101,6 +109,7 @@ export function ContractDialog({ open, onOpenChange, contract }: ContractDialogP
 
   const computedEndDate = useMemo(() => {
     if (billingType === "projeto") return endDate || firstDueDate;
+    if (billingType === "semanal") return addWeeks(firstDueDate, installmentCountNum - 1);
     return addMonths(firstDueDate, installmentCountNum - 1);
   }, [billingType, firstDueDate, installmentCountNum, endDate]);
 
@@ -128,7 +137,7 @@ export function ContractDialog({ open, onOpenChange, contract }: ContractDialogP
         : Array.from({ length: installmentCountNum }).map((_, idx) => ({
             id: generateId(),
             value: installmentValue,
-            dueDate: addMonths(firstDueDate, idx),
+            dueDate: billingType === "semanal" ? addWeeks(firstDueDate, idx) : addMonths(firstDueDate, idx),
             status: "pending" as const,
           }));
 
@@ -154,6 +163,8 @@ export function ContractDialog({ open, onOpenChange, contract }: ContractDialogP
           const labelBase =
             billingType === "mensal"
               ? "Mensalidade"
+              : billingType === "semanal"
+                ? "Semanalidade"
               : billingType === "parcela"
                 ? "Parcela"
                 : "Pagamento único";
@@ -165,7 +176,7 @@ export function ContractDialog({ open, onOpenChange, contract }: ContractDialogP
                 : `${labelBase} ${i + 1}/${installments.length} - ${title}`;
             await addRecord({
               type: "receita",
-              category: billingType === "mensal" ? "Recorrente" : "Projeto",
+              category: billingType === "mensal" || billingType === "semanal" ? "Recorrente" : "Projeto",
               description,
               clientId,
               clientName,
@@ -265,6 +276,7 @@ export function ContractDialog({ open, onOpenChange, contract }: ContractDialogP
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="mensal">Mensal (recorrente)</SelectItem>
+                  <SelectItem value="semanal">Semanal (recorrente)</SelectItem>
                   <SelectItem value="parcela">Parcelado</SelectItem>
                   <SelectItem value="projeto">Pagamento único</SelectItem>
                 </SelectContent>
@@ -285,7 +297,11 @@ export function ContractDialog({ open, onOpenChange, contract }: ContractDialogP
             {billingType !== "projeto" ? (
               <div className="space-y-2">
                 <Label htmlFor="contract-installments">
-                  {billingType === "mensal" ? "Nº de meses" : "Nº de parcelas"}
+                  {billingType === "mensal"
+                    ? "Nº de meses"
+                    : billingType === "semanal"
+                      ? "Nº de semanas"
+                      : "Nº de parcelas"}
                 </Label>
                 <Input
                   id="contract-installments"
