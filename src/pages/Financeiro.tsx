@@ -921,6 +921,15 @@ export default function Financeiro() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <ContractDialog
+        open={showContractDialog}
+        onOpenChange={(open) => {
+          setShowContractDialog(open);
+          if (!open) setEditingContract(null);
+        }}
+        contract={editingContract}
+      />
     </div>
   );
 }

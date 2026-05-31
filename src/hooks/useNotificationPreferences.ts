@@ -64,13 +64,19 @@ export function useNotificationPreferences() {
 
     try {
       // Upsert the preference
+      const upsertPayload: {
+        user_id: string;
+        updated_at: string;
+        push_notifications?: boolean;
+        email_notifications?: boolean;
+      } = {
+        user_id: user.id,
+        updated_at: new Date().toISOString(),
+        [key]: value,
+      };
       const { error } = await supabase
         .from("notification_preferences")
-        .upsert({
-          user_id: user.id,
-          [key]: value,
-          updated_at: new Date().toISOString(),
-        }, {
+        .upsert(upsertPayload, {
           onConflict: "user_id",
         });
 
