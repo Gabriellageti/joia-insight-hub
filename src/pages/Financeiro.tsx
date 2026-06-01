@@ -12,6 +12,7 @@ import {
   TrendingDown,
   TrendingUp,
   Check,
+  Wallet,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -329,12 +330,14 @@ export default function Financeiro() {
     const totalRevenue = paidReceivables.reduce((sum, r) => sum + r.amount, 0);
     const pendingAmount = openReceivables.reduce((sum, r) => sum + r.amount, 0);
     const totalExpensesPeriod = periodExpenses.reduce((sum, r) => sum + r.amount, 0);
+    const balance = totalRevenue - totalExpensesPeriod;
     const margin = totalRevenue > 0 ? ((totalRevenue - totalExpensesPeriod) / totalRevenue) * 100 : 0;
 
     return {
       totalRevenue,
       pendingAmount,
       totalExpenses: totalExpensesPeriod,
+      balance,
       margin,
       paidCount: paidReceivables.length,
       pendingCount: openReceivables.length,
@@ -760,8 +763,8 @@ export default function Financeiro() {
           <h1 className="text-2xl font-semibold text-foreground">Financeiro JoIA</h1>
           <p className="text-muted-foreground">Controle receitas, despesas e margem por projeto</p>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[...Array(4)].map((_, i) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
+          {[...Array(5)].map((_, i) => (
             <Card key={i}>
               <CardContent className="p-6">
                 <Skeleton className="h-20 w-full" />
@@ -821,7 +824,7 @@ export default function Financeiro() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -869,6 +872,23 @@ export default function Financeiro() {
               </div>
               <div className="p-3 bg-muted rounded-lg">
                 <Receipt className="h-5 w-5 text-muted-foreground" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className={dashboardSummary.balance >= 0 ? "border-emerald-200" : "border-destructive/40"}>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Saldo</p>
+                <p className={`text-2xl font-bold ${dashboardSummary.balance >= 0 ? "text-emerald-700" : "text-destructive"}`}>
+                  {formatCurrency(dashboardSummary.balance)}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">Recebido - Despesas</p>
+              </div>
+              <div className={`p-3 rounded-lg ${dashboardSummary.balance >= 0 ? "bg-emerald-100" : "bg-destructive/10"}`}>
+                <Wallet className={`h-5 w-5 ${dashboardSummary.balance >= 0 ? "text-emerald-700" : "text-destructive"}`} />
               </div>
             </div>
           </CardContent>
