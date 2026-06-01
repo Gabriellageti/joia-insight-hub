@@ -2,7 +2,10 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { Upload, Search, Grid, List, FolderTree, Layers, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Toggle } from "@/components/ui/toggle";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import {
   DocumentFilters,
   CategorySidebar,
@@ -13,6 +16,7 @@ import {
 } from "@/components/documents";
 import {
   DocumentCategory,
+  FileItem,
   QuickFilter,
   ViewMode,
   LayoutMode,
@@ -34,6 +38,9 @@ export default function Documentos() {
   const [viewMode, setViewMode] = useState<ViewMode>("category");
   const [layoutMode, setLayoutMode] = useState<LayoutMode>("grid");
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  const [rejectFileId, setRejectFileId] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [deleteFileId, setDeleteFileId] = useState<string | null>(null);
 
   // Map data for components
   const clientsForFilter = useMemo(() => 
@@ -70,7 +77,9 @@ export default function Documentos() {
         if (clientId) setSelectedClientId(clientId);
         if (projectId) setSelectedProjectId(projectId);
       }
-    } catch {}
+    } catch {
+      localStorage.removeItem(STORAGE_KEY);
+    }
   }, []);
 
   // Persist filters
@@ -151,7 +160,7 @@ export default function Documentos() {
     };
   }, [documents, selectedClientId, selectedProjectId, selectedCategory]);
 
-  const handleUpload = async (newFile: any) => {
+  const handleUpload = async (newFile: Omit<FileItem, "id" | "uploadedAt">) => {
     await addDocument(newFile);
   };
 
@@ -160,16 +169,25 @@ export default function Documentos() {
   };
 
   const handleReject = async (id: string) => {
-    const motivo = window.prompt("Informe o motivo da rejeição:");
-    if (motivo) {
-      await rejectDocument(id, motivo);
-    }
+    setRejectFileId(id);
+    setRejectReason("");
   };
 
   const handleDelete = async (id: string) => {
-    if (window.confirm("Tem certeza que deseja excluir este arquivo?")) {
-      await deleteDocument(id);
-    }
+    setDeleteFileId(id);
+  };
+
+  const confirmReject = async () => {
+    if (!rejectFileId || !rejectReason.trim()) return;
+    await rejectDocument(rejectFileId, rejectReason.trim());
+    setRejectFileId(null);
+    setRejectReason("");
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteFileId) return;
+    await deleteDocument(deleteFileId);
+    setDeleteFileId(null);
   };
 
   if (loading) {
@@ -318,6 +336,45 @@ export default function Documentos() {
         defaultClientId={selectedClientId}
         defaultProjectId={selectedProjectId}
       />
+
+      <Dialog open={!!rejectFileId} onOpenChange={(open) => !open && setRejectFileId(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rejeitar evidência</DialogTitle>
+          </DialogHeader>
+          <Textarea
+            value={rejectReason}
+            onChange={(event) => setRejectReason(event.target.value)}
+            placeholder="Informe o motivo da rejeição..."
+            className="min-h-[120px]"
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRejectFileId(null)}>
+              Cancelar
+            </Button>
+            <Button onClick={confirmReject} disabled={!rejectReason.trim()}>
+              Rejeitar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={!!deleteFileId} onOpenChange={(open) => !open && setDeleteFileId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir documento?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação remove o arquivo da lista de documentos.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground">
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

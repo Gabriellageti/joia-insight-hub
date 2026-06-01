@@ -1,4 +1,3 @@
-// @ts-nocheck - Test file using vitest/bun
 import { describe, expect, test } from "vitest";
 import { buildProgressAuditMessage, calculateWeightedProgress, resolveProgressValue } from "./progress";
 import { ProjectDeliverable, Task } from "../../types";

@@ -43,6 +43,9 @@ import {
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 
+const getErrorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : "Ocorreu um erro ao enviar o arquivo.";
+
 interface UploadModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -250,11 +253,11 @@ export function UploadModal({
       setMeetingId(null);
 
       onOpenChange(false);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Upload error:", error);
       toast({
         title: "Erro no upload",
-        description: error.message || "Ocorreu um erro ao enviar o arquivo.",
+        description: getErrorMessage(error),
         variant: "destructive",
       });
     } finally {

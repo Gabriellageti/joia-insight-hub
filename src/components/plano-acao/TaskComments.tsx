@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { MessageCircle, Send, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -31,7 +31,7 @@ export function TaskComments({ taskId, taskTitle }: TaskCommentsProps) {
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  const fetchComments = async () => {
+  const fetchComments = useCallback(async () => {
     setLoading(true);
     try {
       const { data, error } = await supabase
@@ -47,13 +47,13 @@ export function TaskComments({ taskId, taskTitle }: TaskCommentsProps) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [taskId]);
 
   useEffect(() => {
     if (taskId) {
       fetchComments();
     }
-  }, [taskId]);
+  }, [taskId, fetchComments]);
 
   const sendNotification = async (commentContent: string, commenterName: string) => {
     try {

@@ -12,6 +12,9 @@ import {
 import { parseDatePtBR, formatDatePtBR } from "@/lib/dates";
 import { format } from "date-fns";
 
+const getErrorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : "Erro inesperado";
+
 export interface MeetingData {
   id: string;
   title: string;
@@ -109,11 +112,11 @@ export function useMeetings() {
         mapDbToMeeting(row, clientsRef.current, projectsRef.current)
       );
       setMeetings(mapped);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error fetching meetings:", error);
       toast({
         title: "Erro ao carregar reuniões",
-        description: error.message,
+        description: getErrorMessage(error),
         variant: "destructive",
       });
     } finally {
@@ -167,11 +170,11 @@ export function useMeetings() {
       });
 
       return newMeeting;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error creating meeting:", error);
       toast({
         title: "Erro ao criar reunião",
-        description: error.message,
+        description: getErrorMessage(error),
         variant: "destructive",
       });
       throw error;
@@ -230,11 +233,11 @@ export function useMeetings() {
       });
 
       return updatedMeeting;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error updating meeting:", error);
       toast({
         title: "Erro ao atualizar reunião",
-        description: error.message,
+        description: getErrorMessage(error),
         variant: "destructive",
       });
       throw error;
@@ -250,11 +253,11 @@ export function useMeetings() {
         title: "Reunião excluída",
         description: "A reunião foi removida.",
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error deleting meeting:", error);
       toast({
         title: "Erro ao excluir reunião",
-        description: error.message,
+        description: getErrorMessage(error),
         variant: "destructive",
       });
       throw error;

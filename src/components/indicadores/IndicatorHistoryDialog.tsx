@@ -15,6 +15,9 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 
+const getErrorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : "Erro ao registrar valor";
+
 interface IndicatorHistoryDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -43,7 +46,7 @@ export function IndicatorHistoryDialog({
 
     setLoading(true);
     try {
-      const { error } = await supabase.from("indicator_history" as any).insert({
+      const { error } = await supabase.from("indicator_history").insert({
         indicator_id: indicator.id,
         value: Number(value),
         recorded_at: date,
@@ -57,9 +60,9 @@ export function IndicatorHistoryDialog({
       setNotes("");
       onSuccess?.();
       onOpenChange(false);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Erro ao registrar valor:", err);
-      toast.error(err.message || "Erro ao registrar valor");
+      toast.error(getErrorMessage(err));
     } finally {
       setLoading(false);
     }

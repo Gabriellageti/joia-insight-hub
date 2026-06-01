@@ -214,12 +214,15 @@ serve(async (req: Request): Promise<Response> => {
                 pushPayload
               );
               pushSuccessCount++;
-            } catch (error: any) {
+            } catch (error: unknown) {
               console.error(`Push failed for ${sub.endpoint}:`, error);
               pushFailCount++;
               
               // Remove invalid subscriptions
-              if (error.statusCode === 404 || error.statusCode === 410) {
+              const statusCode = typeof error === "object" && error !== null && "statusCode" in error
+                ? Number((error as { statusCode?: unknown }).statusCode)
+                : undefined;
+              if (statusCode === 404 || statusCode === 410) {
                 await supabase
                   .from("push_subscriptions")
                   .delete()
@@ -256,10 +259,10 @@ serve(async (req: Request): Promise<Response> => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error in notify-task-comment:", error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: error instanceof Error ? error.message : "Unexpected error" }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

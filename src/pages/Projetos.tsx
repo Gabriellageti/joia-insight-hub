@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { isPastDate } from "@/lib/dates";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const statusColors = { green: "bg-green-500", yellow: "bg-yellow-500", red: "bg-red-500" };
 const phaseColors: Record<string, string> = { "Diagnóstico": "bg-blue-100 text-blue-700", "Quick wins": "bg-purple-100 text-purple-700", "Estruturação": "bg-orange-100 text-orange-700", "Acompanhamento": "bg-green-100 text-green-700", "Cultura e treinamento": "bg-teal-100 text-teal-700" };
@@ -24,11 +25,21 @@ export default function Projetos() {
   const navigate = useNavigate();
   const { projects, deleteProject } = useData();
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [phaseFilter, setPhaseFilter] = useState("all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
-  const filteredProjects = projects.filter(p => p.name.toLowerCase().includes(search.toLowerCase()) || p.clientName.toLowerCase().includes(search.toLowerCase()));
+  const phaseOptions = Array.from(new Set(projects.map((project) => project.phase).filter(Boolean))).sort();
+  const filteredProjects = projects.filter((p) => {
+    const matchesSearch =
+      p.name.toLowerCase().includes(search.toLowerCase()) ||
+      p.clientName.toLowerCase().includes(search.toLowerCase());
+    const matchesStatus = statusFilter === "all" || p.status === statusFilter;
+    const matchesPhase = phaseFilter === "all" || p.phase === phaseFilter;
+    return matchesSearch && matchesStatus && matchesPhase;
+  });
   const handleDelete = () => { if (deleteId) { deleteProject(deleteId); toast.success("Projeto excluído"); setDeleteId(null); } };
 
   return (
@@ -39,7 +50,31 @@ export default function Projetos() {
       </div>
       <div className="flex items-center gap-4">
         <div className="relative flex-1 max-w-sm"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input placeholder="Buscar projeto ou cliente..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} /></div>
-        <Button variant="outline" size="sm"><Filter className="h-4 w-4 mr-2" />Filtros</Button>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-40">
+            <Filter className="h-4 w-4 mr-2" />
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos status</SelectItem>
+            <SelectItem value="green">Verde</SelectItem>
+            <SelectItem value="yellow">Atenção</SelectItem>
+            <SelectItem value="red">Risco</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={phaseFilter} onValueChange={setPhaseFilter}>
+          <SelectTrigger className="w-48">
+            <SelectValue placeholder="Fase" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas fases</SelectItem>
+            {phaseOptions.map((phase) => (
+              <SelectItem key={phase} value={phase}>
+                {phase}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredProjects.map((project) => {

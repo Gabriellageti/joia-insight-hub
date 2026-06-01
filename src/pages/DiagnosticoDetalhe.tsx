@@ -73,6 +73,72 @@ export default function DiagnosticoDetalhe() {
     [diagnostic, templates]
   );
 
+  const handleConfirmNextSteps = useCallback(
+    async (selectedIds: string[]) => {
+      if (!diagnostic) return;
+
+      const selectedSuggestions = nextStepsSuggestions.filter((s) =>
+        selectedIds.includes(s.id)
+      );
+
+      let createdCount = 0;
+
+      for (const suggestion of selectedSuggestions) {
+        try {
+          if (suggestion.type === "diagnostic" && suggestion.templateId) {
+            // Criar novo diagnóstico
+            const selectedTemplate = templates.find(
+              (t) => t.id === suggestion.templateId
+            );
+            if (selectedTemplate) {
+              await applyDiagnostic({
+                projectId: diagnostic.projectId,
+                projectName: diagnostic.projectName,
+                clientId: diagnostic.clientId,
+                clientName: diagnostic.clientName,
+                templateId: suggestion.templateId,
+                templateName: suggestion.templateName || selectedTemplate.name,
+                responsibleName: diagnostic.responsibleName,
+                responsibleId: diagnostic.responsibleId,
+                name: getDefaultDiagnosticName(
+                  suggestion.templateName || selectedTemplate.name,
+                  diagnostic.projectName
+                ),
+              });
+              createdCount++;
+            }
+          } else if (suggestion.type === "task") {
+            // Criar nova tarefa
+            const newTask: Omit<Task, "id" | "createdAt"> = {
+              title: suggestion.title,
+              description: suggestion.description,
+              projectId: diagnostic.projectId,
+              projectName: diagnostic.projectName,
+              clientId: diagnostic.clientId,
+              clientName: diagnostic.clientName,
+              type: "processo",
+              responsible: diagnostic.responsibleName || "Equipe JoIA",
+              priority: suggestion.priority === "alta" ? "high" : suggestion.priority === "media" ? "medium" : "low",
+              dueDate: "",
+              status: "backlog",
+              evidenceRequired: false,
+              sourceDiagnosticId: diagnostic.id,
+            };
+            addTask(newTask as Task);
+            createdCount++;
+          }
+        } catch (error) {
+          console.error("[next-steps:error]", error);
+        }
+      }
+
+      if (createdCount > 0) {
+        toast.success(`${createdCount} ${createdCount === 1 ? "item criado" : "itens criados"} com sucesso!`);
+      }
+    },
+    [diagnostic, nextStepsSuggestions, templates, applyDiagnostic, addTask]
+  );
+
   if (!diagnostic) {
     return (
       <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
@@ -181,7 +247,6 @@ export default function DiagnosticoDetalhe() {
 
       toast.success(toastMessage, { description: toastDescription });
 
-      // Gerar sugestões de próximos passos
       const suggestions = generateNextStepsSuggestions(
         { ...diagnostic, score: scoreSummary.score, opportunities: diagnostic.opportunities ?? 0 },
         template,
@@ -196,72 +261,6 @@ export default function DiagnosticoDetalhe() {
       setIsExecuting(false);
     }
   };
-
-  const handleConfirmNextSteps = useCallback(
-    async (selectedIds: string[]) => {
-      if (!diagnostic) return;
-
-      const selectedSuggestions = nextStepsSuggestions.filter((s) =>
-        selectedIds.includes(s.id)
-      );
-
-      let createdCount = 0;
-
-      for (const suggestion of selectedSuggestions) {
-        try {
-          if (suggestion.type === "diagnostic" && suggestion.templateId) {
-            // Criar novo diagnóstico
-            const selectedTemplate = templates.find(
-              (t) => t.id === suggestion.templateId
-            );
-            if (selectedTemplate) {
-              await applyDiagnostic({
-                projectId: diagnostic.projectId,
-                projectName: diagnostic.projectName,
-                clientId: diagnostic.clientId,
-                clientName: diagnostic.clientName,
-                templateId: suggestion.templateId,
-                templateName: suggestion.templateName || selectedTemplate.name,
-                responsibleName: diagnostic.responsibleName,
-                responsibleId: diagnostic.responsibleId,
-                name: getDefaultDiagnosticName(
-                  suggestion.templateName || selectedTemplate.name,
-                  diagnostic.projectName
-                ),
-              });
-              createdCount++;
-            }
-          } else if (suggestion.type === "task") {
-            // Criar nova tarefa
-            const newTask: Omit<Task, "id" | "createdAt"> = {
-              title: suggestion.title,
-              description: suggestion.description,
-              projectId: diagnostic.projectId,
-              projectName: diagnostic.projectName,
-              clientId: diagnostic.clientId,
-              clientName: diagnostic.clientName,
-              type: "processo",
-              responsible: diagnostic.responsibleName || "Equipe JoIA",
-              priority: suggestion.priority === "alta" ? "high" : suggestion.priority === "media" ? "medium" : "low",
-              dueDate: "",
-              status: "backlog",
-              evidenceRequired: false,
-              sourceDiagnosticId: diagnostic.id,
-            };
-            addTask(newTask as Task);
-            createdCount++;
-          }
-        } catch (error) {
-          console.error("[next-steps:error]", error);
-        }
-      }
-
-      if (createdCount > 0) {
-        toast.success(`${createdCount} ${createdCount === 1 ? "item criado" : "itens criados"} com sucesso!`);
-      }
-    },
-    [diagnostic, nextStepsSuggestions, templates, applyDiagnostic, addTask]
-  );
 
   const handleExitExecution = () => {
     setIsExecuting(false);

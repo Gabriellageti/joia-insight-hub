@@ -28,14 +28,9 @@ import {
 } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import { Database } from "@/integrations/supabase/types";
 
-interface HistoryPoint {
-  id: string;
-  indicator_id: string;
-  value: number;
-  recorded_at: string;
-  notes?: string;
-}
+type HistoryPoint = Database["public"]["Tables"]["indicator_history"]["Row"];
 
 export default function Indicadores() {
   const { indicators, clients, projects } = useData();
@@ -59,7 +54,7 @@ export default function Indicadores() {
     }
 
     const fetchHistory = async () => {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from("indicator_history")
         .select("*")
         .eq("indicator_id", selectedIndicator.id)
@@ -118,7 +113,7 @@ export default function Indicadores() {
 
   const handleHistorySuccess = async () => {
     if (!selectedIndicator) return;
-    const { data } = await (supabase as any)
+    const { data } = await supabase
       .from("indicator_history")
       .select("*")
       .eq("indicator_id", selectedIndicator.id)

@@ -295,6 +295,7 @@ export interface TemplateQuestion {
   includeInScore?: boolean;
   minValue?: number | null;
   maxValue?: number | null;
+  unit?: "moeda" | "percentual" | string | null;
   options?: string[];
   optionsWithWeight?: QuestionOption[];
   regraOportunidade?: TemplateOpportunityRule;

@@ -1,9 +1,17 @@
 import { useState, useMemo } from "react";
-import { Plus, List, Kanban } from "lucide-react";
+import { Plus, List, Kanban, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useData } from "@/contexts/DataContext";
 import { TaskDialog } from "@/components/dialogs/TaskDialog";
 import { TaskCard, TaskFilters } from "@/components/plano-acao";
@@ -18,6 +26,13 @@ const columns = [
   { id: "done", title: "Concluídas" },
 ];
 
+const statusLabels = Object.fromEntries(columns.map((column) => [column.id, column.title]));
+const priorityLabels: Record<Task["priority"], string> = {
+  low: "Baixa",
+  medium: "Média",
+  high: "Alta",
+};
+
 export default function PlanoAcao() {
   const { tasks, updateTask, deleteTask, clients } = useData();
   const [view, setView] = useState<"kanban" | "list">("kanban");
@@ -27,8 +42,11 @@ export default function PlanoAcao() {
   const [activeColumn, setActiveColumn] = useState<string | null>(null);
   
   // Filters
+  const [search, setSearch] = useState("");
   const [selectedClient, setSelectedClient] = useState("all");
   const [selectedResponsible, setSelectedResponsible] = useState("all");
+  const [selectedPriority, setSelectedPriority] = useState("all");
+  const [selectedStatus, setSelectedStatus] = useState("all");
 
   // Get unique responsibles from tasks
   const uniqueResponsibles = useMemo(() => {
@@ -55,19 +73,49 @@ export default function PlanoAcao() {
   // Filter tasks
   const filteredTasks = useMemo(() => {
     return tasks.filter((task) => {
+      const term = search.trim().toLowerCase();
+      if (
+        term &&
+        ![
+          task.title,
+          task.description,
+          task.projectName,
+          task.clientName,
+          task.responsible,
+          task.what,
+          task.why,
+          task.where,
+          task.who,
+          task.how,
+          task.howMuch,
+        ]
+          .filter(Boolean)
+          .some((value) => value!.toLowerCase().includes(term))
+      ) {
+        return false;
+      }
       if (selectedClient !== "all" && task.clientId !== selectedClient) {
         return false;
       }
       if (selectedResponsible !== "all" && task.responsible !== selectedResponsible) {
         return false;
       }
+      if (selectedPriority !== "all" && task.priority !== selectedPriority) {
+        return false;
+      }
+      if (selectedStatus !== "all" && task.status !== selectedStatus) {
+        return false;
+      }
       return true;
     });
-  }, [tasks, selectedClient, selectedResponsible]);
+  }, [tasks, search, selectedClient, selectedResponsible, selectedPriority, selectedStatus]);
 
   const handleClearFilters = () => {
+    setSearch("");
     setSelectedClient("all");
     setSelectedResponsible("all");
+    setSelectedPriority("all");
+    setSelectedStatus("all");
   };
 
   const handleDrop = (columnId: string) => {
@@ -163,6 +211,44 @@ export default function PlanoAcao() {
         onClear={handleClearFilters}
       />
 
+      <Card>
+        <CardContent className="flex flex-wrap items-center gap-3 p-4">
+          <div className="relative min-w-[220px] flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Buscar tarefa, projeto, responsável ou 5W2H..."
+              className="pl-9"
+            />
+          </div>
+          <Select value={selectedPriority} onValueChange={setSelectedPriority}>
+            <SelectTrigger className="w-40">
+              <SelectValue placeholder="Prioridade" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas prioridades</SelectItem>
+              <SelectItem value="high">Alta</SelectItem>
+              <SelectItem value="medium">Média</SelectItem>
+              <SelectItem value="low">Baixa</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+            <SelectTrigger className="w-44">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos status</SelectItem>
+              {columns.map((column) => (
+                <SelectItem key={column.id} value={column.id}>
+                  {column.title}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </CardContent>
+      </Card>
+
       {view === "kanban" ? (
         <div className="flex gap-4 overflow-x-auto pb-4">
           {columns.map((column) => (
@@ -219,14 +305,59 @@ export default function PlanoAcao() {
           ))}
         </div>
       ) : (
-        <Card>
-          <CardContent className="p-6">
-            <p className="text-muted-foreground text-center py-8">
-              Visualização 5W2H - Clique em Nova Tarefa para adicionar com
-              campos 5W2H
-            </p>
-          </CardContent>
-        </Card>
+        <div className="space-y-3">
+          {filteredTasks.length === 0 ? (
+            <Card>
+              <CardContent className="p-8 text-center text-muted-foreground">
+                Nenhuma tarefa encontrada com os filtros atuais.
+              </CardContent>
+            </Card>
+          ) : (
+            filteredTasks.map((task) => (
+              <Card key={task.id} className="cursor-pointer hover:bg-muted/30" onClick={() => {
+                setEditingTask(task);
+                setDialogOpen(true);
+              }}>
+                <CardContent className="space-y-4 p-4">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div className="space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="font-semibold text-foreground">{task.title}</h3>
+                        <Badge variant="outline">{statusLabels[task.status] || task.status}</Badge>
+                        <Badge variant={task.priority === "high" ? "destructive" : "secondary"}>
+                          {priorityLabels[task.priority]}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {task.clientName} • {task.projectName} • Responsável: {task.responsible || "Não definido"}
+                      </p>
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      Prazo: <span className="font-medium text-foreground">{task.dueDate || "Sem prazo"}</span>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    {[
+                      ["O que", task.what || task.description || "-"],
+                      ["Por quê", task.why || "-"],
+                      ["Onde", task.where || task.projectName || "-"],
+                      ["Quando", task.when || task.dueDate || "-"],
+                      ["Quem", task.who || task.responsible || "-"],
+                      ["Como", task.how || "-"],
+                      ["Quanto", task.howMuch || "-"],
+                    ].map(([label, value]) => (
+                      <div key={label} className="rounded-md border p-3">
+                        <p className="text-xs font-medium uppercase text-muted-foreground">{label}</p>
+                        <p className="mt-1 text-sm text-foreground">{value}</p>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </div>
       )}
 
       <TaskDialog

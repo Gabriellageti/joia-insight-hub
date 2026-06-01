@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Filter, Pencil, Plus, Route, Search, Trash } from "lucide-react";
+import { Pencil, Plus, Route, Search, Trash } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,6 +9,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ClientDialog } from "@/components/dialogs/ClientDialog";
 import { useData } from "@/contexts/DataContext";
 import { toast } from "sonner";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 const followUpLabels = {
   semanal: "Semanal",
@@ -19,8 +21,11 @@ const followUpLabels = {
 export default function Clientes() {
   const { clients, deleteClient } = useData();
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [segmentFilter, setSegmentFilter] = useState("all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState<typeof clients[number] | null>(null);
+  const [clientToDelete, setClientToDelete] = useState<typeof clients[number] | null>(null);
 
   const handleEdit = (clientId: string) => {
     const client = clients.find((item) => item.id === clientId) || null;
@@ -28,40 +33,45 @@ export default function Clientes() {
     setDialogOpen(true);
   };
 
-  const handleDelete = async (clientId: string) => {
-    const client = clients.find((item) => item.id === clientId);
-    const confirmed = window.confirm(
-      `Deseja realmente excluir ${client?.nomeFantasia || client?.razaoSocial || "o cliente"}?`
-    );
-
-    if (!confirmed) return;
-
+  const handleDelete = async () => {
+    if (!clientToDelete) return;
     try {
-      await deleteClient(clientId);
+      await deleteClient(clientToDelete.id);
       toast.success("Cliente excluído com sucesso");
+      setClientToDelete(null);
     } catch (error) {
       console.error(error);
       toast.error("Não foi possível excluir o cliente");
     }
   };
 
+  const segmentOptions = useMemo(() => {
+    const segments = new Set<string>();
+    clients.forEach((client) => client.segmentoTags?.forEach((tag) => segments.add(tag)));
+    return Array.from(segments).sort();
+  }, [clients]);
+
   const filteredClients = useMemo(() => {
     const term = search.toLowerCase();
-    if (!term) return clients;
 
-    return clients.filter((client) =>
-      [
-        client.razaoSocial,
-        client.nomeFantasia,
-        client.cnpj,
-        client.segmentoTags.join(" "),
-        client.endereco?.cidade,
-        client.endereco?.uf,
-      ]
-        .filter(Boolean)
-        .some((value) => value!.toLowerCase().includes(term))
-    );
-  }, [clients, search]);
+    return clients.filter((client) => {
+      const matchesSearch =
+        !term ||
+        [
+          client.razaoSocial,
+          client.nomeFantasia,
+          client.cnpj,
+          client.segmentoTags.join(" "),
+          client.endereco?.cidade,
+          client.endereco?.uf,
+        ]
+          .filter(Boolean)
+          .some((value) => value!.toLowerCase().includes(term));
+      const matchesStatus = statusFilter === "all" || client.status === statusFilter;
+      const matchesSegment = segmentFilter === "all" || client.segmentoTags.includes(segmentFilter);
+      return matchesSearch && matchesStatus && matchesSegment;
+    });
+  }, [clients, search, statusFilter, segmentFilter]);
 
   return (
     <div className="space-y-6">
@@ -88,10 +98,29 @@ export default function Clientes() {
                 className="pl-9"
               />
             </div>
-            <Button variant="outline" size="sm">
-              <Filter className="h-4 w-4 mr-2" />
-              Filtros
-            </Button>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-36">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="ativo">Ativos</SelectItem>
+                <SelectItem value="inativo">Inativos</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={segmentFilter} onValueChange={setSegmentFilter}>
+              <SelectTrigger className="w-44">
+                <SelectValue placeholder="Segmento" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos segmentos</SelectItem>
+                {segmentOptions.map((segment) => (
+                  <SelectItem key={segment} value={segment}>
+                    {segment}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -186,7 +215,7 @@ export default function Clientes() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => handleDelete(client.id)}
+                        onClick={() => setClientToDelete(client)}
                         aria-label="Excluir cliente"
                       >
                         <Trash className="h-4 w-4 text-destructive" />
@@ -210,6 +239,23 @@ export default function Clientes() {
         }}
         client={selectedClient || undefined}
       />
+
+      <AlertDialog open={!!clientToDelete} onOpenChange={(open) => !open && setClientToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir cliente?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação remove {clientToDelete?.nomeFantasia || clientToDelete?.razaoSocial || "o cliente"} do cadastro.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

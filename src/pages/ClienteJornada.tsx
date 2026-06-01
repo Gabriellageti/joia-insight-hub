@@ -14,37 +14,9 @@ import { toast } from "sonner";
 
 export default function ClienteJornada() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
-  const { clients, projects, diagnostics, templates } = useData();
+  const { clients } = useData();
   
   const client = clients.find(c => c.id === id);
-  const clientProjects = projects.filter(p => p.clientId === id);
-  const clientDiagnostics = diagnostics.filter(d => d.clientId === id);
-  
-  const {
-    events,
-    loading,
-    error,
-    currentPhase,
-    phases,
-    suggestedActions,
-    overallProgress,
-    registerEvent,
-    refresh,
-  } = useClientJourney(id);
-  
-  // Only initialize handler if client exists
-  const actionHandler = client ? useJourneyActionHandler({
-    client,
-    projects: clientProjects,
-    diagnostics: clientDiagnostics,
-    templates,
-    currentPhase,
-    onEventRegistered: async (input) => {
-      await registerEvent(input);
-    },
-    onDataRefresh: refresh,
-  }) : null;
 
   if (!client) {
     return (
@@ -61,6 +33,45 @@ export default function ClienteJornada() {
       </div>
     );
   }
+
+  return <ClienteJornadaContent id={id} client={client} />;
+}
+
+function ClienteJornadaContent({
+  id,
+  client,
+}: {
+  id?: string;
+  client: NonNullable<ReturnType<typeof useData>["clients"][number]>;
+}) {
+  const navigate = useNavigate();
+  const { projects, diagnostics, templates } = useData();
+  const clientProjects = projects.filter(p => p.clientId === id);
+  const clientDiagnostics = diagnostics.filter(d => d.clientId === id);
+  
+  const {
+    events,
+    loading,
+    error,
+    currentPhase,
+    phases,
+    suggestedActions,
+    overallProgress,
+    registerEvent,
+    refresh,
+  } = useClientJourney(id);
+  
+  const actionHandler = useJourneyActionHandler({
+    client,
+    projects: clientProjects,
+    diagnostics: clientDiagnostics,
+    templates,
+    currentPhase,
+    onEventRegistered: async (input) => {
+      await registerEvent(input);
+    },
+    onDataRefresh: refresh,
+  });
 
   const clientName = client.nomeFantasia || client.razaoSocial || client.name || 'Cliente';
   const currentPhaseInfo = phases.find(p => p.id === currentPhase);
@@ -175,7 +186,7 @@ export default function ClienteJornada() {
         <div className="space-y-4">
           <NextActionsCard 
             actions={suggestedActions}
-            onActionClick={actionHandler?.handleAction}
+            onActionClick={actionHandler.handleAction}
           />
 
           {/* Quick Links */}
@@ -225,7 +236,7 @@ export default function ClienteJornada() {
       )}
       
       {/* Dialogs for automated actions */}
-      {actionHandler?.renderDialogs()}
+      {actionHandler.renderDialogs()}
     </div>
   );
 }

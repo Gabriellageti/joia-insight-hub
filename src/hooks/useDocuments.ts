@@ -3,9 +3,17 @@ import { supabase } from "@/integrations/supabase/client";
 import { useData } from "@/contexts/DataContext";
 import { toast } from "@/hooks/use-toast";
 import { FileItem, DocumentCategory, EvidenceStatus, FileVisibility } from "@/types/documents";
+import { Client, Project } from "@/types";
+import { Database } from "@/integrations/supabase/types";
+
+type DocumentRow = Database["public"]["Tables"]["documents"]["Row"];
+type DocumentUpdate = Database["public"]["Tables"]["documents"]["Update"];
+
+const getErrorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : "Erro inesperado";
 
 // Map database document to FileItem
-function mapDbToFileItem(doc: any, clients: any[], projects: any[]): FileItem {
+function mapDbToFileItem(doc: DocumentRow, clients: Client[], projects: Project[]): FileItem {
   const client = clients.find((c) => c.id === doc.client_id);
   const project = projects.find((p) => p.id === doc.project_id);
   
@@ -14,7 +22,7 @@ function mapDbToFileItem(doc: any, clients: any[], projects: any[]): FileItem {
     nomeArquivo: doc.name,
     nomeExibicao: doc.description || doc.name,
     clienteId: doc.client_id || undefined,
-    clienteNome: client?.name,
+    clienteNome: client?.nomeFantasia || client?.razaoSocial || client?.name,
     projetoId: doc.project_id || undefined,
     projetoNome: project?.name,
     categoriaId: (doc.category || "contracts") as DocumentCategory,
@@ -62,11 +70,11 @@ export function useDocuments() {
         mapDbToFileItem(doc, clientsRef.current, projectsRef.current)
       );
       setDocuments(mapped);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error fetching documents:", error);
       toast({
         title: "Erro ao carregar documentos",
-        description: error.message,
+        description: getErrorMessage(error),
         variant: "destructive",
       });
     } finally {
@@ -118,11 +126,11 @@ export function useDocuments() {
       });
 
       return newDoc;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error adding document:", error);
       toast({
         title: "Erro ao adicionar documento",
-        description: error.message,
+        description: getErrorMessage(error),
         variant: "destructive",
       });
       throw error;
@@ -131,7 +139,7 @@ export function useDocuments() {
 
   const updateDocument = useCallback(async (id: string, updates: Partial<FileItem>) => {
     try {
-      const dbUpdates: any = {};
+      const dbUpdates: DocumentUpdate = {};
       
       if (updates.nomeExibicao !== undefined) dbUpdates.description = updates.nomeExibicao;
       if (updates.categoriaId !== undefined) dbUpdates.category = updates.categoriaId;
@@ -153,11 +161,11 @@ export function useDocuments() {
       setDocuments((prev) =>
         prev.map((doc) => (doc.id === id ? { ...doc, ...updates } : doc))
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error updating document:", error);
       toast({
         title: "Erro ao atualizar documento",
-        description: error.message,
+        description: getErrorMessage(error),
         variant: "destructive",
       });
       throw error;
@@ -182,11 +190,11 @@ export function useDocuments() {
 
       setDocuments((prev) => prev.filter((doc) => doc.id !== id));
       toast({ title: "Documento excluído" });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error deleting document:", error);
       toast({
         title: "Erro ao excluir documento",
-        description: error.message,
+        description: getErrorMessage(error),
         variant: "destructive",
       });
       throw error;
