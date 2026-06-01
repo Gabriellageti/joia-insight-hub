@@ -1,0 +1,9 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="630" fill="#111111"/>
+  <rect x="88" y="88" width="148" height="148" rx="32" fill="#F4B000"/>
+  <path d="M130 179.5C136.5 187.5 147.5 192 161 192C185.5 192 202 175.5 202 153.5C202 131.5 185.5 115 163 115C147.5 115 135.5 122.5 129 134" stroke="#111111" stroke-width="10" stroke-linecap="round"/>
+  <path d="M153 163.5L168 126H180L163 168C158.5 178.8 151.5 184 141 184C136 184 131.5 182.8 128 180.5L132 170.5C134.5 172 137 172.8 140 172.8C146.2 172.8 150 169.8 153 163.5Z" fill="#111111"/>
+  <text x="88" y="345" fill="#FFFFFF" font-family="Inter, Arial, sans-serif" font-size="86" font-weight="700">JOIA Labs</text>
+  <text x="92" y="420" fill="#D8D8D8" font-family="Inter, Arial, sans-serif" font-size="34">Gestão empresarial, financeiro, projetos e operação.</text>
+  <rect x="88" y="488" width="272" height="8" rx="4" fill="#F4B000"/>
+</svg>
