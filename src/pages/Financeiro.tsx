@@ -4,6 +4,7 @@ import {
   ChevronDown,
   ChevronRight,
   CreditCard,
+  Download,
   DollarSign,
   Pencil,
   Plus,
@@ -100,6 +101,31 @@ const paymentMethods = [
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+};
+
+const escapeHtml = (value: unknown) =>
+  String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+const formatCsvCell = (value: unknown) => {
+  const text = String(value ?? "").replace(/"/g, '""');
+  return `"${text}"`;
+};
+
+const downloadTextFile = (filename: string, content: string, type: string) => {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 };
 
 const formatDate = (value?: string) => {
@@ -748,6 +774,191 @@ export default function Financeiro() {
     resetPaymentDialog();
   };
 
+  const handleGenerateReport = () => {
+    const generatedAt = new Date().toLocaleString("pt-BR");
+    const fileDate = getTodayIso();
+    const topClients = clientSummaries.slice(0, 10);
+    const topGroups = contractGroups.slice(0, 10);
+    const reportReceivables = sortedReceivables.slice(0, 80);
+    const reportExpenses = sortedExpenses.slice(0, 80);
+
+    const csvRows = [
+      ["Tipo", "Cliente/Projeto", "Descrição", "Categoria/Status", "Data", "Pagamento", "Valor"],
+      ...reportReceivables.map((record) => [
+        "Receita",
+        `${getClientName(record.clientId)} / ${getProjectName(record.projectId)}`,
+        record.description || "",
+        getReceivableStatus(record) || "Pendente",
+        formatDate(record.date),
+        record.paidAt ? `${formatDate(record.paidAt)} ${record.paymentMethod || ""}`.trim() : "",
+        record.amount.toFixed(2),
+      ]),
+      ...reportExpenses.map((expense) => [
+        "Despesa",
+        getProjectName(expense.projectId),
+        expense.description || "",
+        expense.category || "",
+        formatDate(expense.date),
+        "",
+        expense.amount.toFixed(2),
+      ]),
+    ];
+
+    const csv = csvRows.map((row) => row.map(formatCsvCell).join(";")).join("\n");
+    downloadTextFile(`relatorio-financeiro-joia-labs-${fileDate}.csv`, csv, "text/csv;charset=utf-8");
+
+    const summaryCards = [
+      ["Recebido", formatCurrency(dashboardSummary.totalRevenue), `${dashboardSummary.paidCount} pagamento(s)`],
+      ["A receber", formatCurrency(dashboardSummary.pendingAmount), `${dashboardSummary.pendingCount} pendência(s)`],
+      ["Despesas", formatCurrency(dashboardSummary.totalExpenses), `${periodExpenses.length} lançamento(s)`],
+      ["Saldo", formatCurrency(dashboardSummary.balance), "Recebido - despesas"],
+      ["Margem", `${dashboardSummary.margin.toFixed(0)}%`, "Receita - despesas"],
+    ];
+
+    const buildRows = (rows: string[][]) =>
+      rows
+        .map(
+          (row) =>
+            `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`
+        )
+        .join("");
+
+    const reportWindow = window.open("", "_blank", "width=1100,height=800");
+    if (!reportWindow) return;
+
+    reportWindow.document.write(`
+      <!doctype html>
+      <html lang="pt-BR">
+        <head>
+          <meta charset="utf-8" />
+          <title>Relatório Financeiro - JoIA Labs</title>
+          <style>
+            * { box-sizing: border-box; }
+            body { font-family: Arial, sans-serif; color: #111; margin: 32px; }
+            header { display: flex; justify-content: space-between; gap: 24px; border-bottom: 3px solid #f4b000; padding-bottom: 18px; margin-bottom: 24px; }
+            h1 { margin: 0; font-size: 28px; }
+            h2 { margin: 28px 0 12px; font-size: 18px; }
+            p { margin: 4px 0; color: #555; }
+            .brand { display: flex; align-items: center; gap: 12px; }
+            .logo { width: 42px; height: 42px; border-radius: 10px; background: #f4b000; color: #111; display: grid; place-items: center; font-weight: 800; }
+            .cards { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+            .card { border: 1px solid #ddd; border-radius: 8px; padding: 12px; }
+            .card span { display: block; color: #666; font-size: 12px; }
+            .card strong { display: block; margin: 6px 0; font-size: 18px; }
+            table { width: 100%; border-collapse: collapse; font-size: 12px; }
+            th, td { border-bottom: 1px solid #e5e5e5; padding: 8px; text-align: left; vertical-align: top; }
+            th { background: #f6f6f6; color: #333; }
+            .right { text-align: right; }
+            .muted { color: #666; font-size: 12px; }
+            .print { margin: 24px 0; }
+            button { background: #111; color: #fff; border: 0; border-radius: 6px; padding: 10px 14px; cursor: pointer; }
+            @media print {
+              body { margin: 18mm; }
+              .print { display: none; }
+              .cards { grid-template-columns: repeat(3, 1fr); }
+            }
+          </style>
+        </head>
+        <body>
+          <header>
+            <div class="brand">
+              <div class="logo">J</div>
+              <div>
+                <h1>Relatório Financeiro</h1>
+                <p>JoIA Labs · ${escapeHtml(selectedRange.label)}</p>
+              </div>
+            </div>
+            <div class="right">
+              <p class="muted">Gerado em</p>
+              <strong>${escapeHtml(generatedAt)}</strong>
+            </div>
+          </header>
+
+          <section class="cards">
+            ${summaryCards
+              .map(
+                ([label, value, detail]) =>
+                  `<div class="card"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong><span>${escapeHtml(detail)}</span></div>`
+              )
+              .join("")}
+          </section>
+
+          <h2>Clientes no período</h2>
+          <table>
+            <thead><tr><th>Cliente</th><th>Recebido</th><th>A receber</th><th>Vencido</th><th>Lançamentos</th></tr></thead>
+            <tbody>
+              ${buildRows(
+                topClients.map((client) => [
+                  client.clientName,
+                  formatCurrency(client.received),
+                  formatCurrency(client.pending),
+                  formatCurrency(client.overdue),
+                  String(client.count),
+                ])
+              ) || '<tr><td colspan="5">Nenhum cliente com lançamentos.</td></tr>'}
+            </tbody>
+          </table>
+
+          <h2>Contratos e ciclos</h2>
+          <table>
+            <thead><tr><th>Ciclo</th><th>Cliente</th><th>Recebido</th><th>A receber</th><th>Progresso</th><th>Período</th></tr></thead>
+            <tbody>
+              ${buildRows(
+                topGroups.map((group) => [
+                  group.title,
+                  group.clientName,
+                  formatCurrency(group.received),
+                  formatCurrency(group.pending),
+                  `${group.progress}%`,
+                  `${formatDate(group.firstDueDate)} a ${formatDate(group.lastDueDate)}`,
+                ])
+              ) || '<tr><td colspan="6">Nenhum ciclo financeiro no período.</td></tr>'}
+            </tbody>
+          </table>
+
+          <h2>Contas a receber</h2>
+          <table>
+            <thead><tr><th>Cliente</th><th>Descrição</th><th>Vencimento</th><th>Pagamento</th><th>Status</th><th>Valor</th></tr></thead>
+            <tbody>
+              ${buildRows(
+                reportReceivables.map((record) => [
+                  getClientName(record.clientId),
+                  record.description || "-",
+                  formatDate(record.date),
+                  record.paidAt ? `${formatDate(record.paidAt)} ${record.paymentMethod || ""}`.trim() : "-",
+                  statusConfig[getReceivableStatus(record) || "Pendente"].label,
+                  formatCurrency(record.amount),
+                ])
+              ) || '<tr><td colspan="6">Nenhuma conta a receber para os filtros atuais.</td></tr>'}
+            </tbody>
+          </table>
+
+          <h2>Despesas</h2>
+          <table>
+            <thead><tr><th>Descrição</th><th>Categoria</th><th>Projeto</th><th>Data</th><th>Valor</th></tr></thead>
+            <tbody>
+              ${buildRows(
+                reportExpenses.map((expense) => [
+                  expense.description || "-",
+                  expense.category || "-",
+                  getProjectName(expense.projectId),
+                  formatDate(expense.date),
+                  formatCurrency(expense.amount),
+                ])
+              ) || '<tr><td colspan="5">Nenhuma despesa para os filtros atuais.</td></tr>'}
+            </tbody>
+          </table>
+
+          <div class="print">
+            <button onclick="window.print()">Imprimir ou salvar em PDF</button>
+            <p class="muted">O CSV com os lançamentos detalhados foi baixado automaticamente.</p>
+          </div>
+        </body>
+      </html>
+    `);
+    reportWindow.document.close();
+  };
+
   const isExpenseFormValid = Boolean(
     expenseForm.description && expenseForm.category && expenseForm.value && expenseForm.date
   );
@@ -778,9 +989,15 @@ export default function Financeiro() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-foreground">Financeiro JoIA</h1>
-        <p className="text-muted-foreground">Controle receitas, despesas e margem por projeto</p>
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-foreground">Financeiro JoIA</h1>
+          <p className="text-muted-foreground">Controle receitas, despesas e margem por projeto</p>
+        </div>
+        <Button type="button" variant="outline" onClick={handleGenerateReport}>
+          <Download className="mr-2 h-4 w-4" />
+          Gerar relatório
+        </Button>
       </div>
 
       <div className="flex flex-col gap-3 rounded-md border border-border bg-card p-4 md:flex-row md:items-end md:justify-between">
