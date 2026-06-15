@@ -8,6 +8,8 @@ import { ArrowLeft, Edit, Route, Plus } from "lucide-react";
 import { getProjectTypeLabel } from "@/lib/project-delivery";
 import { ProjectDialog } from "@/components/dialogs/ProjectDialog";
 import { TaskDialog } from "@/components/dialogs/TaskDialog";
+import type { Task } from "@/types";
+import type { DeliveryStep } from "@/lib/project-delivery";
 import {
   ProjectProgressCard,
   ProjectStatusCard,
@@ -34,6 +36,7 @@ export default function ProjetoDetalhes() {
 
   const [projectDialogOpen, setProjectDialogOpen] = useState(false);
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
 
   const project = useMemo(() => projects.find((p) => p.id === id), [projects, id]);
   const client = useMemo(
@@ -81,6 +84,46 @@ export default function ProjetoDetalhes() {
     );
   }
 
+
+
+  const buildTaskDraftFromStep = (step: DeliveryStep): Task => ({
+    id: "",
+    title: step.title,
+    description: `Etapa: ${step.title}\n\n${step.description}`,
+    projectId: project.id,
+    projectName: project.name,
+    clientId: project.clientId,
+    clientName: project.clientName,
+    type:
+      project.projectType === "automation" || project.projectType === "ai_implementation"
+        ? "tecnologia"
+        : "processo",
+    responsible: project.responsible || project.responsibleNameLegacy || "",
+    priority: step.approvalRequired ? "high" : "medium",
+    dueDate: "",
+    status: "backlog",
+    evidenceRequired: true,
+    what: step.title,
+    why: step.description,
+    where: project.clientName,
+    when: "",
+    who: project.responsible || project.responsibleNameLegacy || "",
+    how: [...step.checklist, ...step.deliverables.map((item) => `Entregável: ${item}`)].join("\n"),
+    howMuch: "",
+    createdAt: "",
+  });
+
+  const handleCreateTaskFromStep = (step: DeliveryStep) => {
+    setSelectedTask(buildTaskDraftFromStep(step));
+    setTaskDialogOpen(true);
+  };
+
+  const handleOpenTask = (task: Task) => {
+    setSelectedTask(task);
+    setTaskDialogOpen(true);
+  };
+
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -117,7 +160,14 @@ export default function ProjetoDetalhes() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setTaskDialogOpen(true)}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setSelectedTask(null);
+              setTaskDialogOpen(true);
+            }}
+          >
             <Plus className="h-4 w-4 mr-1" />
             Nova Tarefa
           </Button>
@@ -145,7 +195,12 @@ export default function ProjetoDetalhes() {
       </div>
 
       {/* Esteira de Entrega */}
-      <ProjectDeliveryWorkflow project={project} />
+      <ProjectDeliveryWorkflow
+        project={project}
+        tasks={projectTasks}
+        onCreateTask={handleCreateTaskFromStep}
+        onOpenTask={handleOpenTask}
+      />
 
       {/* Resumo de Tarefas */}
       <ProjectTasksSummary tasks={projectTasks} projectId={project.id} />
@@ -167,22 +222,27 @@ export default function ProjetoDetalhes() {
       />
       <TaskDialog
         open={taskDialogOpen}
-        onOpenChange={setTaskDialogOpen}
-        task={{
-          id: "",
-          title: "",
-          projectId: project.id,
-          projectName: project.name,
-          clientId: project.clientId,
-          clientName: project.clientName,
-          type: "processo",
-          responsible: "",
-          priority: "medium",
-          dueDate: "",
-          status: "backlog",
-          evidenceRequired: false,
-          createdAt: "",
+        onOpenChange={(open) => {
+          setTaskDialogOpen(open);
+          if (!open) setSelectedTask(null);
         }}
+        task={
+          selectedTask || {
+            id: "",
+            title: "",
+            projectId: project.id,
+            projectName: project.name,
+            clientId: project.clientId,
+            clientName: project.clientName,
+            type: "processo",
+            responsible: project.responsible || project.responsibleNameLegacy || "",
+            priority: "medium",
+            dueDate: "",
+            status: "backlog",
+            evidenceRequired: false,
+            createdAt: "",
+          }
+        }
       />
     </div>
   );
