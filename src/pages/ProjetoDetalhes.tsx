@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ArrowLeft, Edit, Route, Plus } from "lucide-react";
+import { getProjectTypeLabel } from "@/lib/project-delivery";
 import { ProjectDialog } from "@/components/dialogs/ProjectDialog";
 import { TaskDialog } from "@/components/dialogs/TaskDialog";
 import {
@@ -14,6 +15,7 @@ import {
   ProjectDiagnosticsList,
   ProjectMeetingsList,
   ProjectDeliverablesList,
+  ProjectDeliveryWorkflow,
 } from "@/components/projetos";
 
 const phaseColors: Record<string, string> = {
@@ -97,6 +99,7 @@ export default function ProjetoDetalhes() {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-semibold text-foreground">{project.name}</h1>
+              <Badge variant="secondary">{getProjectTypeLabel(project.projectType)}</Badge>
               <Badge className={phaseColors[project.phase] || "bg-muted"} variant="outline">
                 {project.phase}
               </Badge>
@@ -140,6 +143,9 @@ export default function ProjetoDetalhes() {
         <ProjectProgressCard project={project} />
         <ProjectStatusCard project={project} />
       </div>
+
+      {/* Esteira de Entrega */}
+      <ProjectDeliveryWorkflow project={project} />
 
       {/* Resumo de Tarefas */}
       <ProjectTasksSummary tasks={projectTasks} projectId={project.id} />

@@ -699,6 +699,7 @@ const normalizeProject = (project: LegacyProject): Project => {
     objective: project.objective || "",
     scope: project.scope || "",
     phase: project.phase || "Diagnóstico",
+    projectType: project.projectType || "consulting",
     progress,
     progressSource: project.progressSource || (progressOverrideEnabled ? "manual" : "calculated"),
     progressOverrideEnabled,
@@ -1095,6 +1096,7 @@ const mapSupabaseProjectToLegacy = (project: ProjectRow): Partial<Project> => ({
   objective: project.objective || "",
   scope: project.scope || "",
   phase: project.phase || "Diagnóstico",
+  projectType: (project.project_type as Project["projectType"]) || "consulting",
   progress: project.progress || 0,
   progressSource: "calculated",
   progressOverrideEnabled: false,
@@ -1186,6 +1188,7 @@ const buildSupabaseProjectInsert = (project: Partial<Project>, clientId: string)
     objective: project.objective || null,
     scope: project.scope || null,
     phase: project.phase || "Diagnóstico",
+    project_type: project.projectType || "consulting",
     progress: project.progress || 0,
     responsible: project.responsible || project.responsibleNameLegacy || null,
     start_date: toSupabaseDate(project.startDate),
@@ -1216,6 +1219,10 @@ const buildSupabaseProjectUpdate = (project: Partial<Project>): SupabaseProjectU
 
   if (typeof project.phase !== "undefined") {
     payload.phase = project.phase || null;
+  }
+
+  if (typeof project.projectType !== "undefined") {
+    payload.project_type = project.projectType || "consulting";
   }
 
   if (typeof project.progress !== "undefined") {

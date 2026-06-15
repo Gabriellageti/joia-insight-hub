@@ -1,3 +1,5 @@
+import type { ProjectType } from "@/lib/project-delivery";
+
 // Types for JoIA Ops
 
 export interface ClientContactInfo {
@@ -76,6 +78,7 @@ export interface Project {
   objective?: string;
   scope?: string;
   phase: string;
+  projectType?: ProjectType;
   progress: number;
   progressSource?: "calculated" | "manual";
   progressOverrideEnabled: boolean;
