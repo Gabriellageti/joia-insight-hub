@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { isPastDate } from "@/lib/dates";
+import { getProjectTypeLabel } from "@/lib/project-delivery";
 
 const statusColors = { green: "bg-green-500", yellow: "bg-yellow-500", red: "bg-red-500" };
 const phaseColors: Record<string, string> = { "Diagnóstico": "bg-blue-100 text-blue-700", "Quick wins": "bg-purple-100 text-purple-700", "Estruturação": "bg-orange-100 text-orange-700", "Acompanhamento": "bg-green-100 text-green-700", "Cultura e treinamento": "bg-teal-100 text-teal-700" };
@@ -34,7 +35,7 @@ export default function Projetos() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div><h1 className="text-2xl font-semibold text-foreground">Projetos</h1><p className="text-muted-foreground">Acompanhe todos os projetos de consultoria</p></div>
+        <div><h1 className="text-2xl font-semibold text-foreground">Projetos</h1><p className="text-muted-foreground">Acompanhe projetos de consultoria, desenvolvimento, IA e transformação digital</p></div>
         <Button className="bg-accent text-accent-foreground hover:bg-accent/90" onClick={() => { setEditingProject(null); setDialogOpen(true); }}><Plus className="h-4 w-4 mr-2" />Novo Projeto</Button>
       </div>
       <div className="flex items-center gap-4">
@@ -64,7 +65,10 @@ export default function Projetos() {
                     {project.statusSource === "manual" ? "Status manual" : "Status automático"}
                   </Badge>
                 </div>
-                <Badge className={phaseColors[project.phase] || "bg-muted"} variant="outline">{project.phase}</Badge>
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="secondary">{getProjectTypeLabel(project.projectType)}</Badge>
+                  <Badge className={phaseColors[project.phase] || "bg-muted"} variant="outline">{project.phase}</Badge>
+                </div>
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>

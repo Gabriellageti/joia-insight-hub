@@ -46,6 +46,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Check, ChevronsUpDown, Link2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getDeliveryStepsForProject, PROJECT_TYPE_OPTIONS, ProjectType } from "@/lib/project-delivery";
 
 const statusColors: Record<Project["status"], string> = {
   green: "bg-green-500",
@@ -71,6 +72,28 @@ const PHASES = [
   "Execução",
   "Acompanhamento",
   "Encerramento",
+  "Briefing",
+  "Escopo",
+  "Design / Protótipo",
+  "Desenvolvimento",
+  "Conteúdo e SEO básico",
+  "Testes e Homologação",
+  "Publicação",
+  "Descoberta e requisitos",
+  "Arquitetura",
+  "UX/UI",
+  "Desenvolvimento do MVP",
+  "Homologação e deploy",
+  "Pós-lançamento",
+  "Diagnóstico de oportunidade",
+  "Mapeamento de dados e processos",
+  "Protótipo",
+  "Integração",
+  "Treinamento e monitoramento",
+  "Processo atual",
+  "Processo futuro",
+  "Implementação",
+  "Testes e treinamento",
 ];
 
 const DURATION_OPTIONS: { value: ProjectDuration; label: string }[] = [
@@ -114,6 +137,7 @@ export function ProjectDialog({
     objective: "",
     scope: "",
     phase: "Diagnóstico",
+    projectType: "consulting" as ProjectType,
     progressOverrideEnabled: false,
     manualProgress: null as number | null,
     progressJustification: "",
@@ -163,6 +187,7 @@ export function ProjectDialog({
         objective: project.objective || "",
         scope: project.scope || "",
         phase: project.phase,
+        projectType: project.projectType || "consulting",
         progressOverrideEnabled: project.progressOverrideEnabled || false,
         manualProgress: project.manualProgress ?? null,
         progressJustification: project.progressJustification || "",
@@ -188,6 +213,7 @@ export function ProjectDialog({
         objective: project.objective || "",
         scope: project.scope || "",
         phase: project.phase || "Diagnóstico",
+        projectType: project.projectType || "consulting",
         progressOverrideEnabled: false,
         manualProgress: null,
         progressJustification: "",
@@ -212,6 +238,7 @@ export function ProjectDialog({
         objective: "",
         scope: "",
         phase: "Diagnóstico",
+        projectType: "consulting",
         progressOverrideEnabled: false,
         manualProgress: null,
         progressJustification: "",
@@ -349,6 +376,7 @@ export function ProjectDialog({
       objective: formData.objective.trim(),
       scope: formData.scope.trim(),
       phase: formData.phase,
+      projectType: formData.projectType,
       progressOverrideEnabled: formData.progressOverrideEnabled,
       manualProgress: formData.progressOverrideEnabled ? Number(formData.manualProgress) : null,
       progressJustification: formData.progressOverrideEnabled
@@ -442,6 +470,39 @@ export function ProjectDialog({
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="projectType">Tipo de Projeto</Label>
+                <Select
+                  value={formData.projectType}
+                  onValueChange={(value) => {
+                    const projectType = value as ProjectType;
+                    const firstStep = getDeliveryStepsForProject({
+                      projectType,
+                      phase: formData.phase,
+                    })[0]?.title;
+                    setFormData((prev) => ({
+                      ...prev,
+                      projectType,
+                      phase: firstStep || prev.phase,
+                    }));
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PROJECT_TYPE_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Define a esteira de entrega sugerida para sites, sistemas, IA, automações ou consultoria.
+                </p>
               </div>
 
               <div className="space-y-2">

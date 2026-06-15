@@ -1132,6 +1132,7 @@ export type Database = {
           name: string
           objective: string | null
           phase: string | null
+          project_type: string | null
           progress: number | null
           responsible: string | null
           scope: string | null
@@ -1148,6 +1149,7 @@ export type Database = {
           name: string
           objective?: string | null
           phase?: string | null
+          project_type?: string | null
           progress?: number | null
           responsible?: string | null
           scope?: string | null
@@ -1164,6 +1166,7 @@ export type Database = {
           name?: string
           objective?: string | null
           phase?: string | null
+          project_type?: string | null
           progress?: number | null
           responsible?: string | null
           scope?: string | null
