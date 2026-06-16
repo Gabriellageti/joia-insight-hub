@@ -1,5 +1,5 @@
-import { useState, useMemo } from "react";
-import { Plus, List, Kanban } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Plus, List, Kanban, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +9,7 @@ import { TaskDialog } from "@/components/dialogs/TaskDialog";
 import { TaskCard, TaskFilters } from "@/components/plano-acao";
 import { Task } from "@/types";
 import { toast } from "sonner";
+import { useSearchParams } from "react-router-dom";
 
 const columns = [
   { id: "backlog", title: "Backlog" },
@@ -19,7 +20,8 @@ const columns = [
 ];
 
 export default function PlanoAcao() {
-  const { tasks, updateTask, deleteTask, clients } = useData();
+  const { tasks, updateTask, deleteTask, clients, projects } = useData();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [view, setView] = useState<"kanban" | "list">("kanban");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -29,6 +31,9 @@ export default function PlanoAcao() {
   // Filters
   const [selectedClient, setSelectedClient] = useState("all");
   const [selectedResponsible, setSelectedResponsible] = useState("all");
+  const selectedProjectId = searchParams.get("projectId") || "all";
+  const selectedTaskId = searchParams.get("taskId") || "";
+  const selectedProject = projects.find((project) => project.id === selectedProjectId);
 
   // Get unique responsibles from tasks
   const uniqueResponsibles = useMemo(() => {
@@ -55,6 +60,9 @@ export default function PlanoAcao() {
   // Filter tasks
   const filteredTasks = useMemo(() => {
     return tasks.filter((task) => {
+      if (selectedProjectId !== "all" && task.projectId !== selectedProjectId) {
+        return false;
+      }
       if (selectedClient !== "all" && task.clientId !== selectedClient) {
         return false;
       }
@@ -63,11 +71,29 @@ export default function PlanoAcao() {
       }
       return true;
     });
-  }, [tasks, selectedClient, selectedResponsible]);
+  }, [tasks, selectedProjectId, selectedClient, selectedResponsible]);
+
+  useEffect(() => {
+    if (!selectedTaskId || editingTask?.id === selectedTaskId) return;
+
+    const task = tasks.find((item) => item.id === selectedTaskId);
+    if (task) {
+      setEditingTask(task);
+      setDialogOpen(true);
+    }
+  }, [tasks, selectedTaskId, editingTask?.id]);
 
   const handleClearFilters = () => {
     setSelectedClient("all");
     setSelectedResponsible("all");
+    setSearchParams({});
+  };
+
+  const handleClearProjectFilter = () => {
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("projectId");
+    nextParams.delete("taskId");
+    setSearchParams(nextParams);
   };
 
   const handleDrop = (columnId: string) => {
@@ -163,6 +189,21 @@ export default function PlanoAcao() {
         onClear={handleClearFilters}
       />
 
+      {selectedProject && (
+        <Card className="border-primary/20 bg-primary/5">
+          <CardContent className="flex flex-col gap-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-medium">Plano filtrado pelo projeto</p>
+              <p className="text-sm text-muted-foreground">{selectedProject.name}</p>
+            </div>
+            <Button variant="ghost" size="sm" onClick={handleClearProjectFilter}>
+              <X className="mr-1 h-4 w-4" />
+              Limpar projeto
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {view === "kanban" ? (
         <div className="flex gap-4 overflow-x-auto pb-4">
           {columns.map((column) => (
@@ -203,6 +244,10 @@ export default function PlanoAcao() {
                       onClick={() => {
                         setEditingTask(task);
                         setDialogOpen(true);
+                        const nextParams = new URLSearchParams(searchParams);
+                        nextParams.set("taskId", task.id);
+                        if (task.projectId) nextParams.set("projectId", task.projectId);
+                        setSearchParams(nextParams);
                       }}
                       onDelete={() => handleDeleteTask(task)}
                       onComplete={() => handleCompleteTask(task)}
@@ -231,7 +276,15 @@ export default function PlanoAcao() {
 
       <TaskDialog
         open={dialogOpen}
-        onOpenChange={setDialogOpen}
+        onOpenChange={(open) => {
+          setDialogOpen(open);
+          if (!open) {
+            setEditingTask(null);
+            const nextParams = new URLSearchParams(searchParams);
+            nextParams.delete("taskId");
+            setSearchParams(nextParams);
+          }
+        }}
         task={editingTask}
       />
     </div>
