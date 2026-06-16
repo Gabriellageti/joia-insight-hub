@@ -45,7 +45,15 @@ const taskMatchesStep = (task: Task, step: DeliveryStep) => {
   return taskTitle.includes(stepTitle) || taskDescription.includes(`etapa: ${stepTitle}`);
 };
 
-const getStepStatus = (index: number, activeIndex: number) => {
+const getStepStatus = (index: number, activeIndex: number, stepTasks: Task[]) => {
+  if (stepTasks.length > 0 && stepTasks.every((task) => task.status === "done")) {
+    return "completed";
+  }
+
+  if (stepTasks.some((task) => task.status !== "done")) {
+    return "active";
+  }
+
   if (index < activeIndex) return "completed";
   if (index === activeIndex) return "active";
   return "pending";
@@ -64,7 +72,13 @@ export function ProjectDeliveryWorkflow({
     steps.findIndex((step) => step.title.toLowerCase() === project.phase.toLowerCase())
   );
   const safeActiveIndex = activeIndex === -1 ? 0 : activeIndex;
-  const completedSteps = steps.filter((_, index) => index < safeActiveIndex).length;
+  const stepsWithTasks = steps.map((step) => ({
+    step,
+    tasks: tasks.filter((task) => taskMatchesStep(task, step)),
+  }));
+  const completedSteps = stepsWithTasks.filter(({ tasks: stepTasks }, index) =>
+    getStepStatus(index, safeActiveIndex, stepTasks) === "completed"
+  ).length;
   const workflowProgress = Math.round((completedSteps / steps.length) * 100);
 
   const handleOpenInActionPlan = (task?: Task) => {
@@ -104,12 +118,11 @@ export function ProjectDeliveryWorkflow({
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          {steps.map((step, index) => {
-            const status = getStepStatus(index, safeActiveIndex);
+          {stepsWithTasks.map(({ step, tasks: stepTasks }, index) => {
+            const status = getStepStatus(index, safeActiveIndex, stepTasks);
             const isCompleted = status === "completed";
             const isActive = status === "active";
             const Icon = isCompleted ? CheckCircle2 : isActive ? Clock : Circle;
-            const stepTasks = tasks.filter((task) => taskMatchesStep(task, step));
 
             return (
               <div
