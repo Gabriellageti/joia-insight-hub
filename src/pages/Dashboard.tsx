@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   AlertTriangle,
@@ -17,7 +17,11 @@ import { StatCard } from "@/components/dashboard/StatCard";
 import { ProjectProgress } from "@/components/dashboard/ProjectProgress";
 import { TaskQueue } from "@/components/dashboard/TaskQueue";
 import { useData } from "@/contexts/DataContext";
-import { useFinancial } from "@/hooks/useFinancial";
+import type { FinancialRecord, FinancialSummary } from "@/hooks/useFinancial";
+import {
+  getFinancialSummary,
+  listOverdueReceivables,
+} from "@/integrations/supabase/financial-records";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -28,9 +32,18 @@ const currency = new Intl.NumberFormat("pt-BR", {
   currency: "BRL",
 });
 
+const emptyFinancialSummary: FinancialSummary = {
+  totalRevenue: 0,
+  totalExpenses: 0,
+  pendingCount: 0,
+  overdueCount: 0,
+  pendingAmount: 0,
+  margin: 0,
+};
+
 export default function Dashboard() {
   const { clients, projects, tasks, diagnostics, meetings } = useData();
-  const { records } = useFinancial();
+  const { summary: financialSummary, overdueReceivables } = useFinancialDashboardSummary();
 
   const stats = useMemo(() => {
     const today = startOfDay(new Date());
@@ -51,20 +64,11 @@ export default function Dashboard() {
         projectsWithOverdueTasks.has(project.id)
     );
 
-    const receivables = records.filter((record) => record.type === "receita");
-    const paidReceivables = receivables.filter((record) => record.status === "Pago");
-    const pendingReceivables = receivables.filter((record) => record.status !== "Pago");
-    const expenses = records.filter((record) => record.type === "despesa");
-    const overdueReceivables = pendingReceivables.filter((record) => {
-      const dueDate = parseFlexibleDate(record.date);
-      return dueDate && dueDate < today;
-    });
-
-    const totalRevenue = paidReceivables.reduce((sum, record) => sum + record.amount, 0);
-    const totalExpenses = expenses.reduce((sum, record) => sum + record.amount, 0);
-    const pendingAmount = pendingReceivables.reduce((sum, record) => sum + record.amount, 0);
+    const totalRevenue = financialSummary.totalRevenue;
+    const totalExpenses = financialSummary.totalExpenses;
+    const pendingAmount = financialSummary.pendingAmount;
     const balance = totalRevenue - totalExpenses;
-    const margin = totalRevenue > 0 ? ((totalRevenue - totalExpenses) / totalRevenue) * 100 : 0;
+    const margin = financialSummary.margin;
 
     const openDiagnostics = diagnostics.filter((diagnostic) => diagnostic.status !== "completed");
     const upcomingMeetings = meetings
@@ -90,12 +94,12 @@ export default function Dashboard() {
       pendingAmount,
       balance,
       margin,
-      pendingReceivables,
+      pendingCount: financialSummary.pendingCount,
       overdueReceivables,
       openDiagnostics,
       upcomingMeetings,
     };
-  }, [clients, diagnostics, meetings, projects, records, tasks]);
+  }, [clients, diagnostics, financialSummary, meetings, overdueReceivables, projects, tasks]);
 
   const operationalScore = useMemo(() => {
     let score = 100;
@@ -109,7 +113,7 @@ export default function Dashboard() {
   const priorities = [
     ...stats.overdueReceivables.slice(0, 2).map((record) => ({
       title: record.description || "Receita vencida",
-      meta: `${record.clientName || "Cliente não informado"} · ${currency.format(record.amount)}`,
+      meta: `${getClientName(clients, record.clientId)} · ${currency.format(record.amount)}`,
       href: "/financeiro",
       tone: "destructive" as const,
     })),
@@ -147,7 +151,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         <StatCard title="Saldo" value={currency.format(stats.balance)} subtitle="Recebido - despesas" icon={Wallet} highlight />
         <StatCard title="Receita Recebida" value={currency.format(stats.totalRevenue)} subtitle="Pagamentos baixados" icon={TrendingUp} />
-        <StatCard title="A Receber" value={currency.format(stats.pendingAmount)} subtitle={`${stats.pendingReceivables.length} pendências`} icon={CircleDollarSign} />
+        <StatCard title="A Receber" value={currency.format(stats.pendingAmount)} subtitle={`${stats.pendingCount} pendências`} icon={CircleDollarSign} />
         <StatCard title="Despesas" value={currency.format(stats.totalExpenses)} subtitle="Lançamentos de saída" icon={TrendingDown} />
         <StatCard title="Projetos em Risco" value={stats.projectsAtRisk.length} subtitle="Semáforo ou tarefa atrasada" icon={AlertTriangle} />
         <StatCard title="Reuniões 7 dias" value={stats.upcomingMeetings.length} subtitle="Agendadas" icon={CalendarDays} />
@@ -227,6 +231,62 @@ export default function Dashboard() {
       </div>
     </div>
   );
+}
+
+function useFinancialDashboardSummary() {
+  const [summary, setSummary] = useState<FinancialSummary>(emptyFinancialSummary);
+  const [overdueReceivables, setOverdueReceivables] = useState<FinancialRecord[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadSummary = async () => {
+      try {
+        const [summaryData, overdueData] = await Promise.all([
+          getFinancialSummary(),
+          listOverdueReceivables(2),
+        ]);
+
+        if (cancelled) return;
+
+        setSummary(summaryData);
+        setOverdueReceivables(
+          overdueData.map((record) => ({
+            id: record.id,
+            clientId: record.client_id || undefined,
+            projectId: record.project_id || undefined,
+            type: record.type as FinancialRecord["type"],
+            category: record.category || undefined,
+            description: record.description || undefined,
+            amount: Number(record.amount || 0),
+            date: record.date || undefined,
+            status: (record.status as FinancialRecord["status"]) || "Pendente",
+            paidAt: record.paid_at || undefined,
+            paymentMethod: record.payment_method || undefined,
+            paymentNotes: record.payment_notes || undefined,
+            isInternal: record.is_internal || false,
+            createdAt: record.created_at || "",
+          }))
+        );
+      } catch (error) {
+        console.error("Error fetching dashboard financial summary:", error);
+      }
+    };
+
+    loadSummary();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return { summary, overdueReceivables };
+}
+
+function getClientName(clients: ReturnType<typeof useData>["clients"], clientId?: string) {
+  if (!clientId) return "Cliente não informado";
+  const client = clients.find((item) => item.id === clientId);
+  return client?.nomeFantasia || client?.razaoSocial || client?.name || "Cliente não informado";
 }
 
 function PulseRow({

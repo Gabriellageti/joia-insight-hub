@@ -3,8 +3,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
   createFinancialRecord,
   deleteFinancialRecord,
-  getFinancialSummary,
   listFinancialRecords,
+  summarizeFinancialRecords,
   updateFinancialRecord,
   type FinancialRecordInsert,
   type FinancialRecordRow,
@@ -85,12 +85,9 @@ export function useFinancial() {
 
     setLoading(true);
     try {
-      const [recordsData, summaryData] = await Promise.all([
-        listFinancialRecords(),
-        getFinancialSummary(),
-      ]);
+      const recordsData = await listFinancialRecords();
       setRecords(recordsData.map(mapRecordToLegacy));
-      setSummary(summaryData);
+      setSummary(summarizeFinancialRecords(recordsData));
     } catch (error) {
       console.error("Error fetching financial data:", error);
       toast({
