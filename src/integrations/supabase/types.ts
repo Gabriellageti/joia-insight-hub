@@ -630,11 +630,16 @@ export type Database = {
           amount: number
           category: string | null
           client_id: string | null
+          contract_id: string | null
           created_at: string
           date: string | null
           description: string | null
           id: string
+          installment_id: string | null
           is_internal: boolean | null
+          paid_at: string | null
+          payment_method: string | null
+          payment_notes: string | null
           project_id: string | null
           status: string | null
           type: string
@@ -644,11 +649,16 @@ export type Database = {
           amount: number
           category?: string | null
           client_id?: string | null
+          contract_id?: string | null
           created_at?: string
           date?: string | null
           description?: string | null
           id?: string
+          installment_id?: string | null
           is_internal?: boolean | null
+          paid_at?: string | null
+          payment_method?: string | null
+          payment_notes?: string | null
           project_id?: string | null
           status?: string | null
           type: string
@@ -658,11 +668,16 @@ export type Database = {
           amount?: number
           category?: string | null
           client_id?: string | null
+          contract_id?: string | null
           created_at?: string
           date?: string | null
           description?: string | null
           id?: string
+          installment_id?: string | null
           is_internal?: boolean | null
+          paid_at?: string | null
+          payment_method?: string | null
+          payment_notes?: string | null
           project_id?: string | null
           status?: string | null
           type?: string
@@ -1132,8 +1147,8 @@ export type Database = {
           name: string
           objective: string | null
           phase: string | null
-          project_type: string | null
           progress: number | null
+          project_type: string | null
           responsible: string | null
           scope: string | null
           start_date: string | null
@@ -1149,8 +1164,8 @@ export type Database = {
           name: string
           objective?: string | null
           phase?: string | null
-          project_type?: string | null
           progress?: number | null
+          project_type?: string | null
           responsible?: string | null
           scope?: string | null
           start_date?: string | null
@@ -1166,8 +1181,8 @@ export type Database = {
           name?: string
           objective?: string | null
           phase?: string | null
-          project_type?: string | null
           progress?: number | null
+          project_type?: string | null
           responsible?: string | null
           scope?: string | null
           start_date?: string | null
