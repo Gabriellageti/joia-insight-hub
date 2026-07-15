@@ -9,20 +9,12 @@ export interface TaskValidationErrors {
   dueDate?: string;
 }
 
-export interface TaskValidationOptions {
-  requireAssignee?: boolean;
-}
-
-export function validateTask(
-  task: Partial<Task>,
-  projects: Project[],
-  { requireAssignee = true }: TaskValidationOptions = {},
-): TaskValidationErrors {
+export function validateTask(task: Partial<Task>, projects: Project[]): TaskValidationErrors {
   const errors: TaskValidationErrors = {};
 
   if (!task.title?.trim()) errors.title = "Informe o título da tarefa.";
   if (!task.taskType || !["personal", "project"].includes(task.taskType)) errors.taskType = "Selecione o tipo da tarefa.";
-  if (requireAssignee && !task.assignedTo) errors.assignedTo = "Selecione um usuário responsável.";
+  if (!task.assignedTo) errors.assignedTo = "Selecione um usuário responsável.";
 
   if (task.taskType === "project") {
     if (!task.projectId) errors.projectId = "Selecione um projeto.";
