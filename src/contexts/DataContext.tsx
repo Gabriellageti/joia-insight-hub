@@ -2752,7 +2752,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
             : {};
         const nextTask = { ...task, ...completionPatch };
         optimisticTask = { ...current, ...nextTask };
-        const validationErrors = validateTask(optimisticTask, projects);
+        const statusOnlyFields = new Set(["status", "previousStatus", "completedAt", "completedBy"]);
+        const statusOnlyUpdate = Object.keys(nextTask).every((field) => statusOnlyFields.has(field));
+        const validationErrors = validateTask(optimisticTask, projects, { requireAssignee: !statusOnlyUpdate });
         if (hasTaskValidationErrors(validationErrors)) throw new Error(Object.values(validationErrors)[0]);
 
         tasksRef.current = tasksRef.current.map((item) => item.id === id ? optimisticTask : item);

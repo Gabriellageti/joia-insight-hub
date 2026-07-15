@@ -17,6 +17,11 @@ const directProjectInsertPolicyUrl = new URL(
   import.meta.url,
 );
 const directProjectInsertPolicySql = await Bun.file(directProjectInsertPolicyUrl).text();
+const unassignedProjectTaskPolicyUrl = new URL(
+  "../../../supabase/migrations/20260715161233_allow_managers_to_update_unassigned_project_tasks.sql",
+  import.meta.url,
+);
+const unassignedProjectTaskPolicySql = await Bun.file(unassignedProjectTaskPolicyUrl).text();
 
 describe("task workspace migration security", () => {
   test("uses explicit project membership instead of authenticated-wide project access", () => {
@@ -64,5 +69,16 @@ describe("task workspace migration security", () => {
     expect(directProjectInsertPolicySql).not.toContain("private.user_has_role");
     expect(directProjectInsertPolicySql).not.toContain("WITH CHECK (true)");
     expect(directProjectInsertPolicySql).not.toContain("TO anon");
+  });
+
+  test("allows only admins and project managers to update unassigned project tasks", () => {
+    expect(unassignedProjectTaskPolicySql).toContain("assigned_to IS NULL");
+    expect(unassignedProjectTaskPolicySql).toContain("private.user_has_role((SELECT auth.uid()), 'admin_joia')");
+    expect(unassignedProjectTaskPolicySql).toContain(
+      "private.user_project_access_level((SELECT auth.uid()), project_id) >= 3",
+    );
+    expect(unassignedProjectTaskPolicySql).toContain("public.tasks.client_id IS NOT DISTINCT FROM project.client_id");
+    expect(unassignedProjectTaskPolicySql).not.toContain("WITH CHECK (true)");
+    expect(unassignedProjectTaskPolicySql).not.toContain("TO anon");
   });
 });
