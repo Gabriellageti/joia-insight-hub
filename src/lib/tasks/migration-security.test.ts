@@ -2,6 +2,11 @@ import { describe, expect, test } from "bun:test";
 
 const migrationUrl = new URL("../../../supabase/migrations/20260714181740_enhance_task_workspace.sql", import.meta.url);
 const sql = await Bun.file(migrationUrl).text();
+const permissionBackfillUrl = new URL(
+  "../../../supabase/migrations/20260715002015_backfill_task_project_permissions.sql",
+  import.meta.url,
+);
+const permissionBackfillSql = await Bun.file(permissionBackfillUrl).text();
 
 describe("task workspace migration security", () => {
   test("uses explicit project membership instead of authenticated-wide project access", () => {
@@ -20,5 +25,13 @@ describe("task workspace migration security", () => {
     expect(sql).toContain("NEW.completed_at := now()");
     expect(sql).toContain('CREATE POLICY "Users can delete their own permitted comments"');
     expect(sql).toContain("SET search_path = ''");
+  });
+
+  test("backfills legacy employee roles without making employees an authorization source", () => {
+    expect(permissionBackfillSql).toContain("INSERT INTO public.user_roles");
+    expect(permissionBackfillSql).toContain("WHEN 'admin joia' THEN 'admin_joia'::public.app_role");
+    expect(permissionBackfillSql).toContain("INSERT INTO public.project_members");
+    expect(permissionBackfillSql).not.toContain("cliente_proprietario");
+    expect(permissionBackfillSql).not.toContain("CREATE TRIGGER");
   });
 });
