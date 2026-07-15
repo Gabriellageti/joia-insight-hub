@@ -19,7 +19,8 @@ const statusLabels: Record<Task["status"], string> = {
   backlog: "Backlog",
   next: "Próximas",
   in_progress: "Em andamento",
-  validation: "Validação",
+  waiting: "Aguardando",
+  review: "Em revisão",
   done: "Concluída",
 };
 
@@ -27,7 +28,8 @@ const statusClasses: Record<Task["status"], string> = {
   backlog: "bg-muted text-muted-foreground",
   next: "bg-blue-100 text-blue-700",
   in_progress: "bg-amber-100 text-amber-700",
-  validation: "bg-purple-100 text-purple-700",
+  waiting: "bg-orange-100 text-orange-700",
+  review: "bg-purple-100 text-purple-700",
   done: "bg-green-100 text-green-700",
 };
 

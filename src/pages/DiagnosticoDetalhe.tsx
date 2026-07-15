@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   Card,
@@ -30,10 +30,12 @@ import { buildActionPlan, generateRecommendations } from "@/lib/recommendations"
 import { DiagnosticReportPayload, ImpactProjection, Task } from "@/types";
 import { NextStepsSuggestionModal, SuggestedNextStep } from "@/components/plano-acao";
 import { generateNextStepsSuggestions, isKickoffTemplate } from "@/lib/next-steps";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function DiagnosticoDetalhe() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { diagnostics, templates, updateDiagnostic, createActionPlan, applyDiagnostic, addTask } = useData();
   const [isExecuting, setIsExecuting] = useState(false);
   const [showNextStepsModal, setShowNextStepsModal] = useState(false);
@@ -128,11 +130,11 @@ export default function DiagnosticoDetalhe() {
         score: scoreSummary.score,
       });
 
-      let createdTasks: ReturnType<typeof createActionPlan> = [];
+      let createdTasks: Task[] = [];
       let kanbanError: string | null = null;
 
       try {
-        createdTasks = createActionPlan({ diagnostic, actionPlan });
+        createdTasks = await createActionPlan({ diagnostic, actionPlan });
       } catch (error) {
         kanbanError = error instanceof Error ? error.message : "Erro ao criar cards no Kanban.";
         console.error("[diagnostic:kanban:error]", {
@@ -197,8 +199,7 @@ export default function DiagnosticoDetalhe() {
     }
   };
 
-  const handleConfirmNextSteps = useCallback(
-    async (selectedIds: string[]) => {
+  const handleConfirmNextSteps = async (selectedIds: string[]) => {
       if (!diagnostic) return;
 
       const selectedSuggestions = nextStepsSuggestions.filter((s) =>
@@ -241,14 +242,18 @@ export default function DiagnosticoDetalhe() {
               clientId: diagnostic.clientId,
               clientName: diagnostic.clientName,
               type: "processo",
-              responsible: diagnostic.responsibleName || "Equipe JoIA",
+              responsible: (user?.user_metadata as Record<string, string> | undefined)?.full_name || user?.email || "Equipe JoIA",
               priority: suggestion.priority === "alta" ? "high" : suggestion.priority === "media" ? "medium" : "low",
+              taskType: "project",
+              assignedTo: user?.id || "",
+              createdBy: user?.id || "",
               dueDate: "",
               status: "backlog",
               evidenceRequired: false,
               sourceDiagnosticId: diagnostic.id,
+              sourceActionId: suggestion.id,
             };
-            addTask(newTask as Task);
+            await addTask(newTask);
             createdCount++;
           }
         } catch (error) {
@@ -259,9 +264,7 @@ export default function DiagnosticoDetalhe() {
       if (createdCount > 0) {
         toast.success(`${createdCount} ${createdCount === 1 ? "item criado" : "itens criados"} com sucesso!`);
       }
-    },
-    [diagnostic, nextStepsSuggestions, templates, applyDiagnostic, addTask]
-  );
+  };
 
   const handleExitExecution = () => {
     setIsExecuting(false);

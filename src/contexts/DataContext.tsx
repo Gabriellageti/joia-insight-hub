@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, ReactNode, useState, useCallback } from "react";
+import React, { createContext, useContext, useEffect, ReactNode, useState, useCallback, useRef } from "react";
 import { User } from "@supabase/supabase-js";
 import {
   Client,
@@ -150,6 +150,8 @@ import {
   type AuditLogRow,
 } from "@/integrations/supabase/audit-logs";
 import type { Database } from "@/integrations/supabase/types";
+import { hasTaskValidationErrors, validateTask } from "@/lib/tasks/validation";
+import { assertExpectedTaskStatus } from "@/lib/tasks/completion";
 
 interface DataContextType {
   // Clients
@@ -162,6 +164,8 @@ interface DataContextType {
 
   // Projects
   projects: Project[];
+  projectsLoading: boolean;
+  projectsError: string | null;
   addProject: (
     project: Omit<Project, "id" | "createdAt" | "progress" | "status" | "statusReason" | "statusSource">,
     options?: {
@@ -174,9 +178,12 @@ interface DataContextType {
 
   // Tasks
   tasks: Task[];
-  addTask: (task: Omit<Task, "id" | "createdAt">) => void;
-  updateTask: (id: string, task: Partial<Task>) => void;
-  deleteTask: (id: string) => void;
+  tasksLoading: boolean;
+  tasksError: string | null;
+  savingTaskIds: string[];
+  addTask: (task: Omit<Task, "id" | "createdAt">) => Promise<void>;
+  updateTask: (id: string, task: Partial<Task>, options?: { expectedStatus?: Task["status"] }) => Promise<Task>;
+  deleteTask: (id: string) => Promise<void>;
 
   // Deliverables
   deliverables: ProjectDeliverable[];
@@ -238,7 +245,7 @@ interface DataContextType {
     diagnostic: Diagnostic,
     target: { projectId: string; projectName: string; clientId: string; clientName: string }
   ) => Promise<Diagnostic>;
-  createActionPlan: (input: { diagnostic: Diagnostic; actionPlan: ActionPlan }) => Task[];
+  createActionPlan: (input: { diagnostic: Diagnostic; actionPlan: ActionPlan }) => Promise<Task[]>;
 
   // Content
   contentItems: ContentItem[];
@@ -1123,6 +1130,7 @@ const toSupabaseUuid = (value?: string | null): string | null =>
   value && uuidRegex.test(value) ? value : null;
 
 const toSupabaseDate = (value?: string | null): string | null => {
+  if (value && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
   const parsed = parseDatePtBR(value || undefined);
   return parsed ? format(parsed, "yyyy-MM-dd") : null;
 };
@@ -1244,6 +1252,24 @@ const buildSupabaseProjectUpdate = (project: Partial<Project>): SupabaseProjectU
   return payload;
 };
 
+const normalizeTaskStatus = (value?: string | null): Task["status"] => {
+  const status = (value || "").trim().toLowerCase().replace(/_/g, " ");
+  if (["next", "próximas", "proximas"].includes(status)) return "next";
+  if (["in progress", "em andamento"].includes(status)) return "in_progress";
+  if (["waiting", "aguardando"].includes(status)) return "waiting";
+  if (["review", "em revisão", "em revisao", "validation", "em validação", "em validacao"].includes(status)) return "review";
+  if (["done", "concluída", "concluida", "concluído", "concluido"].includes(status)) return "done";
+  return "backlog";
+};
+
+const normalizeTaskPriority = (value?: string | null): Task["priority"] => {
+  const priority = (value || "").trim().toLowerCase();
+  if (["urgent", "urgente"].includes(priority)) return "urgent";
+  if (["high", "alta"].includes(priority)) return "high";
+  if (["low", "baixa"].includes(priority)) return "low";
+  return "medium";
+};
+
 // Funções de mapeamento para tarefas
 const mapSupabaseTaskToLegacy = (task: TaskRow, projectName: string, clientName: string): Task => ({
   id: task.id,
@@ -1255,10 +1281,13 @@ const mapSupabaseTaskToLegacy = (task: TaskRow, projectName: string, clientName:
   clientName,
   type: (task.type as Task["type"]) || "processo",
   responsible: task.responsible || "",
-  priority: (task.priority?.toLowerCase() as Task["priority"]) || "medium",
+  priority: normalizeTaskPriority(task.priority),
+  taskType: task.task_type === "personal" ? "personal" : "project",
+  assignedTo: task.assigned_to || "",
+  startDate: task.start_date || "",
   dueDate: task.due_date || "",
   impact: "",
-  status: (task.status?.toLowerCase().replace(/ /g, "_") as Task["status"]) || "backlog",
+  status: normalizeTaskStatus(task.status),
   checklist: [],
   evidenceRequired: task.evidence_required || false,
   evidenceFile: task.evidence_url || undefined,
@@ -1270,6 +1299,15 @@ const mapSupabaseTaskToLegacy = (task: TaskRow, projectName: string, clientName:
   how: task.how || "",
   howMuch: task.how_much ? String(task.how_much) : "",
   createdAt: formatDateFromIso(task.created_at),
+  updatedAt: task.updated_at,
+  sourceDiagnosticId: task.source_diagnostic_id || undefined,
+  sourceActionId: task.source_action_id || undefined,
+  createdBy: task.created_by || "",
+  completedAt: task.completed_at || undefined,
+  completedBy: task.completed_by || undefined,
+  previousStatus: task.previous_status
+    ? normalizeTaskStatus(task.previous_status)
+    : undefined,
 });
 
 type SupabaseTaskInsert = Database["public"]["Tables"]["tasks"]["Insert"];
@@ -1282,9 +1320,12 @@ const buildSupabaseTaskInsert = (task: Omit<Task, "id" | "createdAt">): Supabase
   client_id: task.clientId || null,
   type: task.type || "processo",
   responsible: task.responsible || null,
-  priority: task.priority ? task.priority.charAt(0).toUpperCase() + task.priority.slice(1) : "Média",
+  priority: task.priority || "medium",
+  task_type: task.taskType || "project",
+  assigned_to: task.assignedTo || null,
+  start_date: toSupabaseDate(task.startDate),
   due_date: toSupabaseDate(task.dueDate),
-  status: task.status ? task.status.charAt(0).toUpperCase() + task.status.slice(1).replace(/_/g, " ") : "A fazer",
+  status: task.status || "backlog",
   evidence_required: task.evidenceRequired || false,
   evidence_url: task.evidenceFile || null,
   what: task.what || null,
@@ -1294,6 +1335,12 @@ const buildSupabaseTaskInsert = (task: Omit<Task, "id" | "createdAt">): Supabase
   who: task.who || null,
   how: task.how || null,
   how_much: task.howMuch ? parseFloat(task.howMuch.replace(/[^\d.-]/g, "")) || null : null,
+  created_by: task.createdBy || undefined,
+  completed_at: task.completedAt || null,
+  completed_by: task.completedBy || null,
+  previous_status: task.previousStatus || null,
+  source_diagnostic_id: task.sourceDiagnosticId || null,
+  source_action_id: task.sourceActionId || null,
 });
 
 const buildSupabaseTaskUpdate = (task: Partial<Task>): SupabaseTaskUpdate => {
@@ -1301,13 +1348,15 @@ const buildSupabaseTaskUpdate = (task: Partial<Task>): SupabaseTaskUpdate => {
 
   if (typeof task.title !== "undefined") payload.title = task.title;
   if (typeof task.description !== "undefined") payload.description = task.description || null;
+  if (typeof task.projectId !== "undefined") payload.project_id = task.projectId || null;
+  if (typeof task.clientId !== "undefined") payload.client_id = task.clientId || null;
   if (typeof task.responsible !== "undefined") payload.responsible = task.responsible || null;
   if (typeof task.priority !== "undefined") {
-    payload.priority = task.priority ? task.priority.charAt(0).toUpperCase() + task.priority.slice(1) : null;
+    payload.priority = task.priority || null;
   }
   if (typeof task.dueDate !== "undefined") payload.due_date = toSupabaseDate(task.dueDate);
   if (typeof task.status !== "undefined") {
-    payload.status = task.status ? task.status.charAt(0).toUpperCase() + task.status.slice(1).replace(/_/g, " ") : null;
+    payload.status = task.status || null;
   }
   if (typeof task.evidenceRequired !== "undefined") payload.evidence_required = task.evidenceRequired;
   if (typeof task.evidenceFile !== "undefined") payload.evidence_url = task.evidenceFile || null;
@@ -1320,6 +1369,14 @@ const buildSupabaseTaskUpdate = (task: Partial<Task>): SupabaseTaskUpdate => {
   if (typeof task.howMuch !== "undefined") {
     payload.how_much = task.howMuch ? parseFloat(task.howMuch.replace(/[^\d.-]/g, "")) || null : null;
   }
+  if (typeof task.taskType !== "undefined") payload.task_type = task.taskType || "project";
+  if (typeof task.assignedTo !== "undefined") payload.assigned_to = task.assignedTo || null;
+  if (typeof task.startDate !== "undefined") payload.start_date = toSupabaseDate(task.startDate);
+  if (typeof task.completedAt !== "undefined") payload.completed_at = task.completedAt || null;
+  if (typeof task.completedBy !== "undefined") payload.completed_by = task.completedBy || null;
+  if (typeof task.previousStatus !== "undefined") payload.previous_status = task.previousStatus || null;
+  if (typeof task.sourceDiagnosticId !== "undefined") payload.source_diagnostic_id = task.sourceDiagnosticId || null;
+  if (typeof task.sourceActionId !== "undefined") payload.source_action_id = task.sourceActionId || null;
 
   return payload;
 };
@@ -1654,8 +1711,18 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [clientsError, setClientsError] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(true);
+  const [projectsError, setProjectsError] = useState<string | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const tasksRef = useRef<Task[]>([]);
   const [tasksLoading, setTasksLoading] = useState(true);
+  const [tasksError, setTasksError] = useState<string | null>(null);
+  const [savingTaskIds, setSavingTaskIds] = useState<string[]>([]);
+  const savingTaskIdsRef = useRef(new Set<string>());
+  const tasksLoadVersionRef = useRef(0);
+
+  useEffect(() => {
+    tasksRef.current = tasks;
+  }, [tasks]);
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [deliverables, setDeliverables] = useState<ProjectDeliverable[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
@@ -1704,6 +1771,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const fetchProjectsData = async () => {
       setProjectsLoading(true);
+      setProjectsError(null);
 
       try {
         const projectsData = await listProjects();
@@ -1715,6 +1783,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         setProjects(normalized);
       } catch (error) {
         const message = (error as Error).message || "Não foi possível carregar os projetos";
+        setProjectsError(message);
         toast({
           title: "Erro ao carregar projetos",
           description: message,
@@ -1735,7 +1804,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
   // Fetch tarefas do banco de dados
   useEffect(() => {
     const fetchTasksData = async () => {
+      const requestVersion = ++tasksLoadVersionRef.current;
       setTasksLoading(true);
+      setTasksError(null);
 
       try {
         const tasksData = await listTasks();
@@ -1746,17 +1817,21 @@ export function DataProvider({ children }: { children: ReactNode }) {
           const clientName = client?.nomeFantasia || client?.razaoSocial || client?.name || "";
           return mapSupabaseTaskToLegacy(task, projectName, clientName);
         });
-        setTasks(normalized);
+        if (requestVersion === tasksLoadVersionRef.current) {
+          tasksRef.current = normalized;
+          setTasks(normalized);
+        }
       } catch (error) {
         const message = (error as Error).message || "Não foi possível carregar as tarefas";
+        setTasksError(message);
         toast({
           title: "Erro ao carregar tarefas",
           description: message,
           variant: "destructive",
         });
-        setTasks([]);
+        if (requestVersion === tasksLoadVersionRef.current) setTasks([]);
       } finally {
-        setTasksLoading(false);
+        if (requestVersion === tasksLoadVersionRef.current) setTasksLoading(false);
       }
     };
 
@@ -2154,7 +2229,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   );
 
   const createActionPlan = useCallback(
-    ({ diagnostic, actionPlan }: { diagnostic: Diagnostic; actionPlan: ActionPlan }) => {
+    async ({ diagnostic, actionPlan }: { diagnostic: Diagnostic; actionPlan: ActionPlan }) => {
       const existingActionIds = new Set(
         tasks
           .filter(
@@ -2169,7 +2244,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
         .map((action) => {
           const priority = mapActionPriorityToTask(action.priority);
           return {
-            id: generateId(),
             title: action.title,
             description: action.description,
             projectId: diagnostic.projectId,
@@ -2177,14 +2251,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
             clientId: diagnostic.clientId,
             clientName: diagnostic.clientName,
             type: "processo",
-            responsible: action.responsible || diagnostic.responsibleName || currentUserName,
+            responsible: currentUserName,
             priority,
             dueDate: action.dueDate,
             impact: `Impacto ${action.impact}`,
             status: initialStatusFromPriority(priority),
+            taskType: "project" as const,
+            assignedTo: user?.id || "",
+            createdBy: user?.id,
             checklist: [],
             evidenceRequired: false,
-            createdAt: getDate(),
             sourceDiagnosticId: diagnostic.id,
             sourceActionId: action.id,
             what: action.what || action.title,
@@ -2197,16 +2273,22 @@ export function DataProvider({ children }: { children: ReactNode }) {
               action.howMuch ||
               action.positiveImpact?.estimatedCostOrTime ||
               action.negativeImpact?.estimatedCostOrTime,
-          } as Task;
+          } as Omit<Task, "id" | "createdAt">;
         });
 
-      if (newTasks.length) {
-        setTasks((prev) => [...prev, ...newTasks]);
-      }
+      if (newTasks.length === 0) return [];
 
-      return newTasks;
+      const createdRows = await createTasksBatch(newTasks.map(buildSupabaseTaskInsert));
+      const normalizedTasks = createdRows.map((row) =>
+        mapSupabaseTaskToLegacy(row, diagnostic.projectName, diagnostic.clientName)
+      );
+      tasksLoadVersionRef.current += 1;
+      setTasksLoading(false);
+      tasksRef.current = [...tasksRef.current, ...normalizedTasks];
+      setTasks((prev) => [...prev, ...normalizedTasks]);
+      return normalizedTasks;
     },
-    [currentUserName, tasks]
+    [currentUserName, tasks, user?.id]
   );
 
   const projectTasks = useCallback(
@@ -2444,6 +2526,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
     },
 
     projects,
+    projectsLoading,
+    projectsError,
     addProject: async (project, options) => {
       try {
         const payload = buildSupabaseProjectInsert(project, project.clientId);
@@ -2481,17 +2565,23 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
           if (seededTasks.length) {
             // Salva tarefas no banco com 5W2H preenchido
-            const taskPayloads = seededTasks.map((task) => buildSupabaseTaskInsert(task));
+            const taskPayloads = seededTasks.map((task) => buildSupabaseTaskInsert({ ...task, responsible: currentUserName, taskType: "project", assignedTo: user?.id || "", createdBy: user?.id || "" }));
             try {
               const createdTasks = await createTasksBatch(taskPayloads);
               const normalizedTasks = createdTasks.map((task) => 
                 mapSupabaseTaskToLegacy(task, newProject.name, newProject.clientName)
               );
+              tasksLoadVersionRef.current += 1;
+              setTasksLoading(false);
+              tasksRef.current = [...tasksRef.current, ...normalizedTasks];
               setTasks((prev) => [...prev, ...normalizedTasks]);
             } catch (error) {
               console.error("Erro ao criar tarefas:", error);
-              // Fallback: adiciona localmente
-              setTasks((prev) => [...prev, ...seededTasks]);
+              toast({
+                title: "Projeto criado sem tarefas iniciais",
+                description: "As tarefas automáticas não foram persistidas. Tente criá-las novamente.",
+                variant: "destructive",
+              });
             }
           }
         }
@@ -2565,17 +2655,36 @@ export function DataProvider({ children }: { children: ReactNode }) {
     },
 
     tasks,
+    tasksLoading,
+    tasksError,
+    savingTaskIds,
     addTask: async (task) => {
       try {
-        const payload = buildSupabaseTaskInsert(task);
+        const project = task.taskType === "project" ? projects.find((item) => item.id === task.projectId) : undefined;
+        const client = project ? clients.find((item) => item.id === project.clientId) : undefined;
+        const preparedTask = {
+          ...task,
+          assignedTo: task.assignedTo || user?.id,
+          createdBy: task.createdBy || user?.id,
+          projectId: project?.id || "",
+          projectName: project?.name || "",
+          clientId: client?.id || "",
+          clientName: client?.nomeFantasia || client?.razaoSocial || client?.name || "",
+        };
+        const validationErrors = validateTask(preparedTask, projects);
+        if (hasTaskValidationErrors(validationErrors)) {
+          throw new Error(Object.values(validationErrors)[0]);
+        }
+        const payload = buildSupabaseTaskInsert(preparedTask);
         const created = await createSupabaseTask(payload);
-        const project = projects.find((p) => p.id === task.projectId);
-        const client = clients.find((c) => c.id === task.clientId);
         const normalized = mapSupabaseTaskToLegacy(
           created,
-          project?.name || task.projectName,
-          client?.nomeFantasia || client?.razaoSocial || task.clientName
+          preparedTask.projectName,
+          preparedTask.clientName
         );
+        tasksLoadVersionRef.current += 1;
+        setTasksLoading(false);
+        tasksRef.current = [...tasksRef.current, normalized];
         setTasks((prev) => [...prev, normalized]);
       } catch (error) {
         const message = (error as Error).message || "Erro ao criar tarefa";
@@ -2584,25 +2693,62 @@ export function DataProvider({ children }: { children: ReactNode }) {
           description: message,
           variant: "destructive",
         });
+        throw error;
       }
     },
-    updateTask: async (id, task) => {
+    updateTask: async (id, task, options) => {
+      if (savingTaskIdsRef.current.has(id)) {
+        throw new Error("Esta tarefa já está sendo salva.");
+      }
+      const current = tasksRef.current.find((item) => item.id === id);
+      if (!current) throw new Error("Tarefa não encontrada.");
+      assertExpectedTaskStatus(current, options?.expectedStatus);
+
+      savingTaskIdsRef.current.add(id);
+      tasksLoadVersionRef.current += 1;
+      setTasksLoading(false);
+      setSavingTaskIds(Array.from(savingTaskIdsRef.current));
+      let optimisticTask = current;
       try {
-        const payload = buildSupabaseTaskUpdate(task);
-        await updateSupabaseTask(id, payload);
-        setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...task } : t)));
+        const completionPatch: Partial<Task> = task.status === "done" && current?.status !== "done"
+          ? { previousStatus: current?.status || "backlog", completedAt: new Date().toISOString(), completedBy: user?.id }
+          : current?.status === "done" && task.status && task.status !== "done"
+            ? { completedAt: "", completedBy: "" }
+            : {};
+        const nextTask = { ...task, ...completionPatch };
+        optimisticTask = { ...current, ...nextTask };
+        const validationErrors = validateTask(optimisticTask, projects);
+        if (hasTaskValidationErrors(validationErrors)) throw new Error(Object.values(validationErrors)[0]);
+
+        tasksRef.current = tasksRef.current.map((item) => item.id === id ? optimisticTask : item);
+        setTasks((previous) => previous.map((item) => item.id === id ? optimisticTask : item));
+        const payload = buildSupabaseTaskUpdate(nextTask);
+        const stored = await updateSupabaseTask(id, payload, current.updatedAt);
+        const persistedTask = mapSupabaseTaskToLegacy(stored, optimisticTask.projectName, optimisticTask.clientName);
+        tasksRef.current = tasksRef.current.map((item) => item.id === id ? persistedTask : item);
+        setTasks((previous) => previous.map((item) => item.id === id ? persistedTask : item));
+        return persistedTask;
       } catch (error) {
+        tasksRef.current = tasksRef.current.map((item) => item.id === id ? current : item);
+        setTasks((previous) => previous.map((item) => item.id === id ? current : item));
         const message = (error as Error).message || "Erro ao atualizar tarefa";
         toast({
           title: "Não foi possível atualizar a tarefa",
           description: message,
           variant: "destructive",
         });
+        throw error;
+      } finally {
+        savingTaskIdsRef.current.delete(id);
+        setSavingTaskIds(Array.from(savingTaskIdsRef.current));
       }
     },
     deleteTask: async (id) => {
       try {
         await deleteSupabaseTask(id);
+        tasksLoadVersionRef.current += 1;
+        setTasksLoading(false);
+        tasksRef.current = tasksRef.current.filter((task) => task.id !== id);
         setTasks((prev) => prev.filter((t) => t.id !== id));
       } catch (error) {
         const message = (error as Error).message || "Erro ao remover tarefa";
@@ -2611,6 +2757,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
           description: message,
           variant: "destructive",
         });
+        throw error;
       }
     },
 
