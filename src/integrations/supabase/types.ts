@@ -191,6 +191,50 @@ export type Database = {
         }
         Relationships: []
       }
+      consulting_day_plans: {
+        Row: {
+          created_at: string
+          day_number: number
+          expected_decisions: string[]
+          id: string
+          meeting_date: string | null
+          objective: string
+          project_id: string
+          theme: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          day_number: number
+          expected_decisions?: string[]
+          id?: string
+          meeting_date?: string | null
+          objective: string
+          project_id: string
+          theme: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          day_number?: number
+          expected_decisions?: string[]
+          id?: string
+          meeting_date?: string | null
+          objective?: string
+          project_id?: string
+          theme?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consulting_day_plans_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       content_items: {
         Row: {
           author: string | null
@@ -1137,6 +1181,38 @@ export type Database = {
           },
         ]
       }
+      project_members: {
+        Row: {
+          access_level: string
+          created_at: string
+          created_by: string | null
+          project_id: string
+          user_id: string
+        }
+        Insert: {
+          access_level?: string
+          created_at?: string
+          created_by?: string | null
+          project_id: string
+          user_id: string
+        }
+        Update: {
+          access_level?: string
+          created_at?: string
+          created_by?: string | null
+          project_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_members_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projects: {
         Row: {
           client_id: string | null
@@ -1195,38 +1271,6 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      project_members: {
-        Row: {
-          access_level: string
-          created_at: string
-          created_by: string | null
-          project_id: string
-          user_id: string
-        }
-        Insert: {
-          access_level?: string
-          created_at?: string
-          created_by?: string | null
-          project_id: string
-          user_id: string
-        }
-        Update: {
-          access_level?: string
-          created_at?: string
-          created_by?: string | null
-          project_id?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "project_members_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]
@@ -1340,6 +1384,7 @@ export type Database = {
           client_id: string | null
           completed_at: string | null
           completed_by: string | null
+          consulting_day: number | null
           created_at: string
           created_by: string | null
           description: string | null
@@ -1349,8 +1394,8 @@ export type Database = {
           how: string | null
           how_much: number | null
           id: string
-          priority: string
           previous_status: string | null
+          priority: string
           project_id: string | null
           responsible: string | null
           source_action_id: string | null
@@ -1372,6 +1417,7 @@ export type Database = {
           client_id?: string | null
           completed_at?: string | null
           completed_by?: string | null
+          consulting_day?: number | null
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -1381,8 +1427,8 @@ export type Database = {
           how?: string | null
           how_much?: number | null
           id?: string
-          priority?: string
           previous_status?: string | null
+          priority?: string
           project_id?: string | null
           responsible?: string | null
           source_action_id?: string | null
@@ -1404,6 +1450,7 @@ export type Database = {
           client_id?: string | null
           completed_at?: string | null
           completed_by?: string | null
+          consulting_day?: number | null
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -1413,8 +1460,8 @@ export type Database = {
           how?: string | null
           how_much?: number | null
           id?: string
-          priority?: string
           previous_status?: string | null
+          priority?: string
           project_id?: string | null
           responsible?: string | null
           source_action_id?: string | null
@@ -1438,6 +1485,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "clients"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_consulting_day_plan_fkey"
+            columns: ["project_id", "consulting_day"]
+            isOneToOne: false
+            referencedRelation: "consulting_day_plans"
+            referencedColumns: ["project_id", "day_number"]
           },
           {
             foreignKeyName: "tasks_project_id_fkey"
