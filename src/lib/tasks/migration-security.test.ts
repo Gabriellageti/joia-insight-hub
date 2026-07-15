@@ -12,6 +12,11 @@ const legacyRoleBackfillUrl = new URL(
   import.meta.url,
 );
 const legacyRoleBackfillSql = await Bun.file(legacyRoleBackfillUrl).text();
+const directProjectInsertPolicyUrl = new URL(
+  "../../../supabase/migrations/20260715034109_replace_project_insert_role_policy.sql",
+  import.meta.url,
+);
+const directProjectInsertPolicySql = await Bun.file(directProjectInsertPolicyUrl).text();
 
 describe("task workspace migration security", () => {
   test("uses explicit project membership instead of authenticated-wide project access", () => {
@@ -48,5 +53,16 @@ describe("task workspace migration security", () => {
     expect(legacyRoleBackfillSql).toContain("NOT EXISTS");
     expect(legacyRoleBackfillSql).not.toContain("'admin_joia'::public.app_role");
     expect(legacyRoleBackfillSql).not.toContain("CREATE POLICY");
+  });
+
+  test("authorizes project inserts from the authenticated user's explicit role", () => {
+    expect(directProjectInsertPolicySql).toContain("TO authenticated");
+    expect(directProjectInsertPolicySql).toContain("(SELECT auth.uid()) IS NOT NULL");
+    expect(directProjectInsertPolicySql).toContain("FROM public.user_roles AS role_entry");
+    expect(directProjectInsertPolicySql).toContain("role_entry.user_id = (SELECT auth.uid())");
+    expect(directProjectInsertPolicySql).toContain("'analista'::public.app_role");
+    expect(directProjectInsertPolicySql).not.toContain("private.user_has_role");
+    expect(directProjectInsertPolicySql).not.toContain("WITH CHECK (true)");
+    expect(directProjectInsertPolicySql).not.toContain("TO anon");
   });
 });

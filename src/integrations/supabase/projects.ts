@@ -50,10 +50,26 @@ export async function listProjects(): Promise<ProjectRow[]> {
 export async function createProject(project: ProjectInsert): Promise<ProjectRow> {
   await requireProjectCreationSession();
 
-  const { data, error } = await supabase.from("projects").insert(project).select().single();
+  // Do not chain `.select()` to this insert. Project visibility depends on the
+  // AFTER INSERT trigger that grants the creator membership; PostgREST applies
+  // the SELECT policy to `INSERT ... RETURNING` before that membership can be
+  // used, which makes an otherwise-authorized insert fail RLS.
+  const projectId = project.id ?? crypto.randomUUID();
+  const { error: insertError } = await supabase.from("projects").insert({
+    ...project,
+    id: projectId,
+  });
 
-  if (error) {
-    throw new Error(error.message);
+  if (insertError) {
+    throw new Error(insertError.message);
+  }
+
+  // The insert transaction has completed and the creator membership now
+  // exists, so the regular project SELECT policy authorizes this read.
+  const { data, error: selectError } = await supabase.from("projects").select("*").eq("id", projectId).single();
+
+  if (selectError) {
+    throw new Error(selectError.message);
   }
 
   if (!data) {
