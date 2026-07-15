@@ -1803,6 +1803,15 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   // Fetch tarefas do banco de dados
   useEffect(() => {
+    if (!user) {
+      ++tasksLoadVersionRef.current;
+      tasksRef.current = [];
+      setTasks([]);
+      setTasksError(null);
+      setTasksLoading(false);
+      return;
+    }
+
     const fetchTasksData = async () => {
       const requestVersion = ++tasksLoadVersionRef.current;
       setTasksLoading(true);
@@ -1839,7 +1848,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     if (!projectsLoading && !clientsLoading) {
       fetchTasksData();
     }
-  }, [toast, projects, clients, projectsLoading, clientsLoading]);
+  }, [toast, user, projects, clients, projectsLoading, clientsLoading]);
 
   useEffect(() => {
     if (!user) {
