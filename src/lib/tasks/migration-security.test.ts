@@ -7,6 +7,11 @@ const permissionBackfillUrl = new URL(
   import.meta.url,
 );
 const permissionBackfillSql = await Bun.file(permissionBackfillUrl).text();
+const legacyRoleBackfillUrl = new URL(
+  "../../../supabase/migrations/20260715020620_backfill_legacy_internal_user_roles.sql",
+  import.meta.url,
+);
+const legacyRoleBackfillSql = await Bun.file(legacyRoleBackfillUrl).text();
 
 describe("task workspace migration security", () => {
   test("uses explicit project membership instead of authenticated-wide project access", () => {
@@ -33,5 +38,15 @@ describe("task workspace migration security", () => {
     expect(permissionBackfillSql).toContain("INSERT INTO public.project_members");
     expect(permissionBackfillSql).not.toContain("cliente_proprietario");
     expect(permissionBackfillSql).not.toContain("CREATE TRIGGER");
+  });
+
+  test("restores project creation only for confirmed legacy accounts with least privilege", () => {
+    expect(legacyRoleBackfillSql).toContain("'analista'::public.app_role");
+    expect(legacyRoleBackfillSql).toContain("auth_user.created_at < TIMESTAMPTZ '2026-07-14 18:17:40+00'");
+    expect(legacyRoleBackfillSql).toContain("auth_user.email_confirmed_at IS NOT NULL");
+    expect(legacyRoleBackfillSql).toContain("COALESCE(auth_user.is_anonymous, false) = false");
+    expect(legacyRoleBackfillSql).toContain("NOT EXISTS");
+    expect(legacyRoleBackfillSql).not.toContain("'admin_joia'::public.app_role");
+    expect(legacyRoleBackfillSql).not.toContain("CREATE POLICY");
   });
 });
