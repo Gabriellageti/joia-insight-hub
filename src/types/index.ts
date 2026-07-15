@@ -150,8 +150,8 @@ export interface Task {
   type: "processo" | "financeiro" | "tecnologia" | "treinamento" | "compras" | "vendas";
   responsible: string;
   priority: "low" | "medium" | "high" | "urgent";
-  taskType: "personal" | "project";
-  assignedTo: string;
+  taskType?: "personal" | "project";
+  assignedTo?: string;
   startDate?: string;
   dueDate: string;
   impact?: string;
@@ -170,7 +170,7 @@ export interface Task {
   updatedAt?: string;
   sourceDiagnosticId?: string;
   sourceActionId?: string;
-  createdBy: string;
+  createdBy?: string;
   completedAt?: string;
   completedBy?: string;
   previousStatus?: Task["status"];
