@@ -1707,9 +1707,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
   const currentUserName = resolveUserName(user);
   const [clients, setClients] = useState<Client[]>(initialClients.map(normalizeClient));
+  const clientsRef = useRef<Client[]>(clients);
   const [clientsLoading, setClientsLoading] = useState(true);
   const [clientsError, setClientsError] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
+  const projectsRef = useRef<Project[]>(projects);
   const [projectsLoading, setProjectsLoading] = useState(true);
   const [projectsError, setProjectsError] = useState<string | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -1723,6 +1725,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     tasksRef.current = tasks;
   }, [tasks]);
+
+  useEffect(() => {
+    clientsRef.current = clients;
+  }, [clients]);
+
+  useEffect(() => {
+    projectsRef.current = projects;
+  }, [projects]);
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [deliverables, setDeliverables] = useState<ProjectDeliverable[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
@@ -1803,7 +1813,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   // Fetch tarefas do banco de dados
   useEffect(() => {
-    if (!user) {
+    const userId = user?.id;
+    if (!userId) {
       ++tasksLoadVersionRef.current;
       tasksRef.current = [];
       setTasks([]);
@@ -1820,8 +1831,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       try {
         const tasksData = await listTasks();
         const normalized = tasksData.map((task) => {
-          const project = projects.find((p) => p.id === task.project_id);
-          const client = clients.find((c) => c.id === task.client_id);
+          const project = projectsRef.current.find((item) => item.id === task.project_id);
+          const client = clientsRef.current.find((item) => item.id === task.client_id);
           const projectName = project?.name || "";
           const clientName = client?.nomeFantasia || client?.razaoSocial || client?.name || "";
           return mapSupabaseTaskToLegacy(task, projectName, clientName);
@@ -1848,7 +1859,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     if (!projectsLoading && !clientsLoading) {
       fetchTasksData();
     }
-  }, [toast, user, projects, clients, projectsLoading, clientsLoading]);
+  }, [toast, user?.id, projectsLoading, clientsLoading]);
 
   useEffect(() => {
     if (!user) {
@@ -2455,16 +2466,31 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const auditEntries: ProjectAuditLogEntry[] = [];
-    setProjects((prev) =>
-      prev.map((project) => {
+    setProjects((prev) => {
+      let changed = false;
+      const next = prev.map((project) => {
         const { project: nextProject, statusOverrideExpired } = computeProjectWithDerivedState(project);
         const derivedLogs = deriveAuditLogs(project, nextProject, { statusOverrideExpired });
         if (derivedLogs.length) {
           auditEntries.push(...derivedLogs);
         }
+        const derivedChanged =
+          project.responsible !== nextProject.responsible
+          || project.responsibleAvatarUrl !== nextProject.responsibleAvatarUrl
+          || project.progress !== nextProject.progress
+          || project.progressSource !== nextProject.progressSource
+          || project.status !== nextProject.status
+          || project.statusReason !== nextProject.statusReason
+          || project.statusSource !== nextProject.statusSource
+          || project.statusOverrideEnabled !== nextProject.statusOverrideEnabled
+          || project.statusOverrideValue !== nextProject.statusOverrideValue
+          || project.statusOverrideExpiresAt !== nextProject.statusOverrideExpiresAt;
+        if (!derivedChanged) return project;
+        changed = true;
         return nextProject;
-      })
-    );
+      });
+      return changed ? next : prev;
+    });
 
     if (auditEntries.length > 0) {
       setProjectAuditLogs((prev) => [...prev, ...auditEntries]);
