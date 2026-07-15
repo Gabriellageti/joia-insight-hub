@@ -15,7 +15,8 @@ const statusConfig = {
   backlog: { label: "Backlog", icon: ListTodo, color: "bg-muted text-muted-foreground" },
   next: { label: "Próximas", icon: Circle, color: "bg-blue-100 text-blue-700" },
   in_progress: { label: "Em andamento", icon: Play, color: "bg-amber-100 text-amber-700" },
-  validation: { label: "Validação", icon: Clock, color: "bg-purple-100 text-purple-700" },
+  waiting: { label: "Aguardando", icon: Clock, color: "bg-orange-100 text-orange-700" },
+  review: { label: "Em revisão", icon: Clock, color: "bg-purple-100 text-purple-700" },
   done: { label: "Concluídas", icon: CheckCircle2, color: "bg-green-100 text-green-700" },
 };
 
@@ -23,6 +24,7 @@ const priorityColors = {
   high: "bg-red-100 text-red-700",
   medium: "bg-amber-100 text-amber-700",
   low: "bg-green-100 text-green-700",
+  urgent: "bg-red-200 text-red-900",
 };
 
 export function ProjectTasksSummary({ tasks, projectId }: ProjectTasksSummaryProps) {
@@ -33,7 +35,8 @@ export function ProjectTasksSummary({ tasks, projectId }: ProjectTasksSummaryPro
       backlog: 0,
       next: 0,
       in_progress: 0,
-      validation: 0,
+      waiting: 0,
+      review: 0,
       done: 0,
     };
 
@@ -50,7 +53,7 @@ export function ProjectTasksSummary({ tasks, projectId }: ProjectTasksSummaryPro
     return [...tasks]
       .filter((t) => t.status !== "done")
       .sort((a, b) => {
-        const priorityOrder = { high: 0, medium: 1, low: 2 };
+        const priorityOrder: Record<Task["priority"], number> = { urgent: 0, high: 1, medium: 2, low: 3 };
         return priorityOrder[a.priority] - priorityOrder[b.priority];
       })
       .slice(0, 5);

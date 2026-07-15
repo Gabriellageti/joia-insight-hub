@@ -1199,6 +1199,38 @@ export type Database = {
           },
         ]
       }
+      project_members: {
+        Row: {
+          access_level: string
+          created_at: string
+          created_by: string | null
+          project_id: string
+          user_id: string
+        }
+        Insert: {
+          access_level?: string
+          created_at?: string
+          created_by?: string | null
+          project_id: string
+          user_id: string
+        }
+        Update: {
+          access_level?: string
+          created_at?: string
+          created_by?: string | null
+          project_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_members_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       push_subscriptions: {
         Row: {
           auth: string
@@ -1264,10 +1296,52 @@ export type Database = {
           },
         ]
       }
+      task_history: {
+        Row: {
+          action: string
+          created_at: string
+          id: string
+          new_value: Json
+          previous_value: Json | null
+          task_id: string
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          id?: string
+          new_value: Json
+          previous_value?: Json | null
+          task_id: string
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          id?: string
+          new_value?: Json
+          previous_value?: Json | null
+          task_id?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_history_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tasks: {
         Row: {
+          assigned_to: string | null
           client_id: string | null
+          completed_at: string | null
+          completed_by: string | null
           created_at: string
+          created_by: string | null
           description: string | null
           due_date: string | null
           evidence_required: boolean | null
@@ -1275,10 +1349,15 @@ export type Database = {
           how: string | null
           how_much: number | null
           id: string
-          priority: string | null
+          priority: string
+          previous_status: string | null
           project_id: string | null
           responsible: string | null
-          status: string | null
+          source_action_id: string | null
+          source_diagnostic_id: string | null
+          start_date: string | null
+          status: string
+          task_type: string
           title: string
           type: string | null
           updated_at: string
@@ -1289,8 +1368,12 @@ export type Database = {
           why: string | null
         }
         Insert: {
+          assigned_to?: string | null
           client_id?: string | null
+          completed_at?: string | null
+          completed_by?: string | null
           created_at?: string
+          created_by?: string | null
           description?: string | null
           due_date?: string | null
           evidence_required?: boolean | null
@@ -1298,10 +1381,15 @@ export type Database = {
           how?: string | null
           how_much?: number | null
           id?: string
-          priority?: string | null
+          priority?: string
+          previous_status?: string | null
           project_id?: string | null
           responsible?: string | null
-          status?: string | null
+          source_action_id?: string | null
+          source_diagnostic_id?: string | null
+          start_date?: string | null
+          status?: string
+          task_type?: string
           title: string
           type?: string | null
           updated_at?: string
@@ -1312,8 +1400,12 @@ export type Database = {
           why?: string | null
         }
         Update: {
+          assigned_to?: string | null
           client_id?: string | null
+          completed_at?: string | null
+          completed_by?: string | null
           created_at?: string
+          created_by?: string | null
           description?: string | null
           due_date?: string | null
           evidence_required?: boolean | null
@@ -1321,10 +1413,15 @@ export type Database = {
           how?: string | null
           how_much?: number | null
           id?: string
-          priority?: string | null
+          priority?: string
+          previous_status?: string | null
           project_id?: string | null
           responsible?: string | null
-          status?: string | null
+          source_action_id?: string | null
+          source_diagnostic_id?: string | null
+          start_date?: string | null
+          status?: string
+          task_type?: string
           title?: string
           type?: string | null
           updated_at?: string

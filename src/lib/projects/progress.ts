@@ -15,7 +15,7 @@ const calculateCompletionRatio = (completed: number, total: number) => {
   return completed / total;
 };
 
-const isTaskCompleted = (task: Task) => task.status === "done" || task.status === "validation";
+const isTaskCompleted = (task: Task) => task.status === "done";
 
 const isDeliverableCompleted = (deliverable: ProjectDeliverable) => deliverable.status === "done";
 

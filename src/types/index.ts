@@ -149,10 +149,13 @@ export interface Task {
   clientName: string;
   type: "processo" | "financeiro" | "tecnologia" | "treinamento" | "compras" | "vendas";
   responsible: string;
-  priority: "low" | "medium" | "high";
+  priority: "low" | "medium" | "high" | "urgent";
+  taskType: "personal" | "project";
+  assignedTo: string;
+  startDate?: string;
   dueDate: string;
   impact?: string;
-  status: "backlog" | "next" | "in_progress" | "validation" | "done";
+  status: "backlog" | "next" | "in_progress" | "waiting" | "review" | "done";
   checklist?: { id: string; text: string; completed: boolean }[];
   evidenceRequired: boolean;
   evidenceFile?: string;
@@ -164,8 +167,13 @@ export interface Task {
   how?: string;
   howMuch?: string;
   createdAt: string;
+  updatedAt?: string;
   sourceDiagnosticId?: string;
   sourceActionId?: string;
+  createdBy: string;
+  completedAt?: string;
+  completedBy?: string;
+  previousStatus?: Task["status"];
 }
 
 export type ActionPriority = "alta" | "media" | "baixa";

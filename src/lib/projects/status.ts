@@ -24,7 +24,7 @@ const countOverdueTasks = (tasks: Task[], today: Date) =>
     if (!task.dueDate) return false;
     const dueDate = parseFlexibleDate(task.dueDate);
     if (!dueDate) return false;
-    const isCompleted = task.status === "done" || task.status === "validation";
+    const isCompleted = task.status === "done";
     return !isCompleted && differenceInCalendarDays(today, dueDate) > 0;
   }).length;
 
