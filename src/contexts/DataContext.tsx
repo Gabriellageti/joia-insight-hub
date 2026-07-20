@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useEffect, ReactNode, useState, useCallback, useRef } from "react";
 import { User } from "@supabase/supabase-js";
 import {
@@ -198,6 +199,7 @@ interface DataContextType {
   deleteMeeting: (id: string) => void;
 
   // Indicators
+
   indicators: Indicator[];
   addIndicator: (indicator: Omit<Indicator, "id" | "createdAt">) => void;
   updateIndicator: (id: string, indicator: Partial<Indicator>) => void;
@@ -398,6 +400,7 @@ const serializePlaybookContent = (playbook: Partial<Playbook>): string =>
     area: playbook.area,
     whenToUse: playbook.whenToUse,
     howToValidate: playbook.howToValidate,
+
     steps: playbook.steps,
     checklist: playbook.checklist,
     commonErrors: playbook.commonErrors,
@@ -598,6 +601,7 @@ const buildSupabaseExpenseUpdate = (expense: Partial<Expense>) => {
     payload.project_id = expense.projectId ?? null;
   }
 
+
   if ("projectName" in expense) {
     payload.project_name = expense.projectName ?? null;
   }
@@ -797,6 +801,7 @@ const normalizeOpportunityRule = (rule?: Partial<TemplateOpportunityRule>): Temp
   if (!rule) return undefined;
 
   const estimatedValue = safeNumber(rule.estimatedValue);
+
 
   return {
     id: rule.id || generateId(),
@@ -999,6 +1004,7 @@ const buildSeedTasks = ({
   const templates = phaseSeeds[phase] || [];
   const baseDate = parseDatePtBR(startDate) || new Date();
 
+
   return templates.map((template, index) => {
     const dueDate = formatDatePtBR(addDays(baseDate, template.offset));
     
@@ -1198,6 +1204,7 @@ const buildSupabaseProjectInsert = (project: Partial<Project>, clientId: string)
     phase: project.phase || "Diagnóstico",
     project_type: project.projectType || "consulting",
     progress: project.progress || 0,
+
     responsible: project.responsible || project.responsibleNameLegacy || null,
     start_date: toSupabaseDate(project.startDate),
     end_date: toSupabaseDate(project.endDate || project.forecastEndDate || null),
@@ -1302,6 +1309,7 @@ const mapSupabaseTaskToLegacy = (task: TaskRow, projectName: string, clientName:
   updatedAt: task.updated_at,
   sourceDiagnosticId: task.source_diagnostic_id || undefined,
   sourceActionId: task.source_action_id || undefined,
+  consultingDay: task.consulting_day || undefined,
   createdBy: task.created_by || "",
   completedAt: task.completed_at || undefined,
   completedBy: task.completed_by || undefined,
@@ -1341,6 +1349,7 @@ const buildSupabaseTaskInsert = (task: Omit<Task, "id" | "createdAt">): Supabase
   previous_status: task.previousStatus || null,
   source_diagnostic_id: task.sourceDiagnosticId || null,
   source_action_id: task.sourceActionId || null,
+  consulting_day: task.consultingDay || null,
 });
 
 const buildSupabaseTaskUpdate = (task: Partial<Task>): SupabaseTaskUpdate => {
@@ -1377,6 +1386,7 @@ const buildSupabaseTaskUpdate = (task: Partial<Task>): SupabaseTaskUpdate => {
   if (typeof task.previousStatus !== "undefined") payload.previous_status = task.previousStatus || null;
   if (typeof task.sourceDiagnosticId !== "undefined") payload.source_diagnostic_id = task.sourceDiagnosticId || null;
   if (typeof task.sourceActionId !== "undefined") payload.source_action_id = task.sourceActionId || null;
+  if (typeof task.consultingDay !== "undefined") payload.consulting_day = task.consultingDay || null;
 
   return payload;
 };
@@ -1395,6 +1405,7 @@ const mapSupabaseDiagnosticToLegacy = (diagnostic: ExtendedDiagnosticRow): Diagn
   projectId: diagnostic.project_id || "",
   projectName: diagnostic.project_name || "",
   clientId: diagnostic.client_id || "",
+
   clientName: diagnostic.client_name || "",
   templateId: diagnostic.template_id || "",
   templateName: diagnostic.template_name || "",
@@ -1595,6 +1606,7 @@ const initialIndicators: Indicator[] = [
     targetValue: 500000,
     currentValue: 438000,
     trend: "up",
+
     projectId: "project-2",
     projectName: "Estruturação de CS",
     responsible: "Bruna Lira",
@@ -1707,9 +1719,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
   const currentUserName = resolveUserName(user);
   const [clients, setClients] = useState<Client[]>(initialClients.map(normalizeClient));
+  const clientsRef = useRef<Client[]>(clients);
   const [clientsLoading, setClientsLoading] = useState(true);
   const [clientsError, setClientsError] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
+  const projectsRef = useRef<Project[]>(projects);
   const [projectsLoading, setProjectsLoading] = useState(true);
   const [projectsError, setProjectsError] = useState<string | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -1723,6 +1737,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     tasksRef.current = tasks;
   }, [tasks]);
+
+  useEffect(() => {
+    clientsRef.current = clients;
+  }, [clients]);
+
+  useEffect(() => {
+    projectsRef.current = projects;
+  }, [projects]);
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [deliverables, setDeliverables] = useState<ProjectDeliverable[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
@@ -1785,6 +1807,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         const message = (error as Error).message || "Não foi possível carregar os projetos";
         setProjectsError(message);
         toast({
+
           title: "Erro ao carregar projetos",
           description: message,
           variant: "destructive",
@@ -1803,6 +1826,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   // Fetch tarefas do banco de dados
   useEffect(() => {
+    const userId = user?.id;
+    if (!userId) {
+      ++tasksLoadVersionRef.current;
+      tasksRef.current = [];
+      setTasks([]);
+      setTasksError(null);
+      setTasksLoading(false);
+      return;
+    }
+
     const fetchTasksData = async () => {
       const requestVersion = ++tasksLoadVersionRef.current;
       setTasksLoading(true);
@@ -1811,8 +1844,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       try {
         const tasksData = await listTasks();
         const normalized = tasksData.map((task) => {
-          const project = projects.find((p) => p.id === task.project_id);
-          const client = clients.find((c) => c.id === task.client_id);
+          const project = projectsRef.current.find((item) => item.id === task.project_id);
+          const client = clientsRef.current.find((item) => item.id === task.client_id);
           const projectName = project?.name || "";
           const clientName = client?.nomeFantasia || client?.razaoSocial || client?.name || "";
           return mapSupabaseTaskToLegacy(task, projectName, clientName);
@@ -1839,7 +1872,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     if (!projectsLoading && !clientsLoading) {
       fetchTasksData();
     }
-  }, [toast, projects, clients, projectsLoading, clientsLoading]);
+  }, [toast, user?.id, projectsLoading, clientsLoading]);
 
   useEffect(() => {
     if (!user) {
@@ -1974,6 +2007,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
     fetchDeliverablesData();
   }, [user]);
+
 
   // Fetch content items from Supabase
   useEffect(() => {
@@ -2175,6 +2209,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
           description: message,
           variant: "destructive",
         });
+
         throw error;
       }
     },
@@ -2375,6 +2410,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         nextProject.statusOverrideEnabled = false;
         nextProject.statusOverrideValue = null;
         nextProject.statusOverrideExpiresAt = undefined;
+
       }
 
       return { project: nextProject, statusOverrideExpired: statusState.overrideExpired };
@@ -2446,16 +2482,31 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const auditEntries: ProjectAuditLogEntry[] = [];
-    setProjects((prev) =>
-      prev.map((project) => {
+    setProjects((prev) => {
+      let changed = false;
+      const next = prev.map((project) => {
         const { project: nextProject, statusOverrideExpired } = computeProjectWithDerivedState(project);
         const derivedLogs = deriveAuditLogs(project, nextProject, { statusOverrideExpired });
         if (derivedLogs.length) {
           auditEntries.push(...derivedLogs);
         }
+        const derivedChanged =
+          project.responsible !== nextProject.responsible
+          || project.responsibleAvatarUrl !== nextProject.responsibleAvatarUrl
+          || project.progress !== nextProject.progress
+          || project.progressSource !== nextProject.progressSource
+          || project.status !== nextProject.status
+          || project.statusReason !== nextProject.statusReason
+          || project.statusSource !== nextProject.statusSource
+          || project.statusOverrideEnabled !== nextProject.statusOverrideEnabled
+          || project.statusOverrideValue !== nextProject.statusOverrideValue
+          || project.statusOverrideExpiresAt !== nextProject.statusOverrideExpiresAt;
+        if (!derivedChanged) return project;
+        changed = true;
         return nextProject;
-      })
-    );
+      });
+      return changed ? next : prev;
+    });
 
     if (auditEntries.length > 0) {
       setProjectAuditLogs((prev) => [...prev, ...auditEntries]);
@@ -2560,6 +2611,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
             projectId: created.id,
             projectName: newProject.name,
             clientId: newProject.clientId,
+
             clientName: newProject.clientName,
           });
 
@@ -2761,6 +2813,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       }
     },
 
+
     deliverables,
     addDeliverable: (deliverable) => {
       const newDeliverable = { ...deliverable, id: generateId(), createdAt: getDate() };
@@ -2959,6 +3012,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     },
     updateEmployee: async (id, employee) => {
       const payload = buildSupabaseEmployeeUpdate(employee);
+
 
       try {
         const updated = await updateSupabaseEmployee(id, payload);
@@ -3160,6 +3214,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         setDiagnostics((prev) => prev.map((d) => (d.id === id ? mapped : d)));
         return mapped;
       } catch (error) {
+
         const message = (error as Error).message || "Erro ao atualizar diagnóstico";
         toast({
           title: "Não foi possível atualizar o diagnóstico",
@@ -3360,6 +3415,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         });
         return undefined;
       }
+
     },
     deleteExpense: async (id) => {
       if (!user) {

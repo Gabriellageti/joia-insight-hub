@@ -1,3 +1,4 @@
+
 import type { ProjectType } from "@/lib/project-delivery";
 
 // Types for JoIA Ops
@@ -170,10 +171,21 @@ export interface Task {
   updatedAt?: string;
   sourceDiagnosticId?: string;
   sourceActionId?: string;
+  consultingDay?: number;
   createdBy?: string;
   completedAt?: string;
   completedBy?: string;
   previousStatus?: Task["status"];
+}
+
+export interface ConsultingDayPlan {
+  id: string;
+  projectId: string;
+  dayNumber: number;
+  theme: string;
+  objective: string;
+  expectedDecisions: string[];
+  meetingDate?: string;
 }
 
 export type ActionPriority = "alta" | "media" | "baixa";
@@ -187,6 +199,7 @@ export interface ImpactProjection {
 
 export interface ActionRecommendation {
   id: string;
+
   title: string;
   description: string;
   priority: ActionPriority;
@@ -387,6 +400,7 @@ export interface Indicator {
   frequency?: string | null;
   source?: "manual" | "planilha" | "integração";
   currentValue?: number | null;
+
   targetValue?: number | null;
   trend?: "up" | "down" | "stable" | null;
   status?: string | null;

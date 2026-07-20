@@ -1,12 +1,13 @@
+
 import { useEffect, useMemo, useState } from "react";
-import { FolderKanban, Plus, User } from "lucide-react";
+import { CalendarRange, FolderKanban, Plus, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TaskDialog } from "@/components/dialogs/TaskDialog";
-import { TaskCard, TaskFilters } from "@/components/plano-acao";
+import { ConsultingDayWorkspace, TaskCard, TaskFilters } from "@/components/plano-acao";
 import { filterTasks, type TaskFilterValues } from "@/lib/tasks/filters";
 import { useData } from "@/contexts/DataContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -30,11 +31,12 @@ const columns: { id: Task["status"]; title: string }[] = [
 const emptyFilters = (projectId = "all"): TaskFilterValues => ({ search: "", projectId, status: "all", priority: "all", assignedTo: "all", taskType: "all", overdue: false });
 
 export default function PlanoAcao() {
-  const { tasks, tasksLoading, tasksError, projects, projectsLoading, projectsError, savingTaskIds, updateTask, deleteTask } = useData();
+  const { tasks, tasksLoading, tasksError, clients, projects, projectsLoading, projectsError, savingTaskIds, updateTask, deleteTask } = useData();
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const initialProjectId = searchParams.get("projectId") || "all";
-  const [workspace, setWorkspace] = useState<"mine" | "project">(initialProjectId === "all" ? "mine" : "project");
+  const initialWorkspace = searchParams.get("view") === "consulting" ? "consulting" : initialProjectId === "all" ? "mine" : "project";
+  const [workspace, setWorkspace] = useState<"mine" | "project" | "consulting">(initialWorkspace);
   const [filters, setFilters] = useState<TaskFilterValues>(() => emptyFilters(initialProjectId));
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -111,9 +113,12 @@ export default function PlanoAcao() {
     try { await deleteTask(task.id); toast.success("Tarefa excluída."); } catch { /* DataContext reports the error. */ }
   };
 
-  const handleWorkspaceChange = (value: "mine" | "project") => {
+  const handleWorkspaceChange = (value: "mine" | "project" | "consulting") => {
     setWorkspace(value);
     if (value === "mine" && filters.projectId !== "all") setFilters((current) => ({ ...current, projectId: "all" }));
+    const next = new URLSearchParams(searchParams);
+    if (value === "consulting") next.set("view", "consulting"); else next.delete("view");
+    setSearchParams(next);
   };
 
   if (tasksLoading || projectsLoading) {
@@ -129,10 +134,23 @@ export default function PlanoAcao() {
 
       {(tasksError || projectsError) && <Alert variant="destructive"><AlertDescription>{tasksError || projectsError}</AlertDescription></Alert>}
 
-      <Tabs value={workspace} onValueChange={(value) => handleWorkspaceChange(value as "mine" | "project")}>
-        <TabsList className="w-full justify-start"><TabsTrigger value="mine"><User className="mr-2 h-4 w-4" />Meu Workspace</TabsTrigger><TabsTrigger value="project"><FolderKanban className="mr-2 h-4 w-4" />Por Projeto</TabsTrigger></TabsList>
+      <Tabs value={workspace} onValueChange={(value) => handleWorkspaceChange(value as "mine" | "project" | "consulting")}>
+        <TabsList className="h-auto w-full justify-start overflow-x-auto"><TabsTrigger value="mine" className="shrink-0"><User className="mr-2 h-4 w-4" />Meu Workspace</TabsTrigger><TabsTrigger value="project" className="shrink-0"><FolderKanban className="mr-2 h-4 w-4" />Por Projeto</TabsTrigger><TabsTrigger value="consulting" className="shrink-0"><CalendarRange className="mr-2 h-4 w-4" />Por Dia da Consultoria</TabsTrigger></TabsList>
       </Tabs>
 
+      {workspace === "consulting" ? (
+        <ConsultingDayWorkspace
+          clients={clients}
+          projects={projects}
+          tasks={tasks}
+          savingTaskIds={savingTaskIds}
+          currentUserId={user?.id}
+          initialProjectId={initialProjectId === "all" ? undefined : initialProjectId}
+          onUpdateTask={updateTask}
+          onToggleComplete={handleToggleComplete}
+          onRequestDelete={setDeletingTask}
+        />
+      ) : <>
       <TaskFilters projects={projects.map(({ id, name }) => ({ id, name }))} assignees={assignees} values={filters} onChange={(nextFilters) => { setFilters(nextFilters); const next = new URLSearchParams(searchParams); if (nextFilters.projectId === "all") next.delete("projectId"); else next.set("projectId", nextFilters.projectId); setSearchParams(next); }} onClear={() => { setFilters(emptyFilters()); setSearchParams({}); }} />
 
       {filteredTasks.length === 0 ? (
@@ -148,6 +166,7 @@ export default function PlanoAcao() {
           </div>
         </DndContext>
       )}
+      </>}
 
       <TaskDialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) { setEditingTask(null); const next = new URLSearchParams(searchParams); next.delete("taskId"); setSearchParams(next); } }} task={editingTask} />
       <AlertDialog open={Boolean(deletingTask)} onOpenChange={(open) => !open && setDeletingTask(null)}>

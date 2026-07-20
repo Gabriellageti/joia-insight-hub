@@ -1,3 +1,4 @@
+
 import { supabase } from "./client";
 import type { Database } from "./types";
 
@@ -6,6 +7,7 @@ export type TaskHistoryRow = Database["public"]["Tables"]["task_history"]["Row"]
 type TaskInsert = Database["public"]["Tables"]["tasks"]["Insert"];
 type TaskUpdate = Database["public"]["Tables"]["tasks"]["Update"];
 export type TaskAssignee = Pick<Database["public"]["Tables"]["profiles"]["Row"], "id" | "full_name">;
+export type TaskHistoryEntry = TaskHistoryRow & { user_name: string };
 
 const assigneeCache = new Map<string, Promise<TaskAssignee[]>>();
 
@@ -60,6 +62,16 @@ export async function listTaskHistory(taskId: string): Promise<TaskHistoryRow[]>
   const { data, error } = await supabase.from("task_history").select("*").eq("task_id", taskId).order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
   return data ?? [];
+}
+
+export async function listTaskHistoryEntries(taskId: string): Promise<TaskHistoryEntry[]> {
+  const history = await listTaskHistory(taskId);
+  const userIds = [...new Set(history.map((entry) => entry.user_id).filter((id): id is string => Boolean(id)))];
+  if (userIds.length === 0) return history.map((entry) => ({ ...entry, user_name: "Sistema" }));
+  const { data, error } = await supabase.from("profiles").select("id, full_name").in("id", userIds);
+  if (error) throw new Error(error.message);
+  const names = new Map((data ?? []).map((profile) => [profile.id, profile.full_name || "Usuário"]));
+  return history.map((entry) => ({ ...entry, user_name: entry.user_id ? names.get(entry.user_id) || "Usuário" : "Sistema" }));
 }
 
 export async function createTask(task: TaskInsert): Promise<TaskRow> {
