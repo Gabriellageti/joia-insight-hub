@@ -1296,6 +1296,50 @@ export type Database = {
           },
         ]
       }
+      consulting_day_plans: {
+        Row: {
+          created_at: string
+          day_number: number
+          expected_decisions: string[]
+          id: string
+          meeting_date: string | null
+          objective: string
+          project_id: string
+          theme: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          day_number: number
+          expected_decisions?: string[]
+          id?: string
+          meeting_date?: string | null
+          objective: string
+          project_id: string
+          theme: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          day_number?: number
+          expected_decisions?: string[]
+          id?: string
+          meeting_date?: string | null
+          objective?: string
+          project_id?: string
+          theme?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consulting_day_plans_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       task_history: {
         Row: {
           action: string
@@ -1340,6 +1384,7 @@ export type Database = {
           client_id: string | null
           completed_at: string | null
           completed_by: string | null
+          consulting_day: number | null
           created_at: string
           created_by: string | null
           description: string | null
@@ -1372,6 +1417,7 @@ export type Database = {
           client_id?: string | null
           completed_at?: string | null
           completed_by?: string | null
+          consulting_day?: number | null
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -1404,6 +1450,7 @@ export type Database = {
           client_id?: string | null
           completed_at?: string | null
           completed_by?: string | null
+          consulting_day?: number | null
           created_at?: string
           created_by?: string | null
           description?: string | null

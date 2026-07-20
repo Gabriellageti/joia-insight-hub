@@ -1302,6 +1302,7 @@ const mapSupabaseTaskToLegacy = (task: TaskRow, projectName: string, clientName:
   updatedAt: task.updated_at,
   sourceDiagnosticId: task.source_diagnostic_id || undefined,
   sourceActionId: task.source_action_id || undefined,
+  consultingDay: task.consulting_day || undefined,
   createdBy: task.created_by || "",
   completedAt: task.completed_at || undefined,
   completedBy: task.completed_by || undefined,
@@ -1341,6 +1342,7 @@ const buildSupabaseTaskInsert = (task: Omit<Task, "id" | "createdAt">): Supabase
   previous_status: task.previousStatus || null,
   source_diagnostic_id: task.sourceDiagnosticId || null,
   source_action_id: task.sourceActionId || null,
+  consulting_day: task.consultingDay || null,
 });
 
 const buildSupabaseTaskUpdate = (task: Partial<Task>): SupabaseTaskUpdate => {
@@ -1377,6 +1379,7 @@ const buildSupabaseTaskUpdate = (task: Partial<Task>): SupabaseTaskUpdate => {
   if (typeof task.previousStatus !== "undefined") payload.previous_status = task.previousStatus || null;
   if (typeof task.sourceDiagnosticId !== "undefined") payload.source_diagnostic_id = task.sourceDiagnosticId || null;
   if (typeof task.sourceActionId !== "undefined") payload.source_action_id = task.sourceActionId || null;
+  if (typeof task.consultingDay !== "undefined") payload.consulting_day = task.consultingDay || null;
 
   return payload;
 };

@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, Circle, Clock, ListTodo, Play, ExternalLink } from "lucide-react";
+import { CalendarDays, CheckCircle2, Circle, Clock, ListTodo, Play, ExternalLink } from "lucide-react";
 import type { Task } from "@/types";
 
 interface ProjectTasksSummaryProps {
@@ -74,6 +74,14 @@ export function ProjectTasksSummary({ tasks, projectId }: ProjectTasksSummaryPro
         </Button>
       </CardHeader>
       <CardContent className="space-y-4">
+        <Button
+          variant="outline"
+          className="w-full"
+          onClick={() => navigate(`/plano-acao?view=consulting&projectId=${projectId}`)}
+        >
+          <CalendarDays className="mr-2 h-4 w-4" />
+          Abrir planejamento por dia
+        </Button>
         <div className="flex flex-wrap gap-2">
           {Object.entries(statusConfig).map(([status, config]) => {
             const Icon = config.icon;

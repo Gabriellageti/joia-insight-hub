@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Switch } from "@/components/ui/switch";
 import { TaskComments } from "@/components/plano-acao/TaskComments";
+import { TaskHistory } from "@/components/plano-acao/TaskHistory";
 import { useData } from "@/contexts/DataContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { listTaskAssignees, type TaskAssignee } from "@/integrations/supabase/tasks";
@@ -257,7 +258,7 @@ export function TaskDialog({ open, onOpenChange, task }: TaskDialogProps) {
             </details>
           </div>
 
-          {isEditing && task?.id && <div className="border-t py-4"><TaskComments taskId={task.id} taskTitle={formData.title} /></div>}
+          {isEditing && task?.id && <div className="space-y-5 border-t py-4"><section aria-labelledby="task-history-title"><h3 id="task-history-title" className="mb-3 font-medium">Histórico</h3><TaskHistory taskId={task.id} /></section><TaskComments taskId={task.id} taskTitle={formData.title} /></div>}
 
           <DialogFooter>
             <Button type="button" variant="outline" disabled={saving} onClick={() => onOpenChange(false)}>Cancelar</Button>

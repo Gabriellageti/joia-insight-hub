@@ -17,6 +17,16 @@ const directProjectInsertPolicyUrl = new URL(
   import.meta.url,
 );
 const directProjectInsertPolicySql = await Bun.file(directProjectInsertPolicyUrl).text();
+const consultingPlanningUrl = new URL(
+  "../../../supabase/migrations/20260715164107_add_consulting_day_planning.sql",
+  import.meta.url,
+);
+const consultingPlanningSql = await Bun.file(consultingPlanningUrl).text();
+const consultingRelationshipUrl = new URL(
+  "../../../supabase/migrations/20260715165342_enforce_consulting_day_relationship.sql",
+  import.meta.url,
+);
+const consultingRelationshipSql = await Bun.file(consultingRelationshipUrl).text();
 
 describe("task workspace migration security", () => {
   test("uses explicit project membership instead of authenticated-wide project access", () => {
@@ -64,5 +74,18 @@ describe("task workspace migration security", () => {
     expect(directProjectInsertPolicySql).not.toContain("private.user_has_role");
     expect(directProjectInsertPolicySql).not.toContain("WITH CHECK (true)");
     expect(directProjectInsertPolicySql).not.toContain("TO anon");
+  });
+
+  test("scopes consulting plans to project membership and backfills without titles", () => {
+    expect(consultingPlanningSql).toContain("ALTER TABLE public.consulting_day_plans ENABLE ROW LEVEL SECURITY");
+    expect(consultingPlanningSql).toContain("private.user_project_access_level((SELECT auth.uid()), project_id) >= 1");
+    expect(consultingPlanningSql).toContain("private.user_project_access_level((SELECT auth.uid()), project_id) >= 3");
+    expect(consultingPlanningSql).toContain("task.source_diagnostic_id = 'h2o-ciclo3-planejamento-semanal-v1'");
+    expect(consultingPlanningSql).toContain("task.source_action_id ~ '(^|-)dia-[1-8](-|$)'");
+    expect(consultingPlanningSql).toContain("task.consulting_day IS NULL");
+    expect(consultingPlanningSql).not.toContain("task.title");
+    expect(consultingPlanningSql).not.toContain("WITH CHECK (true)");
+    expect(consultingRelationshipSql).toContain("FOREIGN KEY (project_id, consulting_day)");
+    expect(consultingRelationshipSql).toContain("ON DELETE RESTRICT");
   });
 });
