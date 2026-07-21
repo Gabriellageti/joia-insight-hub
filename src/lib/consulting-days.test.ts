@@ -51,10 +51,20 @@ describe("consulting day metrics", () => {
 
   test("ordena por atraso, prioridade e prazo", () => {
     const result = sortConsultingTasks([
-      task({ id: "normal", priority: "medium", dueDate: "2026-07-20" }),
-      task({ id: "urgent", priority: "urgent", dueDate: "2026-07-21" }),
+      task({ id: "normal", priority: "medium", dueDate: "2099-07-20" }),
+      task({ id: "urgent", priority: "urgent", dueDate: "2099-07-21" }),
       task({ id: "late", priority: "low", dueDate: "2020-01-01" }),
     ]);
     expect(result.map((item) => item.id)).toEqual(["late", "urgent", "normal"]);
+  });
+
+  test("preserva a ordem estável das tarefas importadas", () => {
+    const result = sortConsultingTasks([
+      task({ id: "third", sourceActionId: "h2o-ciclo3-dia-1-tarefa-03" }),
+      task({ id: "first", sourceActionId: "h2o-ciclo3-dia-1-tarefa-01" }),
+      task({ id: "second", sourceActionId: "h2o-ciclo3-dia-1-tarefa-02" }),
+    ]);
+
+    expect(result.map((item) => item.id)).toEqual(["first", "second", "third"]);
   });
 });

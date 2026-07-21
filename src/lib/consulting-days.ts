@@ -57,6 +57,11 @@ export function sortConsultingTasks(tasks: Task[]): Task[] {
   };
 
   return [...tasks].sort((a, b) => {
+    const aImportedOrder = a.sourceActionId?.match(/-tarefa-(\d+)$/)?.[1];
+    const bImportedOrder = b.sourceActionId?.match(/-tarefa-(\d+)$/)?.[1];
+    if (aImportedOrder && bImportedOrder && Number(aImportedOrder) !== Number(bImportedOrder)) {
+      return Number(aImportedOrder) - Number(bImportedOrder);
+    }
     if (isOverdue(a) !== isOverdue(b)) return isOverdue(a) ? -1 : 1;
     if (priorityOrder[a.priority] !== priorityOrder[b.priority]) return priorityOrder[a.priority] - priorityOrder[b.priority];
     const aDue = parseTaskDate(a.dueDate)?.getTime() ?? Number.MAX_SAFE_INTEGER;
