@@ -1,4 +1,3 @@
-
 ALTER TABLE public.tasks
   ADD CONSTRAINT tasks_consulting_day_plan_fkey
   FOREIGN KEY (project_id, consulting_day)

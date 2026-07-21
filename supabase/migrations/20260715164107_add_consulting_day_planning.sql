@@ -1,4 +1,3 @@
-
 CREATE TABLE public.consulting_day_plans (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id uuid NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,

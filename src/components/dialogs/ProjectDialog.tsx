@@ -129,6 +129,7 @@ export function ProjectDialog({
   const { user } = useAuth();
   const [responsibleOpen, setResponsibleOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const responsibleTriggerRef = useRef<HTMLButtonElement>(null);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -321,6 +322,8 @@ export function ProjectDialog({
     }
     if (!formData.responsibleUserId) {
       toast.error("Selecione um responsável interno");
+      responsibleTriggerRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      window.requestAnimationFrame(() => responsibleTriggerRef.current?.focus());
       return;
     }
 
@@ -434,7 +437,7 @@ export function ProjectDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 pr-4">
+        <ScrollArea className="min-h-0 flex-1 pr-4">
           <form id="project-form" onSubmit={handleSubmit} className="space-y-6 py-4">
             {/* Basic Info */}
             <div className="space-y-4">
@@ -505,27 +508,6 @@ export function ProjectDialog({
                 </p>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="objective">Objetivo</Label>
-                <Textarea
-                  id="objective"
-                  value={formData.objective}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, objective: e.target.value }))}
-                  placeholder="Descreva o objetivo principal do projeto"
-                  rows={2}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="scope">Escopo</Label>
-                <Textarea
-                  id="scope"
-                  value={formData.scope}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, scope: e.target.value }))}
-                  placeholder="Descreva o escopo do projeto"
-                  rows={2}
-                />
-              </div>
             </div>
 
             {/* Responsible & Phase */}
@@ -540,9 +522,12 @@ export function ProjectDialog({
                   <Popover open={responsibleOpen} onOpenChange={setResponsibleOpen}>
                     <PopoverTrigger asChild>
                       <Button
+                        ref={responsibleTriggerRef}
+                        type="button"
                         variant="outline"
                         role="combobox"
                         aria-expanded={responsibleOpen}
+                        aria-label="Selecionar responsável interno"
                         className="w-full justify-between"
                       >
                         {selectedResponsible ? (
@@ -637,6 +622,33 @@ export function ProjectDialog({
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+            </div>
+
+            {/* Optional project details */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-medium text-muted-foreground">Objetivo e Escopo</h3>
+
+              <div className="space-y-2">
+                <Label htmlFor="objective">Objetivo</Label>
+                <Textarea
+                  id="objective"
+                  value={formData.objective}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, objective: e.target.value }))}
+                  placeholder="Descreva o objetivo principal do projeto"
+                  rows={2}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="scope">Escopo</Label>
+                <Textarea
+                  id="scope"
+                  value={formData.scope}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, scope: e.target.value }))}
+                  placeholder="Descreva o escopo do projeto"
+                  rows={2}
+                />
               </div>
             </div>
 

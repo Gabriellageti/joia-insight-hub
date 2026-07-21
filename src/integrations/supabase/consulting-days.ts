@@ -1,4 +1,3 @@
-
 import { supabase } from "./client";
 import type { ConsultingDayPlan } from "@/types";
 import type { Database } from "./types";

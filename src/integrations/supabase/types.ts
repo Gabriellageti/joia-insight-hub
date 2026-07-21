@@ -1340,6 +1340,50 @@ export type Database = {
           },
         ]
       }
+      consulting_day_plans: {
+        Row: {
+          created_at: string
+          day_number: number
+          expected_decisions: string[]
+          id: string
+          meeting_date: string | null
+          objective: string
+          project_id: string
+          theme: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          day_number: number
+          expected_decisions?: string[]
+          id?: string
+          meeting_date?: string | null
+          objective: string
+          project_id: string
+          theme: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          day_number?: number
+          expected_decisions?: string[]
+          id?: string
+          meeting_date?: string | null
+          objective?: string
+          project_id?: string
+          theme?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consulting_day_plans_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       task_history: {
         Row: {
           action: string
