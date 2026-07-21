@@ -1,3 +1,4 @@
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -198,6 +199,7 @@ export function TaskDialog({ open, onOpenChange, task }: TaskDialogProps) {
               <Label htmlFor="task-assignee">Responsável *</Label>
               <Select disabled={assigneesLoading || Boolean(assigneesError)} value={formData.assignedTo || "none"} onValueChange={(value) => handleAssigneeChange(value === "none" ? "" : value)}>
                 <SelectTrigger id="task-assignee" aria-invalid={Boolean(errors.assignedTo)} aria-describedby={errors.assignedTo ? "task-assignee-error" : undefined}><SelectValue placeholder={assigneesLoading ? "Carregando responsáveis..." : "Selecione o responsável"} /></SelectTrigger>
+
                 <SelectContent><SelectItem value="none">Selecione o responsável</SelectItem>{assignees.map((assignee) => <SelectItem key={assignee.id} value={assignee.id}>{assignee.full_name || "Usuário sem nome"}</SelectItem>)}</SelectContent>
               </Select>
               {errors.assignedTo && <p id="task-assignee-error" className="text-sm text-destructive">{errors.assignedTo}</p>}

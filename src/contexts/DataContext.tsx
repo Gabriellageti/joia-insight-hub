@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useEffect, ReactNode, useState, useCallback, useRef } from "react";
 import { User } from "@supabase/supabase-js";
 import {
@@ -198,6 +199,7 @@ interface DataContextType {
   deleteMeeting: (id: string) => void;
 
   // Indicators
+
   indicators: Indicator[];
   addIndicator: (indicator: Omit<Indicator, "id" | "createdAt">) => void;
   updateIndicator: (id: string, indicator: Partial<Indicator>) => void;
@@ -398,6 +400,7 @@ const serializePlaybookContent = (playbook: Partial<Playbook>): string =>
     area: playbook.area,
     whenToUse: playbook.whenToUse,
     howToValidate: playbook.howToValidate,
+
     steps: playbook.steps,
     checklist: playbook.checklist,
     commonErrors: playbook.commonErrors,
@@ -598,6 +601,7 @@ const buildSupabaseExpenseUpdate = (expense: Partial<Expense>) => {
     payload.project_id = expense.projectId ?? null;
   }
 
+
   if ("projectName" in expense) {
     payload.project_name = expense.projectName ?? null;
   }
@@ -797,6 +801,7 @@ const normalizeOpportunityRule = (rule?: Partial<TemplateOpportunityRule>): Temp
   if (!rule) return undefined;
 
   const estimatedValue = safeNumber(rule.estimatedValue);
+
 
   return {
     id: rule.id || generateId(),
@@ -999,6 +1004,7 @@ const buildSeedTasks = ({
   const templates = phaseSeeds[phase] || [];
   const baseDate = parseDatePtBR(startDate) || new Date();
 
+
   return templates.map((template, index) => {
     const dueDate = formatDatePtBR(addDays(baseDate, template.offset));
     
@@ -1198,6 +1204,7 @@ const buildSupabaseProjectInsert = (project: Partial<Project>, clientId: string)
     phase: project.phase || "Diagnóstico",
     project_type: project.projectType || "consulting",
     progress: project.progress || 0,
+
     responsible: project.responsible || project.responsibleNameLegacy || null,
     start_date: toSupabaseDate(project.startDate),
     end_date: toSupabaseDate(project.endDate || project.forecastEndDate || null),
@@ -1398,6 +1405,7 @@ const mapSupabaseDiagnosticToLegacy = (diagnostic: ExtendedDiagnosticRow): Diagn
   projectId: diagnostic.project_id || "",
   projectName: diagnostic.project_name || "",
   clientId: diagnostic.client_id || "",
+
   clientName: diagnostic.client_name || "",
   templateId: diagnostic.template_id || "",
   templateName: diagnostic.template_name || "",
@@ -1598,6 +1606,7 @@ const initialIndicators: Indicator[] = [
     targetValue: 500000,
     currentValue: 438000,
     trend: "up",
+
     projectId: "project-2",
     projectName: "Estruturação de CS",
     responsible: "Bruna Lira",
@@ -1798,6 +1807,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         const message = (error as Error).message || "Não foi possível carregar os projetos";
         setProjectsError(message);
         toast({
+
           title: "Erro ao carregar projetos",
           description: message,
           variant: "destructive",
@@ -1997,6 +2007,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
     fetchDeliverablesData();
   }, [user]);
+
 
   // Fetch content items from Supabase
   useEffect(() => {
@@ -2198,6 +2209,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
           description: message,
           variant: "destructive",
         });
+
         throw error;
       }
     },
@@ -2398,6 +2410,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         nextProject.statusOverrideEnabled = false;
         nextProject.statusOverrideValue = null;
         nextProject.statusOverrideExpiresAt = undefined;
+
       }
 
       return { project: nextProject, statusOverrideExpired: statusState.overrideExpired };
@@ -2598,6 +2611,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
             projectId: created.id,
             projectName: newProject.name,
             clientId: newProject.clientId,
+
             clientName: newProject.clientName,
           });
 
@@ -2799,6 +2813,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       }
     },
 
+
     deliverables,
     addDeliverable: (deliverable) => {
       const newDeliverable = { ...deliverable, id: generateId(), createdAt: getDate() };
@@ -2997,6 +3012,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     },
     updateEmployee: async (id, employee) => {
       const payload = buildSupabaseEmployeeUpdate(employee);
+
 
       try {
         const updated = await updateSupabaseEmployee(id, payload);
@@ -3198,6 +3214,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         setDiagnostics((prev) => prev.map((d) => (d.id === id ? mapped : d)));
         return mapped;
       } catch (error) {
+
         const message = (error as Error).message || "Erro ao atualizar diagnóstico";
         toast({
           title: "Não foi possível atualizar o diagnóstico",
@@ -3398,6 +3415,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         });
         return undefined;
       }
+
     },
     deleteExpense: async (id) => {
       if (!user) {
