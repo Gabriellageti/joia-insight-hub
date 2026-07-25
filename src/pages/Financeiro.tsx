@@ -113,6 +113,7 @@ export default function Financeiro() {
     updateRecord,
     deleteRecord,
     markAsPaid,
+    undoPayment,
   } = useFinancial();
 
   const [editingExpense, setEditingExpense] = useState<FinancialRecord | null>(null);
@@ -310,12 +311,7 @@ export default function Financeiro() {
 
   const handleUndoPayment = async () => {
     if (!paymentRecord) return;
-    await updateRecord(paymentRecord.id, {
-      status: "Pendente",
-      paidAt: "",
-      paymentMethod: "",
-      paymentNotes: "",
-    });
+    await undoPayment(paymentRecord.id);
     setPaymentRecord(null);
   };
 

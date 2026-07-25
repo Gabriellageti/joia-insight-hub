@@ -148,7 +148,8 @@ export function ContractDialog({ open, onOpenChange, contract }: ContractDialogP
       if (isEditing && contract) {
         updateContract(contract.id, payload);
       } else {
-        addContract(payload);
+        // Wait for the persisted id before linking the generated charges.
+        const savedContract = await addContract(payload);
 
         if (generateReceivables) {
           const labelBase =
@@ -171,6 +172,8 @@ export function ContractDialog({ open, onOpenChange, contract }: ContractDialogP
               clientName,
               projectId: projectId || undefined,
               projectName: project?.name,
+              contractId: savedContract.id,
+              installmentId: inst.id,
               amount: inst.value,
               date: inst.dueDate,
               status: "Pendente",

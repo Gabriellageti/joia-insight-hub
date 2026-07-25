@@ -60,6 +60,24 @@ export async function updateFinancialRecord(id: string, record: FinancialRecordU
   return data;
 }
 
+export async function updateFinancialRecordPayment(
+  id: string,
+  payment: { paid: boolean; paidAt?: string; paymentMethod?: string; paymentNotes?: string },
+): Promise<FinancialRecordRow> {
+  const { data, error } = await supabase
+    .rpc("set_financial_record_payment", {
+      p_financial_record_id: id,
+      p_paid: payment.paid,
+      p_paid_at: payment.paidAt || null,
+      p_payment_method: payment.paymentMethod || null,
+      p_payment_notes: payment.paymentNotes || null,
+    })
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
 export async function deleteFinancialRecord(id: string): Promise<void> {
   const { error } = await supabase.from("financial_records").delete().eq("id", id);
   if (error) throw error;
