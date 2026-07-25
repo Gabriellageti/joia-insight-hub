@@ -365,75 +365,23 @@ export default function Financeiro() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-5">
       <div>
         <h1 className="text-2xl font-semibold text-foreground">Financeiro JoIA</h1>
         <p className="text-muted-foreground">Controle receitas, despesas e margem por projeto</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-6">
+      <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Card className="min-w-0 border-accent bg-accent/5 shadow-sm">
+          <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Receita Mensal</p>
-                <p className="text-2xl font-bold">{formatCurrency(summary.totalRevenue)}</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {receivables.filter((r) => r.status === "Pago").length} pagamentos recebidos
-                </p>
+                <p className="text-sm font-medium text-foreground">Saldo em caixa hoje</p>
+                <p className="text-xl font-bold tabular-nums text-foreground">{formatCurrency(summary.cashBalance)}</p>
+                <p className="mt-1 text-xs text-muted-foreground">Receitas recebidas − despesas registradas</p>
               </div>
-              <div className="p-3 bg-accent rounded-lg">
-                <DollarSign className="h-5 w-5 text-accent-foreground" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">A Receber</p>
-                <p className="text-2xl font-bold">{formatCurrency(summary.pendingAmount)}</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {summary.pendingCount} faturas pendentes
-                  {summary.overdueCount > 0 && (
-                    <span className="text-destructive"> ({summary.overdueCount} vencidas)</span>
-                  )}
-                </p>
-              </div>
-              <div className="p-3 bg-muted rounded-lg">
-                <CreditCard className="h-5 w-5 text-muted-foreground" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Despesas</p>
-                <p className="text-2xl font-bold">{formatCurrency(summary.totalExpenses)}</p>
-                <p className="text-xs text-muted-foreground mt-1">{expenses.length} lançamentos</p>
-              </div>
-              <div className="p-3 bg-muted rounded-lg">
-                <Receipt className="h-5 w-5 text-muted-foreground" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-accent">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Margem Média</p>
-                <p className="text-2xl font-bold text-accent">{summary.margin.toFixed(0)}%</p>
-                <p className="text-xs text-muted-foreground mt-1">Receita - Despesas</p>
-              </div>
-              <div className="p-3 bg-accent rounded-lg">
-                {summary.margin >= 0 ? (
+              <div className="shrink-0 rounded-lg bg-accent p-2.5">
+                {summary.cashBalance >= 0 ? (
                   <TrendingUp className="h-5 w-5 text-accent-foreground" />
                 ) : (
                   <TrendingDown className="h-5 w-5 text-accent-foreground" />
@@ -442,17 +390,70 @@ export default function Financeiro() {
             </div>
           </CardContent>
         </Card>
+
+        <Card className="min-w-0">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Receita Mensal</p>
+                <p className="text-xl font-bold tabular-nums">{formatCurrency(summary.totalRevenue)}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {receivables.filter((r) => r.status === "Pago").length} pagamentos recebidos
+                </p>
+              </div>
+              <div className="shrink-0 rounded-lg bg-accent p-2.5">
+                <DollarSign className="h-5 w-5 text-accent-foreground" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="min-w-0">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">A Receber</p>
+                <p className="text-xl font-bold tabular-nums">{formatCurrency(summary.pendingAmount)}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {summary.pendingCount} faturas pendentes
+                  {summary.overdueCount > 0 && (
+                    <span className="text-destructive"> ({summary.overdueCount} vencidas)</span>
+                  )}
+                </p>
+              </div>
+              <div className="shrink-0 rounded-lg bg-muted p-2.5">
+                <CreditCard className="h-5 w-5 text-muted-foreground" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="min-w-0">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Despesas</p>
+                <p className="text-xl font-bold tabular-nums">{formatCurrency(summary.totalExpenses)}</p>
+                <p className="text-xs text-muted-foreground mt-1">{expenses.length} lançamentos</p>
+              </div>
+              <div className="shrink-0 rounded-lg bg-muted p-2.5">
+                <Receipt className="h-5 w-5 text-muted-foreground" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
       </div>
 
-      <Tabs defaultValue="receivables">
-        <TabsList>
+      <Tabs defaultValue="receivables" className="min-w-0">
+        <TabsList className="max-w-full overflow-x-auto">
           <TabsTrigger value="receivables">Contas a Receber</TabsTrigger>
           <TabsTrigger value="expenses">Despesas</TabsTrigger>
           <TabsTrigger value="contracts">Contratos</TabsTrigger>
         </TabsList>
 
         <TabsContent value="receivables" className="mt-4">
-          <Card>
+          <Card className="min-w-0 overflow-hidden">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>Contas a Receber</CardTitle>
@@ -462,7 +463,7 @@ export default function Financeiro() {
                 </Button>
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="min-w-0">
               {sortedReceivables.length === 0 ? (
                 <div className="py-10 text-center text-muted-foreground">
                   Nenhuma conta a receber cadastrada.
@@ -563,7 +564,7 @@ export default function Financeiro() {
         </TabsContent>
 
         <TabsContent value="expenses" className="mt-4 space-y-4">
-          <Card>
+          <Card className="min-w-0 overflow-hidden">
             <CardHeader>
               <CardTitle>{editingExpense ? "Editar despesa" : "Registrar nova despesa"}</CardTitle>
             </CardHeader>
@@ -667,14 +668,14 @@ export default function Financeiro() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="min-w-0 overflow-hidden">
             <CardHeader>
               <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
                 <CardTitle>Despesas registradas</CardTitle>
                 <span className="text-sm text-muted-foreground">Total: {formatCurrency(totalExpenses)}</span>
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="min-w-0">
               {sortedExpenses.length === 0 ? (
                 <div className="py-10 text-center text-muted-foreground">
                   Nenhuma despesa cadastrada ainda.
@@ -743,7 +744,7 @@ export default function Financeiro() {
         </TabsContent>
 
         <TabsContent value="contracts" className="mt-4">
-          <Card>
+          <Card className="min-w-0 overflow-hidden">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>Contratos Ativos</CardTitle>
@@ -758,7 +759,7 @@ export default function Financeiro() {
                 </Button>
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="min-w-0">
               {contracts.length === 0 ? (
                 <div className="py-10 text-center text-muted-foreground">
                   Nenhum contrato cadastrado. Crie um para gerar cobranças automaticamente.
