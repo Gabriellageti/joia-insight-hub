@@ -120,6 +120,12 @@ export default function Financeiro() {
   const [editingReceivable, setEditingReceivable] = useState<FinancialRecord | null>(null);
   const [showContractDialog, setShowContractDialog] = useState(false);
   const [editingContract, setEditingContract] = useState<Contract | null>(null);
+  const [paymentRecord, setPaymentRecord] = useState<FinancialRecord | null>(null);
+  const [paymentForm, setPaymentForm] = useState({
+    paidAt: getTodayIso(),
+    paymentMethod: "",
+    paymentNotes: "",
+  });
 
   // Expense form state
   const [expenseForm, setExpenseForm] = useState({
@@ -281,8 +287,24 @@ export default function Financeiro() {
     await deleteRecord(id);
   };
 
-  const handleMarkAsPaid = async (id: string) => {
-    await markAsPaid(id);
+  const openPaymentDialog = (record: FinancialRecord) => {
+    setPaymentRecord(record);
+    setPaymentForm({
+      paidAt: formatDateInputValue(record.paidAt) || getTodayIso(),
+      paymentMethod: record.paymentMethod || "",
+      paymentNotes: record.paymentNotes || "",
+    });
+  };
+
+  const handleConfirmPayment = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!paymentRecord || !paymentForm.paidAt) return;
+    await markAsPaid(paymentRecord.id, {
+      paidAt: paymentForm.paidAt,
+      paymentMethod: paymentForm.paymentMethod,
+      paymentNotes: paymentForm.paymentNotes.trim(),
+    });
+    setPaymentRecord(null);
   };
 
   const getClientName = (clientId?: string) => {
@@ -446,6 +468,7 @@ export default function Financeiro() {
                       <TableHead>Descrição</TableHead>
                       <TableHead>Valor</TableHead>
                       <TableHead>Vencimento</TableHead>
+                      <TableHead>Pagamento</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
@@ -461,23 +484,35 @@ export default function Financeiro() {
                           <TableCell>{formatCurrency(item.amount)}</TableCell>
                           <TableCell>{formatDate(item.date)}</TableCell>
                           <TableCell>
+                            {item.paidAt ? (
+                              <div>
+                                <div>{formatDate(item.paidAt)}</div>
+                                {item.paymentMethod && (
+                                  <div className="text-xs text-muted-foreground">{item.paymentMethod}</div>
+                                )}
+                              </div>
+                            ) : "-"}
+                          </TableCell>
+                          <TableCell>
                             <Badge className={statusConfig[status || "Pendente"].color} variant="outline">
                               {statusConfig[status || "Pendente"].label}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
-                              {status !== "Pago" && (
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleMarkAsPaid(item.id)}
-                                  title="Marcar como pago"
-                                >
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => openPaymentDialog(item)}
+                                title={status === "Pago" ? "Editar pagamento" : "Marcar como pago"}
+                              >
+                                {status === "Pago" ? (
+                                  <Pencil className="h-4 w-4 text-green-600" />
+                                ) : (
                                   <Check className="h-4 w-4 text-green-600" />
-                                </Button>
-                              )}
+                                )}
+                              </Button>
                               <Button
                                 type="button"
                                 variant="ghost"
@@ -917,6 +952,48 @@ export default function Financeiro() {
               <Button type="submit" disabled={!isReceivableFormValid}>
                 {editingReceivable ? "Salvar" : "Adicionar"}
               </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(paymentRecord)} onOpenChange={(open) => !open && setPaymentRecord(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{paymentRecord?.status === "Pago" ? "Editar pagamento" : "Confirmar pagamento"}</DialogTitle>
+          </DialogHeader>
+          <form className="grid gap-4" onSubmit={handleConfirmPayment}>
+            <div className="space-y-2">
+              <Label htmlFor="payment-date">Data efetiva do pagamento</Label>
+              <Input
+                id="payment-date"
+                type="date"
+                required
+                value={paymentForm.paidAt}
+                onChange={(event) => setPaymentForm((prev) => ({ ...prev, paidAt: event.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="payment-method">Forma de pagamento (opcional)</Label>
+              <Input
+                id="payment-method"
+                value={paymentForm.paymentMethod}
+                onChange={(event) => setPaymentForm((prev) => ({ ...prev, paymentMethod: event.target.value }))}
+                placeholder="Ex: PIX, boleto, transferência"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="payment-notes">Observações (opcional)</Label>
+              <Input
+                id="payment-notes"
+                value={paymentForm.paymentNotes}
+                onChange={(event) => setPaymentForm((prev) => ({ ...prev, paymentNotes: event.target.value }))}
+                placeholder="Detalhes sobre o recebimento"
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="ghost" onClick={() => setPaymentRecord(null)}>Cancelar</Button>
+              <Button type="submit" disabled={!paymentForm.paidAt}>Confirmar pagamento</Button>
             </DialogFooter>
           </form>
         </DialogContent>
