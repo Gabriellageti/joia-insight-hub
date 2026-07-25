@@ -266,7 +266,8 @@ export default function Financeiro() {
       projectName: project?.name,
       amount: Number(receivableForm.value),
       date: receivableForm.dueDate,
-      status: "Pendente" as const,
+      // Editing the receivable must not implicitly undo an existing payment.
+      status: editingReceivable?.status || ("Pendente" as const),
       isInternal: false,
     };
 
@@ -303,6 +304,17 @@ export default function Financeiro() {
       paidAt: paymentForm.paidAt,
       paymentMethod: paymentForm.paymentMethod,
       paymentNotes: paymentForm.paymentNotes.trim(),
+    });
+    setPaymentRecord(null);
+  };
+
+  const handleUndoPayment = async () => {
+    if (!paymentRecord) return;
+    await updateRecord(paymentRecord.id, {
+      status: "Pendente",
+      paidAt: "",
+      paymentMethod: "",
+      paymentNotes: "",
     });
     setPaymentRecord(null);
   };
@@ -491,7 +503,7 @@ export default function Financeiro() {
                                   <div className="text-xs text-muted-foreground">{item.paymentMethod}</div>
                                 )}
                               </div>
-                            ) : "-"}
+                            ) : "—"}
                           </TableCell>
                           <TableCell>
                             <Badge className={statusConfig[status || "Pendente"].color} variant="outline">
@@ -945,6 +957,27 @@ export default function Financeiro() {
               </div>
             </div>
 
+            {editingReceivable?.status === "Pago" && (
+              <div className="rounded-md border p-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium">Data do pagamento</p>
+                    <p className="text-sm text-muted-foreground">{formatDate(editingReceivable.paidAt)}</p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setShowReceivableDialog(false);
+                      openPaymentDialog(editingReceivable);
+                    }}
+                  >
+                    Corrigir detalhes do pagamento
+                  </Button>
+                </div>
+              </div>
+            )}
+
             <DialogFooter>
               <Button type="button" variant="ghost" onClick={resetReceivableForm}>
                 Cancelar
@@ -992,8 +1025,29 @@ export default function Financeiro() {
               />
             </div>
             <DialogFooter>
+              {paymentRecord?.status === "Pago" && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button type="button" variant="destructive">Desfazer recebimento</Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Desfazer recebimento?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        A receita voltará para pendente e a data, a forma e as observações do pagamento serão apagadas.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleUndoPayment}>Desfazer recebimento</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
               <Button type="button" variant="ghost" onClick={() => setPaymentRecord(null)}>Cancelar</Button>
-              <Button type="submit" disabled={!paymentForm.paidAt}>Confirmar pagamento</Button>
+              <Button type="submit" disabled={!paymentForm.paidAt}>
+                {paymentRecord?.status === "Pago" ? "Salvar detalhes" : "Confirmar pagamento"}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>
