@@ -14,7 +14,9 @@ export const mapRecordToLegacy = (record: FinancialRecordRow): FinancialRecord =
   projectId: record.project_id || undefined,
   contractId: record.contract_id || undefined,
   installmentId: record.installment_id || undefined,
-  type: record.type as "receita" | "despesa",
+  // Older screens persisted the English aliases. Keep those records visible
+  // without rewriting or deleting any financial data in the database.
+  type: record.type === "expense" || record.type === "despesa" ? "despesa" : "receita",
   category: record.category || undefined,
   description: record.description || undefined,
   amount: Number(record.amount || 0),
@@ -64,4 +66,3 @@ export const mapRecordToUpdate = (updates: Partial<FinancialRecord>) => {
 export const getPaidRecordUpdate = (
   payment: Pick<FinancialRecord, "paidAt" | "paymentMethod" | "paymentNotes">
 ): Partial<FinancialRecord> => ({ status: "Pago", ...payment });
-

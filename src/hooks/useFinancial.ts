@@ -3,12 +3,12 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
   createFinancialRecord,
   deleteFinancialRecord,
-  getFinancialSummary,
   listFinancialRecords,
   updateFinancialRecordPayment,
   updateFinancialRecord,
 } from "@/integrations/supabase/financial-records";
 import { useToast } from "@/components/ui/use-toast";
+import { calculateFinancialSummary } from "@/lib/financial/summary";
 
 export {
   getPaidRecordUpdate,
@@ -50,6 +50,7 @@ export interface FinancialSummary {
   pendingCount: number;
   overdueCount: number;
   pendingAmount: number;
+  cashBalance: number;
   margin: number;
 }
 
@@ -65,6 +66,7 @@ export function useFinancial() {
     pendingCount: 0,
     overdueCount: 0,
     pendingAmount: 0,
+    cashBalance: 0,
     margin: 0,
   });
   const [loading, setLoading] = useState(true);
@@ -78,12 +80,12 @@ export function useFinancial() {
 
     setLoading(true);
     try {
-      const [recordsData, summaryData] = await Promise.all([
-        listFinancialRecords(),
-        getFinancialSummary(),
-      ]);
-      setRecords(recordsData.map(mapRecordToLegacy));
-      setSummary(summaryData);
+      const recordsData = await listFinancialRecords();
+      const mappedRecords = recordsData.map(mapRecordToLegacy);
+      setRecords(mappedRecords);
+      // Derive every card from the same complete dataset shown in the tables.
+      // This also keeps old and overdue receivables in "A receber".
+      setSummary(calculateFinancialSummary(mappedRecords));
     } catch (error) {
       console.error("Error fetching financial data:", error);
       toast({
