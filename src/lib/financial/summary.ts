@@ -13,6 +13,9 @@ export type FinancialSummary = {
   overdueCount: number;
   pendingAmount: number;
   cashBalance: number;
+  payableAmount: number;
+  payableCount: number;
+  projectedBalance: number;
   margin: number;
 };
 
@@ -36,6 +39,7 @@ export const calculateFinancialSummary = (
   const revenues = records.filter((record) => record.type === "receita");
   const expenses = records.filter((record) => record.type === "despesa");
   const openReceivables = revenues.filter((record) => record.status !== "Pago");
+  const openPayables = expenses.filter((record) => record.status !== "Pago");
   const monthlyRevenues = revenues.filter((record) => isInMonth(record.date, referenceDate));
   const monthlyExpenses = expenses.filter((record) => isInMonth(record.date, referenceDate));
 
@@ -44,9 +48,11 @@ export const calculateFinancialSummary = (
   const receivedRevenue = revenues
     .filter((record) => record.status === "Pago")
     .reduce((sum, record) => sum + record.amount, 0);
-  // There is no accounts-payable workflow yet: every registered expense has
-  // already impacted cash, including legacy rows whose default status is pending.
-  const paidExpenses = expenses.reduce((sum, record) => sum + record.amount, 0);
+  const paidExpenses = expenses
+    .filter((record) => record.status === "Pago")
+    .reduce((sum, record) => sum + record.amount, 0);
+  const payableAmount = openPayables.reduce((sum, record) => sum + record.amount, 0);
+  const pendingAmount = openReceivables.reduce((sum, record) => sum + record.amount, 0);
 
   return {
     totalRevenue,
@@ -55,8 +61,11 @@ export const calculateFinancialSummary = (
     overdueCount: openReceivables.filter(
       (record) => record.status === "Vencido" || isBeforeToday(record.date, referenceDate),
     ).length,
-    pendingAmount: openReceivables.reduce((sum, record) => sum + record.amount, 0),
+    pendingAmount,
     cashBalance: receivedRevenue - paidExpenses,
+    payableAmount,
+    payableCount: openPayables.length,
+    projectedBalance: receivedRevenue - paidExpenses + pendingAmount - payableAmount,
     margin: totalRevenue > 0 ? ((totalRevenue - totalExpenses) / totalRevenue) * 100 : 0,
   };
 };

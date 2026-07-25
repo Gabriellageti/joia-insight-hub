@@ -18,6 +18,9 @@ describe("calculateFinancialSummary", () => {
       overdueCount: 1,
       pendingAmount: 1_000,
       cashBalance: 650,
+      payableAmount: 0,
+      payableCount: 0,
+      projectedBalance: 1_650,
       margin: 84.375,
     });
   });
@@ -29,5 +32,21 @@ describe("calculateFinancialSummary", () => {
     );
 
     expect(summary).toMatchObject({ pendingCount: 1, overdueCount: 1, pendingAmount: 200 });
+  });
+
+  test("separa contas a pagar do caixa realizado e calcula o saldo projetado", () => {
+    const summary = calculateFinancialSummary([
+      { type: "receita", amount: 1_000, date: "2026-07-10", status: "Pago" },
+      { type: "receita", amount: 500, date: "2026-08-10", status: "Pendente" },
+      { type: "despesa", amount: 200, date: "2026-07-12", status: "Pago" },
+      { type: "despesa", amount: 300, date: "2026-08-12", status: "Pendente" },
+    ], new Date(2026, 6, 25));
+
+    expect(summary).toMatchObject({
+      cashBalance: 800,
+      payableAmount: 300,
+      payableCount: 1,
+      projectedBalance: 1_000,
+    });
   });
 });

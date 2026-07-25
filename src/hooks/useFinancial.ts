@@ -51,6 +51,9 @@ export interface FinancialSummary {
   overdueCount: number;
   pendingAmount: number;
   cashBalance: number;
+  payableAmount: number;
+  payableCount: number;
+  projectedBalance: number;
   margin: number;
 }
 
@@ -67,6 +70,9 @@ export function useFinancial() {
     overdueCount: 0,
     pendingAmount: 0,
     cashBalance: 0,
+    payableAmount: 0,
+    payableCount: 0,
+    projectedBalance: 0,
     margin: 0,
   });
   const [loading, setLoading] = useState(true);
