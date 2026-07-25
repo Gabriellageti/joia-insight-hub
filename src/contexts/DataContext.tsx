@@ -257,7 +257,7 @@ interface DataContextType {
 
   // Contracts
   contracts: Contract[];
-  addContract: (contract: Omit<Contract, "id" | "createdAt">) => void;
+  addContract: (contract: Omit<Contract, "id" | "createdAt">) => Promise<Contract>;
   updateContract: (id: string, contract: Partial<Contract>) => void;
   deleteContract: (id: string) => void;
 
@@ -3314,30 +3314,28 @@ export function DataProvider({ children }: { children: ReactNode }) {
     },
 
     contracts,
-    addContract: (contract) => {
+    addContract: async (contract) => {
       const newContract = { ...contract, id: generateId(), createdAt: getDate() };
-      
-      void (async () => {
-        try {
-          const payload = {
-            title: newContract.projectName || "Contrato",
-            client_id: newContract.clientId || null,
-            project_id: newContract.projectId || null,
-            value: newContract.value || null,
-            start_date: toSupabaseDate(newContract.startDate),
-            end_date: toSupabaseDate(newContract.endDate),
-            status: "ativo",
-            billing_type: newContract.billingType || null,
-            installments: newContract.installments || [],
-          };
-          const created = await createSupabaseContract(payload);
-          setContracts((prev) => prev.map((c) => c.id === newContract.id ? mapSupabaseContractToLegacy(created) : c));
-        } catch (error) {
-          console.error("Error creating contract:", error);
-        }
-      })();
+      const payload = {
+        title: newContract.projectName || "Contrato",
+        client_id: newContract.clientId || null,
+        project_id: newContract.projectId || null,
+        value: newContract.value || null,
+        start_date: toSupabaseDate(newContract.startDate),
+        end_date: toSupabaseDate(newContract.endDate),
+        status: "ativo",
+        billing_type: newContract.billingType || null,
+        installments: newContract.installments || [],
+      };
 
-      setContracts((prev) => [...prev, newContract]);
+      try {
+        const created = mapSupabaseContractToLegacy(await createSupabaseContract(payload));
+        setContracts((prev) => [...prev, created]);
+        return created;
+      } catch (error) {
+        console.error("Error creating contract:", error);
+        throw error;
+      }
     },
     updateContract: (id, contract) => {
       setContracts((prev) => prev.map((c) => (c.id === id ? { ...c, ...contract } : c)));

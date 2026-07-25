@@ -5,6 +5,7 @@ import {
   deleteFinancialRecord,
   getFinancialSummary,
   listFinancialRecords,
+  updateFinancialRecordPayment,
   updateFinancialRecord,
 } from "@/integrations/supabase/financial-records";
 import { useToast } from "@/components/ui/use-toast";
@@ -16,7 +17,6 @@ export {
   mapRecordToUpdate,
 } from "./financial-record-mappers";
 import {
-  getPaidRecordUpdate,
   mapRecordToInsert,
   mapRecordToLegacy,
   mapRecordToUpdate,
@@ -157,7 +157,25 @@ export function useFinancial() {
     id: string,
     payment: Pick<FinancialRecord, "paidAt" | "paymentMethod" | "paymentNotes">
   ) => {
-    return updateRecord(id, getPaidRecordUpdate(payment));
+    try {
+      const updated = await updateFinancialRecordPayment(id, { paid: true, ...payment });
+      await fetchData();
+      return mapRecordToLegacy(updated);
+    } catch (error) {
+      toast({ title: "Erro ao registrar pagamento", description: (error as Error).message, variant: "destructive" });
+      throw error;
+    }
+  };
+
+  const undoPayment = async (id: string) => {
+    try {
+      const updated = await updateFinancialRecordPayment(id, { paid: false });
+      await fetchData();
+      return mapRecordToLegacy(updated);
+    } catch (error) {
+      toast({ title: "Erro ao desfazer pagamento", description: (error as Error).message, variant: "destructive" });
+      throw error;
+    }
   };
 
   return {
@@ -170,6 +188,7 @@ export function useFinancial() {
     updateRecord,
     deleteRecord,
     markAsPaid,
+    undoPayment,
     refresh: fetchData,
   };
 }

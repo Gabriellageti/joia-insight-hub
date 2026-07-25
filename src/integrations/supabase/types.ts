@@ -1760,6 +1760,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      set_financial_record_payment: {
+        Args: {
+          p_financial_record_id: string
+          p_paid: boolean
+          p_paid_at?: string | null
+          p_payment_method?: string | null
+          p_payment_notes?: string | null
+        }
+        Returns: Database["public"]["Tables"]["financial_records"]["Row"][]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
