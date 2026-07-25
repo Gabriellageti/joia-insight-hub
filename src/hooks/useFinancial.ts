@@ -6,9 +6,22 @@ import {
   getFinancialSummary,
   listFinancialRecords,
   updateFinancialRecord,
-  type FinancialRecordRow,
 } from "@/integrations/supabase/financial-records";
 import { useToast } from "@/components/ui/use-toast";
+
+export {
+  getPaidRecordUpdate,
+  mapRecordToInsert,
+  mapRecordToLegacy,
+  mapRecordToUpdate,
+} from "./financial-record-mappers";
+import {
+  getPaidRecordUpdate,
+  mapRecordToInsert,
+  mapRecordToLegacy,
+  mapRecordToUpdate,
+} from "./financial-record-mappers";
+
 
 export interface FinancialRecord {
   id: string;
@@ -16,12 +29,17 @@ export interface FinancialRecord {
   clientName?: string;
   projectId?: string;
   projectName?: string;
+  contractId?: string;
+  installmentId?: string;
   type: "receita" | "despesa";
   category?: string;
   description?: string;
   amount: number;
   date?: string;
   status?: "Pendente" | "Pago" | "Vencido";
+  paidAt?: string;
+  paymentMethod?: string;
+  paymentNotes?: string;
   isInternal?: boolean;
   createdAt: string;
 }
@@ -35,25 +53,7 @@ export interface FinancialSummary {
   margin: number;
 }
 
-const formatDateFromIso = (value?: string | null) => {
-  if (!value) return "";
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? "" : parsed.toLocaleDateString("pt-BR");
-};
-
-const mapRecordToLegacy = (record: FinancialRecordRow): FinancialRecord => ({
-  id: record.id,
-  clientId: record.client_id || undefined,
-  projectId: record.project_id || undefined,
-  type: record.type as "receita" | "despesa",
-  category: record.category || undefined,
-  description: record.description || undefined,
-  amount: Number(record.amount || 0),
-  date: record.date || undefined,
-  status: (record.status as FinancialRecord["status"]) || "Pendente",
-  isInternal: record.is_internal || false,
-  createdAt: formatDateFromIso(record.created_at),
-});
+export type FinancialRecordInput = Omit<FinancialRecord, "id" | "createdAt">;
 
 export function useFinancial() {
   const { user } = useAuth();
@@ -103,19 +103,9 @@ export function useFinancial() {
   const receivables = records.filter((r) => r.type === "receita");
   const expenses = records.filter((r) => r.type === "despesa");
 
-  const addRecord = async (record: Omit<FinancialRecord, "id" | "createdAt">) => {
+  const addRecord = async (record: FinancialRecordInput) => {
     try {
-      const payload = {
-        client_id: record.clientId || null,
-        project_id: record.projectId || null,
-        type: record.type,
-        category: record.category || null,
-        description: record.description || null,
-        amount: record.amount,
-        date: record.date || null,
-        status: record.status || "Pendente",
-        is_internal: record.isInternal ?? true,
-      };
+      const payload = mapRecordToInsert(record);
       const created = await createFinancialRecord(payload);
       setRecords((prev) => [mapRecordToLegacy(created), ...prev]);
       await fetchData(); // Refresh summary
@@ -132,14 +122,7 @@ export function useFinancial() {
 
   const updateRecord = async (id: string, updates: Partial<FinancialRecord>) => {
     try {
-      const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
-      if (updates.clientId !== undefined) payload.client_id = updates.clientId || null;
-      if (updates.projectId !== undefined) payload.project_id = updates.projectId || null;
-      if (updates.category !== undefined) payload.category = updates.category;
-      if (updates.description !== undefined) payload.description = updates.description;
-      if (updates.amount !== undefined) payload.amount = updates.amount;
-      if (updates.date !== undefined) payload.date = updates.date;
-      if (updates.status !== undefined) payload.status = updates.status;
+      const payload = mapRecordToUpdate(updates);
 
       const updated = await updateFinancialRecord(id, payload);
       setRecords((prev) => prev.map((r) => (r.id === id ? mapRecordToLegacy(updated) : r)));
@@ -170,8 +153,11 @@ export function useFinancial() {
     }
   };
 
-  const markAsPaid = async (id: string) => {
-    return updateRecord(id, { status: "Pago" });
+  const markAsPaid = async (
+    id: string,
+    payment: Pick<FinancialRecord, "paidAt" | "paymentMethod" | "paymentNotes">
+  ) => {
+    return updateRecord(id, getPaidRecordUpdate(payment));
   };
 
   return {
