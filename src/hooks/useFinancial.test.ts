@@ -56,9 +56,32 @@ describe("financial record payment mapping", () => {
   });
 
   test("preserva paid_at no banco ao editar outros campos", () => {
-    const update = mapRecordToUpdate({ description: "Parcela corrigida", amount: 120 });
+    const update = mapRecordToUpdate({
+      description: "Parcela corrigida",
+      clientId: "client-2",
+      projectId: "project-2",
+      amount: 120,
+      date: "2026-08-15",
+      status: "Pago",
+    });
     expect(update).not.toHaveProperty("paid_at");
+    expect(update).not.toHaveProperty("payment_method");
+    expect(update).not.toHaveProperty("payment_notes");
     expect(update).toMatchObject({ description: "Parcela corrigida", amount: 120 });
+  });
+
+  test("limpa todos os detalhes ao desfazer um recebimento", () => {
+    expect(mapRecordToUpdate({
+      status: "Pendente",
+      paidAt: "",
+      paymentMethod: "",
+      paymentNotes: "",
+    })).toMatchObject({
+      status: "Pendente",
+      paid_at: null,
+      payment_method: null,
+      payment_notes: null,
+    });
   });
 
   test("envia campos de pagamento e vínculos ao criar um registro", () => {
