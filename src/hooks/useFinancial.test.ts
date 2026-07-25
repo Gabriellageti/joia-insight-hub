@@ -29,6 +29,15 @@ const databaseRecord = (overrides: Partial<FinancialRecordRow> = {}): FinancialR
 });
 
 describe("financial record payment mapping", () => {
+  test.each([
+    ["expense", "despesa"],
+    ["despesa", "despesa"],
+    ["revenue", "receita"],
+    ["receita", "receita"],
+  ])("mantém visível o tipo histórico %s como %s", (storedType, expectedType) => {
+    expect(mapRecordToLegacy(databaseRecord({ type: storedType })).type).toBe(expectedType);
+  });
+
   test("carrega registros antigos que já possuem dados de pagamento e vínculos", () => {
     expect(mapRecordToLegacy(databaseRecord())).toMatchObject({
       paidAt: "2026-07-20",
