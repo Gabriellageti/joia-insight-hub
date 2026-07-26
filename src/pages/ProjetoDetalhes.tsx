@@ -4,7 +4,7 @@ import { useData } from "@/contexts/DataContext";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { ArrowLeft, CalendarDays, ClipboardCheck, Edit, ListTodo, Route, Plus } from "lucide-react";
+import { ArrowLeft, CalendarDays, CheckCircle2, ClipboardCheck, Edit, ListTodo, Route, Plus } from "lucide-react";
 import { getProjectTypeLabel } from "@/lib/project-delivery";
 import { ProjectDialog } from "@/components/dialogs/ProjectDialog";
 import { TaskDialog } from "@/components/dialogs/TaskDialog";
@@ -154,6 +154,8 @@ export default function ProjetoDetalhes() {
     }
   };
 
+  const isCompleted = project.phase === "Encerramento" || project.progress >= 100;
+
 
   return (
     <div className="space-y-6">
@@ -173,6 +175,11 @@ export default function ProjetoDetalhes() {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-semibold text-foreground">{project.name}</h1>
+              {isCompleted && (
+                <Badge className="gap-1 bg-emerald-600 text-white hover:bg-emerald-600">
+                  <CheckCircle2 className="h-3.5 w-3.5" /> Concluído
+                </Badge>
+              )}
               <Badge variant="secondary">{getProjectTypeLabel(project.projectType)}</Badge>
               <Badge className={phaseColors[project.phase] || "bg-muted"} variant="outline">
                 {project.phase}

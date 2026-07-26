@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Search, Filter, MoreHorizontal, Edit, Trash2 } from "lucide-react";
+import { Plus, Search, Filter, MoreHorizontal, Edit, Trash2, CheckCircle2, AlertTriangle, ListTodo, PlayCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -39,6 +39,23 @@ export default function Projetos() {
       .map((task) => task.projectId)
   ), [tasks]);
 
+  const nextActionByProject = useMemo(() => {
+    const nextActions = new Map<string, typeof tasks[number]>();
+
+    tasks
+      .filter((task) => task.status !== "done")
+      .sort((first, second) => {
+        if (!first.dueDate) return 1;
+        if (!second.dueDate) return -1;
+        return first.dueDate.localeCompare(second.dueDate);
+      })
+      .forEach((task) => {
+        if (!nextActions.has(task.projectId)) nextActions.set(task.projectId, task);
+      });
+
+    return nextActions;
+  }, [tasks]);
+
   const isAttentionProject = (project: Project) => {
     const forecastEndDate = project.forecastEndDate || project.endDate || "";
     return project.status !== "green" || Boolean(forecastEndDate && isPastDate(forecastEndDate));
@@ -64,6 +81,12 @@ export default function Projetos() {
     { value: "no_next_action", label: "Sem próxima ação" },
     { value: "closed", label: "Encerrados" },
   ];
+  const managementViews: { value: ProjectView; label: string; icon: typeof PlayCircle; className: string }[] = [
+    { value: "active", label: "Em andamento", icon: PlayCircle, className: "text-blue-600" },
+    { value: "attention", label: "Precisa de atenção", icon: AlertTriangle, className: "text-amber-600" },
+    { value: "no_next_action", label: "Sem próxima ação", icon: ListTodo, className: "text-violet-600" },
+    { value: "closed", label: "Concluídos", icon: CheckCircle2, className: "text-emerald-600" },
+  ];
   const handleDelete = () => { if (deleteId) { deleteProject(deleteId); toast.success("Projeto excluído"); setDeleteId(null); } };
 
   return (
@@ -71,6 +94,26 @@ export default function Projetos() {
       <div className="flex items-center justify-between">
         <div><h1 className="text-2xl font-semibold text-foreground">Projetos</h1><p className="text-muted-foreground">Acompanhe projetos de consultoria, desenvolvimento, IA e transformação digital</p></div>
         <Button className="bg-accent text-accent-foreground hover:bg-accent/90" onClick={() => { setEditingProject(null); setDialogOpen(true); }}><Plus className="h-4 w-4 mr-2" />Novo Projeto</Button>
+      </div>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {managementViews.map((option) => {
+          const Icon = option.icon;
+          const count = projects.filter((project) => matchesView(project, option.value)).length;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => setView(option.value)}
+              className={`rounded-xl border bg-card p-4 text-left transition-shadow hover:shadow-sm ${view === option.value ? "ring-2 ring-primary" : ""}`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm text-muted-foreground">{option.label}</span>
+                <Icon className={`h-4 w-4 ${option.className}`} />
+              </div>
+              <p className="mt-2 text-2xl font-semibold tabular-nums">{count}</p>
+            </button>
+          );
+        })}
       </div>
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-4">
@@ -99,20 +142,32 @@ export default function Projetos() {
         {filteredProjects.map((project) => {
           const forecastEndDate = project.forecastEndDate || project.endDate || "";
           const overdue = forecastEndDate ? isPastDate(forecastEndDate) : false;
+          const completed = projectIsClosed(project);
+          const nextAction = nextActionByProject.get(project.id);
           const responsibleName = project.responsible || project.responsibleNameLegacy || "Responsável pendente";
           return (
             <Card key={project.id} className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => navigate(`/projetos/${project.id}`)}>
               <CardHeader className="pb-2">
                 <div className="flex items-start justify-between">
-                  <div><h3 className="font-semibold">{project.name}</h3><p className="text-sm text-muted-foreground">{project.clientName}</p></div>
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="font-semibold">{project.name}</h3>
+                      {completed && (
+                        <Badge className="gap-1 bg-emerald-600 text-white hover:bg-emerald-600">
+                          <CheckCircle2 className="h-3.5 w-3.5" /> Concluído
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-sm text-muted-foreground">{project.clientName}</p>
+                  </div>
                   <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => e.stopPropagation()}><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent><DropdownMenuItem onClick={(e) => { e.stopPropagation(); setEditingProject(project); setDialogOpen(true); }}><Edit className="h-4 w-4 mr-2" />Editar</DropdownMenuItem><DropdownMenuItem onClick={(e) => { e.stopPropagation(); setDeleteId(project.id); }} className="text-destructive"><Trash2 className="h-4 w-4 mr-2" />Excluir</DropdownMenuItem></DropdownMenuContent></DropdownMenu>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 text-sm">
-                    <div className={`w-2 h-2 rounded-full ${statusColors[project.status]}`} />
-                    <span className="text-foreground">{project.statusReason || "Status automático"}</span>
+                    <div className={`w-2 h-2 rounded-full ${completed ? "bg-emerald-500" : statusColors[project.status]}`} />
+                    <span className="text-foreground">{completed ? "Projeto concluído" : project.statusReason || "Status automático"}</span>
                   </div>
                   <Badge variant="outline" className="text-xs">
                     {project.statusSource === "manual" ? "Status manual" : "Status automático"}
@@ -138,6 +193,19 @@ export default function Projetos() {
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
+                <div className="rounded-lg border bg-muted/30 p-3">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Próxima ação</p>
+                  {nextAction ? (
+                    <>
+                      <p className="mt-1 truncate text-sm font-medium">{nextAction.title}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {nextAction.responsible || "Responsável pendente"}{nextAction.dueDate ? ` · ${nextAction.dueDate}` : " · Sem prazo"}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="mt-1 text-sm text-amber-700">Defina a próxima ação para este projeto.</p>
+                  )}
+                </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Responsável</span>
                   <div className="flex items-center gap-2">
