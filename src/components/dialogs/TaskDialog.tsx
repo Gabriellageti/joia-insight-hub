@@ -13,7 +13,7 @@ import { TaskComments } from "@/components/plano-acao/TaskComments";
 import { TaskHistory } from "@/components/plano-acao/TaskHistory";
 import { useData } from "@/contexts/DataContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { listTaskAssignees, type TaskAssignee } from "@/integrations/supabase/tasks";
+import { ensureProjectTaskAssignee, listTaskAssignees, type TaskAssignee } from "@/integrations/supabase/tasks";
 import { hasTaskValidationErrors, validateTask, type TaskValidationErrors } from "@/lib/tasks/validation";
 import type { Task } from "@/types";
 import { toast } from "sonner";
@@ -45,7 +45,7 @@ const emptyTask = (userId?: string): Omit<Task, "id" | "createdAt"> => ({
 
 export function TaskDialog({ open, onOpenChange, task }: TaskDialogProps) {
   const { addTask, updateTask, projects, projectsLoading, projectsError } = useData();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [formData, setFormData] = useState<Omit<Task, "id" | "createdAt">>(() => emptyTask(user?.id));
   const [errors, setErrors] = useState<TaskValidationErrors>({});
   const [saving, setSaving] = useState(false);
@@ -60,7 +60,7 @@ export function TaskDialog({ open, onOpenChange, task }: TaskDialogProps) {
     setAssigneesLoading(true);
     setAssigneesError(null);
     try {
-      const data = await listTaskAssignees(projectId);
+      const data = await listTaskAssignees(projectId, Boolean(projectId && isAdmin));
       if (requestId !== assigneeRequestRef.current) return;
       setAssignees(data);
       setFormData((current) => {
@@ -77,7 +77,7 @@ export function TaskDialog({ open, onOpenChange, task }: TaskDialogProps) {
     } finally {
       if (requestId === assigneeRequestRef.current) setAssigneesLoading(false);
     }
-  }, []);
+  }, [isAdmin]);
 
   useEffect(() => {
     if (!open) return;
@@ -94,7 +94,7 @@ export function TaskDialog({ open, onOpenChange, task }: TaskDialogProps) {
     if (!open) return;
     const projectId = formData.taskType === "project" ? formData.projectId : undefined;
     void loadAssignees(projectId || undefined);
-  }, [formData.projectId, formData.taskType, loadAssignees, open]);
+  }, [formData.projectId, formData.taskType, isAdmin, loadAssignees, open]);
 
   const setField = <Key extends keyof typeof formData>(field: Key, value: (typeof formData)[Key]) => {
     setFormData((current) => ({ ...current, [field]: value }));
@@ -143,6 +143,9 @@ export function TaskDialog({ open, onOpenChange, task }: TaskDialogProps) {
         await updateTask(task.id, formData);
         toast.success("Tarefa atualizada com sucesso.");
       } else {
+        if (isAdmin && formData.taskType === "project" && formData.projectId && formData.assignedTo) {
+          await ensureProjectTaskAssignee(formData.projectId, formData.assignedTo);
+        }
         await addTask(formData);
         toast.success("Tarefa criada com sucesso.");
       }
@@ -203,6 +206,7 @@ export function TaskDialog({ open, onOpenChange, task }: TaskDialogProps) {
                 <SelectContent><SelectItem value="none">Selecione o responsável</SelectItem>{assignees.map((assignee) => <SelectItem key={assignee.id} value={assignee.id}>{assignee.full_name || "Usuário sem nome"}</SelectItem>)}</SelectContent>
               </Select>
               {errors.assignedTo && <p id="task-assignee-error" className="text-sm text-destructive">{errors.assignedTo}</p>}
+              {isAdmin && formData.taskType === "project" && <p className="text-xs text-muted-foreground">Ao atribuir a alguém da equipe, essa pessoa será incluída neste projeto como Operador.</p>}
               {assigneesError && <Alert variant="destructive"><AlertDescription className="flex items-center justify-between gap-2">{assigneesError}<Button type="button" size="sm" variant="outline" onClick={() => void loadAssignees(formData.taskType === "project" ? formData.projectId : undefined)}>Tentar novamente</Button></AlertDescription></Alert>}
             </div>
 
