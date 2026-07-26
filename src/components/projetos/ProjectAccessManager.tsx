@@ -14,7 +14,7 @@ const labels: Record<Access, string> = {
 };
 
 export function ProjectAccessManager({ projectId }: { projectId: string }) {
-  const [people, setPeople] = useState<{ id: string; full_name: string | null }[]>([]);
+  const [people, setPeople] = useState<{ id: string; name: string }[]>([]);
   const [accessByUser, setAccessByUser] = useState<Record<string, Access>>({});
   const [saving, setSaving] = useState<string | null>(null);
   const [membersLoaded, setMembersLoaded] = useState(false);
@@ -35,9 +35,9 @@ export function ProjectAccessManager({ projectId }: { projectId: string }) {
 
   useEffect(() => {
     const loadPeople = async () => {
-      const { data, error } = await supabase.from("profiles").select("id, full_name").order("full_name");
+      const { data, error } = await supabase.from("employees").select("user_id, name").eq("status", "active").not("user_id", "is", null).order("name");
       if (error) { toast.error("Não foi possível carregar as contas da equipe."); return; }
-      setPeople(data ?? []);
+      setPeople((data ?? []).flatMap((employee) => employee.user_id ? [{ id: employee.user_id, name: employee.name }] : []));
     };
     void loadPeople();
   }, []);
@@ -67,7 +67,7 @@ export function ProjectAccessManager({ projectId }: { projectId: string }) {
     {people.map((employee) => {
       const access = accessByUser[employee.id] || "none";
       return <div key={employee.id} className="flex items-center justify-between gap-3 rounded-md border p-3">
-        <div><p className="text-sm font-medium">{employee.full_name || "Usuário sem nome"}</p><p className="text-xs text-muted-foreground">{access === "manager" ? "Vê também o financeiro deste projeto." : ""}</p></div>
+        <div><p className="text-sm font-medium">{employee.name}</p><p className="text-xs text-muted-foreground">{access === "manager" ? "Vê também o financeiro deste projeto." : ""}</p></div>
         <Select value={access} disabled={saving === employee.id} onValueChange={(value) => void changeAccess(employee.id, value as Access)}>
           <SelectTrigger className="w-44"><ShieldCheck className="mr-2 h-4 w-4" /><SelectValue /></SelectTrigger>
           <SelectContent><SelectItem value="none">{labels.none}</SelectItem><SelectItem value="editor">{labels.editor}</SelectItem><SelectItem value="manager">{labels.manager}</SelectItem></SelectContent>

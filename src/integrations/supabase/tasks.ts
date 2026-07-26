@@ -30,9 +30,14 @@ export function listTaskAssignees(projectId?: string, includeAvailableTeam = fal
     }
 
     if (includeAvailableTeam) {
-      const { data, error } = await supabase.from("profiles").select("id, full_name").order("full_name");
+      const { data, error } = await supabase
+        .from("employees")
+        .select("user_id, name")
+        .eq("status", "active")
+        .not("user_id", "is", null)
+        .order("name");
       if (error) throw new Error(error.message);
-      return data ?? [];
+      return (data ?? []).flatMap((employee) => employee.user_id ? [{ id: employee.user_id, full_name: employee.name }] : []);
     }
 
     const { data: memberships, error: membershipError } = await supabase
