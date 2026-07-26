@@ -1155,8 +1155,7 @@ type SupabaseEmployeeInsert = Database["public"]["Tables"]["employees"]["Insert"
 type SupabaseEmployeeUpdate = Database["public"]["Tables"]["employees"]["Update"];
 
 const buildSupabaseEmployeeInsert = (
-  employee: Omit<Employee, "id" | "createdAt">,
-  userId?: string | null
+  employee: Omit<Employee, "id" | "createdAt">
 ): SupabaseEmployeeInsert => {
   const timestamp = new Date().toISOString();
 
@@ -1167,7 +1166,9 @@ const buildSupabaseEmployeeInsert = (
     status: employee.status || "onboarding",
     hire_date: toSupabaseDate(employee.startDate),
     avatar_url: employee.avatarUrl || null,
-    user_id: userId || null,
+    // The account is linked only after the person signs in with this e-mail.
+    // The administrator creating the employee must never become their account.
+    user_id: null,
     created_at: timestamp,
     updated_at: timestamp,
   };
@@ -3010,7 +3011,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
     employees,
     addEmployee: async (employee) => {
-      const payload = buildSupabaseEmployeeInsert(employee, user?.id);
+      const payload = buildSupabaseEmployeeInsert(employee);
 
       try {
         const created = await createSupabaseEmployee(payload);
