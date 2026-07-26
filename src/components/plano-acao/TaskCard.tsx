@@ -57,6 +57,7 @@ export function TaskCard({ task, saving = false, onClick, onDelete, onToggleComp
               <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground/60 opacity-0 group-hover:opacity-100" aria-hidden="true" />
             </div>
             {task.taskType === "project" && task.projectName && <p className="mt-1 truncate text-xs text-muted-foreground">{task.projectName}</p>}
+            {task.taskType === "project" && task.clientName && <p className="truncate text-xs text-muted-foreground">{task.clientName}</p>}
           </div>
         </div>
 
