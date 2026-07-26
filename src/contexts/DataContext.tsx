@@ -329,7 +329,7 @@ type LegacyClient = Partial<Omit<Client, "address">> & {
 const mapSupabaseClientToLegacy = (client: ClientRow): LegacyClient => ({
   id: client.id,
   name: client.name,
-  tradeName: client.name,
+  tradeName: client.trade_name || client.name,
   razaoSocial: client.name,
   cnpj: client.cnpj || "",
   segment: client.segment || "",
@@ -344,7 +344,7 @@ const mapSupabaseClientToLegacy = (client: ClientRow): LegacyClient => ({
   risk: "low",
   lastContact: formatDateFromIso(client.updated_at || client.created_at),
   createdAt: formatDateFromIso(client.created_at),
-  endereco: {},
+  endereco: client.address ? { logradouro: client.address } : {},
   preferenciasRelacionamento: {},
 });
 
@@ -356,12 +356,14 @@ const buildSupabaseClientInsert = (client: LegacyClient): SupabaseClientInsert =
 
   return {
     name: client.razaoSocial || client.name || client.tradeName || "Cliente",
+    trade_name: client.tradeName || null,
     cnpj: client.cnpj || null,
     segment: client.segment || client.segmentoTags?.[0] || null,
     status: client.status || "ativo",
     contact_name: client.contatoPrincipal?.nome || client.primaryContactName || null,
     contact_email: client.contatoPrincipal?.email || client.primaryContactEmail || null,
     contact_phone: client.contatoPrincipal?.whatsapp || client.primaryContactPhone || null,
+    address: typeof client.address === "string" ? client.address : null,
     created_at: timestamp,
     updated_at: timestamp,
   };
@@ -372,6 +374,7 @@ const buildSupabaseClientUpdate = (client: LegacyClient): SupabaseClientUpdate =
 
   if (typeof client.razaoSocial !== "undefined" || typeof client.name !== "undefined" || typeof client.tradeName !== "undefined") {
     payload.name = client.razaoSocial || client.name || client.tradeName;
+    payload.trade_name = client.tradeName || null;
   }
 
   if (typeof client.cnpj !== "undefined") {
@@ -390,6 +393,10 @@ const buildSupabaseClientUpdate = (client: LegacyClient): SupabaseClientUpdate =
     payload.contact_name = client.contatoPrincipal?.nome || client.primaryContactName || null;
     payload.contact_email = client.contatoPrincipal?.email || client.primaryContactEmail || null;
     payload.contact_phone = client.contatoPrincipal?.whatsapp || client.primaryContactPhone || null;
+  }
+
+  if (typeof client.address === "string") {
+    payload.address = client.address;
   }
 
   return payload;
