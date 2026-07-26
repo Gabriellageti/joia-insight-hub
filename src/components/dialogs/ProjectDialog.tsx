@@ -128,6 +128,7 @@ export function ProjectDialog({
   const { addProject, updateProject, clients, employees } = useData();
   const { user } = useAuth();
   const [responsibleOpen, setResponsibleOpen] = useState(false);
+  const [advancedDetailsOpen, setAdvancedDetailsOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const responsibleTriggerRef = useRef<HTMLButtonElement>(null);
 
@@ -171,6 +172,7 @@ export function ProjectDialog({
   useEffect(() => {
     if (!open) {
       initializedKeyRef.current = null;
+      setAdvancedDetailsOpen(false);
       return;
     }
 
@@ -625,6 +627,25 @@ export function ProjectDialog({
               </div>
             </div>
 
+            {!isEditing && (
+              <div className="rounded-lg border border-dashed p-3">
+                <p className="text-sm font-medium">Pronto para começar</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Nome, cliente, tipo e responsável já são suficientes para abrir o projeto. Os detalhes podem ser preenchidos depois.
+                </p>
+                <Button
+                  type="button"
+                  variant="link"
+                  size="sm"
+                  className="mt-1 h-auto px-0"
+                  onClick={() => setAdvancedDetailsOpen((current) => !current)}
+                >
+                  {advancedDetailsOpen ? "Ocultar detalhes avançados" : "Adicionar detalhes agora"}
+                </Button>
+              </div>
+            )}
+
+            {(isEditing || advancedDetailsOpen) && <>
             {/* Optional project details */}
             <div className="space-y-4">
               <h3 className="text-sm font-medium text-muted-foreground">Objetivo e Escopo</h3>
@@ -864,6 +885,7 @@ export function ProjectDialog({
                 </div>
               )}
             </div>
+            </>}
           </form>
         </ScrollArea>
 
