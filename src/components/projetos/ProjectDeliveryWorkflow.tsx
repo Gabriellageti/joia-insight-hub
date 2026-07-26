@@ -13,6 +13,7 @@ interface ProjectDeliveryWorkflowProps {
   tasks?: Task[];
   onCreateTask?: (step: DeliveryStep) => void;
   onOpenTask?: (task: Task) => void;
+  onAdvancePhase?: (nextStep: DeliveryStep) => void;
 }
 
 const statusLabels: Record<Task["status"], string> = {
@@ -66,6 +67,7 @@ export function ProjectDeliveryWorkflow({
   tasks = [],
   onCreateTask,
   onOpenTask,
+  onAdvancePhase,
 }: ProjectDeliveryWorkflowProps) {
   const navigate = useNavigate();
   const steps = getDeliveryStepsForProject(project);
@@ -124,6 +126,7 @@ export function ProjectDeliveryWorkflow({
             const status = getStepStatus(index, safeActiveIndex, stepTasks);
             const isCompleted = status === "completed";
             const isActive = status === "active";
+            const nextStep = steps[index + 1];
             const Icon = isCompleted ? CheckCircle2 : isActive ? Clock : Circle;
 
             return (
@@ -163,6 +166,11 @@ export function ProjectDeliveryWorkflow({
                     {stepTasks[0] && (
                       <Button variant="secondary" size="sm" onClick={() => onOpenTask?.(stepTasks[0])}>
                         Abrir tarefa
+                      </Button>
+                    )}
+                    {isActive && nextStep && (
+                      <Button size="sm" onClick={() => onAdvancePhase?.(nextStep)}>
+                        Avançar fase
                       </Button>
                     )}
                   </div>

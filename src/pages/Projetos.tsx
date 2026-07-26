@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plus, Search, Filter, MoreHorizontal, Edit, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -20,16 +20,50 @@ import { getProjectTypeLabel } from "@/lib/project-delivery";
 const statusColors = { green: "bg-green-500", yellow: "bg-yellow-500", red: "bg-red-500" };
 const phaseColors: Record<string, string> = { "Diagnóstico": "bg-blue-100 text-blue-700", "Quick wins": "bg-purple-100 text-purple-700", "Estruturação": "bg-orange-100 text-orange-700", "Acompanhamento": "bg-green-100 text-green-700", "Cultura e treinamento": "bg-teal-100 text-teal-700" };
 const getInitials = (value?: string) => value?.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase() || "--";
+type ProjectView = "all" | "active" | "attention" | "no_next_action" | "closed";
+
+const projectIsClosed = (project: Project) => project.phase === "Encerramento" || project.progress >= 100;
 
 export default function Projetos() {
   const navigate = useNavigate();
-  const { projects, deleteProject } = useData();
+  const { projects, deleteProject, tasks } = useData();
   const [search, setSearch] = useState("");
+  const [view, setView] = useState<ProjectView>("all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
-  const filteredProjects = projects.filter(p => p.name.toLowerCase().includes(search.toLowerCase()) || p.clientName.toLowerCase().includes(search.toLowerCase()));
+  const projectHasPendingAction = useMemo(() => new Set(
+    tasks
+      .filter((task) => task.status !== "done")
+      .map((task) => task.projectId)
+  ), [tasks]);
+
+  const isAttentionProject = (project: Project) => {
+    const forecastEndDate = project.forecastEndDate || project.endDate || "";
+    return project.status !== "green" || Boolean(forecastEndDate && isPastDate(forecastEndDate));
+  };
+
+  const matchesView = (project: Project, targetView: ProjectView) => {
+    if (targetView === "all") return true;
+    if (targetView === "closed") return projectIsClosed(project);
+    if (targetView === "active") return !projectIsClosed(project);
+    if (targetView === "attention") return !projectIsClosed(project) && isAttentionProject(project);
+    return !projectIsClosed(project) && !projectHasPendingAction.has(project.id);
+  };
+
+  const filteredProjects = useMemo(() => projects.filter((project) => {
+    const matchesSearch = project.name.toLowerCase().includes(search.toLowerCase()) || project.clientName.toLowerCase().includes(search.toLowerCase());
+    return matchesSearch && matchesView(project, view);
+  }), [projects, search, view, projectHasPendingAction]);
+
+  const viewOptions: { value: ProjectView; label: string }[] = [
+    { value: "all", label: "Todos" },
+    { value: "active", label: "Em andamento" },
+    { value: "attention", label: "Precisa de atenção" },
+    { value: "no_next_action", label: "Sem próxima ação" },
+    { value: "closed", label: "Encerrados" },
+  ];
   const handleDelete = () => { if (deleteId) { deleteProject(deleteId); toast.success("Projeto excluído"); setDeleteId(null); } };
 
   return (
@@ -38,9 +72,28 @@ export default function Projetos() {
         <div><h1 className="text-2xl font-semibold text-foreground">Projetos</h1><p className="text-muted-foreground">Acompanhe projetos de consultoria, desenvolvimento, IA e transformação digital</p></div>
         <Button className="bg-accent text-accent-foreground hover:bg-accent/90" onClick={() => { setEditingProject(null); setDialogOpen(true); }}><Plus className="h-4 w-4 mr-2" />Novo Projeto</Button>
       </div>
-      <div className="flex items-center gap-4">
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center gap-4">
         <div className="relative flex-1 max-w-sm"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input placeholder="Buscar projeto ou cliente..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} /></div>
-        <Button variant="outline" size="sm"><Filter className="h-4 w-4 mr-2" />Filtros</Button>
+        <Filter className="h-4 w-4 text-muted-foreground" />
+        </div>
+        <div className="flex flex-wrap gap-2" aria-label="Filtros rápidos de projetos">
+          {viewOptions.map((option) => (
+            <Button
+              key={option.value}
+              type="button"
+              size="sm"
+              variant={view === option.value ? "default" : "outline"}
+              aria-pressed={view === option.value}
+              onClick={() => setView(option.value)}
+            >
+              {option.label}
+            </Button>
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {filteredProjects.length} projeto{filteredProjects.length === 1 ? " encontrado" : "s encontrados"}
+        </p>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredProjects.map((project) => {

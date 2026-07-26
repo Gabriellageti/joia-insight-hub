@@ -9,6 +9,7 @@ import { getProjectTypeLabel } from "@/lib/project-delivery";
 import { ProjectDialog } from "@/components/dialogs/ProjectDialog";
 import { TaskDialog } from "@/components/dialogs/TaskDialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { toast } from "sonner";
 import type { Task } from "@/types";
 import type { DeliveryStep } from "@/lib/project-delivery";
 import {
@@ -32,7 +33,7 @@ const phaseColors: Record<string, string> = {
 export default function ProjetoDetalhes() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { projects, clients, tasks, diagnostics, meetings, deliverables } =
+  const { projects, clients, tasks, diagnostics, meetings, deliverables, updateProject } =
     useData();
 
   const [projectDialogOpen, setProjectDialogOpen] = useState(false);
@@ -142,6 +143,15 @@ export default function ProjetoDetalhes() {
   const handleOpenTask = (task: Task) => {
     setSelectedTask(task);
     setTaskDialogOpen(true);
+  };
+
+  const handleAdvancePhase = async (nextStep: DeliveryStep) => {
+    try {
+      await updateProject(project.id, { phase: nextStep.title });
+      toast.success(`Projeto avançou para ${nextStep.title}.`);
+    } catch {
+      toast.error("Não foi possível atualizar a fase do projeto.");
+    }
   };
 
 
@@ -267,6 +277,7 @@ export default function ProjetoDetalhes() {
         tasks={projectTasks}
         onCreateTask={handleCreateTaskFromStep}
         onOpenTask={handleOpenTask}
+        onAdvancePhase={handleAdvancePhase}
       />
 
       {/* Resumo de Tarefas */}
