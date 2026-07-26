@@ -195,7 +195,11 @@ export default function Projetos() {
                 </TooltipProvider>
                 <div className="rounded-lg border bg-muted/30 p-3">
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Próxima ação</p>
-                  {nextAction ? (
+                  {completed ? (
+                    <p className="mt-1 text-sm font-medium text-emerald-700">
+                      Projeto concluído — nenhuma ação pendente.
+                    </p>
+                  ) : nextAction ? (
                     <>
                       <p className="mt-1 truncate text-sm font-medium">{nextAction.title}</p>
                       <p className="text-xs text-muted-foreground">

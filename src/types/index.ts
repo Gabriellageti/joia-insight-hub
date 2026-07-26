@@ -257,6 +257,7 @@ export interface Diagnostic {
   updatedAt: string;
   totalQuestions: number;
   answeredQuestions: number;
+  answers?: Record<string, import("@/types/diagnostic-execution").DiagnosticAnswer>;
   autoGenerateOpportunities?: boolean;
   responsibleName?: string;
   responsibleId?: string;

@@ -45,6 +45,8 @@ const legacyDiagnosticFields = [
   "opportunities_count",
 ];
 
+const requiredDiagnosticFields = new Set(["answers"]);
+
 const stripLegacyDiagnosticPayload = <T extends Record<string, unknown>>(
   payload: T,
   extraKeys: string[] = []
@@ -82,6 +84,9 @@ const retryDiagnosticMutation = async <T extends Record<string, unknown>, R>(
     }
 
     const missingColumn = extractMissingColumn(error);
+    if (missingColumn && requiredDiagnosticFields.has(missingColumn)) {
+      throw new Error("A atualização do banco para salvar respostas de diagnósticos ainda não foi aplicada.");
+    }
     const sanitizedPayload = stripLegacyDiagnosticPayload(
       currentPayload as Record<string, unknown>,
       missingColumn ? [missingColumn] : []
