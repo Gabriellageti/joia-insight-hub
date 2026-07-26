@@ -1,6 +1,6 @@
 
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, CalendarRange, CheckCircle2, Clock3, Columns3, FolderKanban, PlayCircle, Plus, User } from "lucide-react";
+import { AlertTriangle, CalendarRange, FolderKanban, Plus, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -22,15 +22,12 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getDeliveryStepsForProject } from "@/lib/project-delivery";
 
-const columns: { id: Task["status"]; title: string }[] = [
-  { id: "backlog", title: "Backlog" },
-  { id: "next", title: "Próximas" },
-  { id: "in_progress", title: "Em andamento" },
-  { id: "waiting", title: "Aguardando" },
-  { id: "review", title: "Em revisão" },
-  { id: "done", title: "Concluídas" },
+type BoardColumnId = "not_started" | "in_progress" | "done";
+const columns: { id: BoardColumnId; title: string; statuses: Task["status"][]; targetStatus: Task["status"] }[] = [
+  { id: "not_started", title: "Não iniciadas", statuses: ["backlog", "next"], targetStatus: "backlog" },
+  { id: "in_progress", title: "Em andamento", statuses: ["in_progress", "waiting", "review"], targetStatus: "in_progress" },
+  { id: "done", title: "Concluídas", statuses: ["done"], targetStatus: "done" },
 ];
-const focusColumnIds: Task["status"][] = ["next", "in_progress", "waiting"];
 
 const emptyFilters = (projectId = "all"): TaskFilterValues => ({ search: "", projectId, status: "all", priority: "all", assignedTo: "all", taskType: "all", overdue: false });
 
@@ -45,7 +42,6 @@ export default function PlanoAcao() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [deletingTask, setDeletingTask] = useState<Task | null>(null);
-  const [showFullBoard, setShowFullBoard] = useState(false);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor)
@@ -100,11 +96,7 @@ export default function PlanoAcao() {
     return filterTasks(workspaceTasks, filters);
   }, [filters, tasks, user?.id, workspace]);
 
-  const tasksByColumn = useMemo(() => Object.fromEntries(columns.map((column) => [column.id, filteredTasks.filter((task) => task.status === column.id)])) as Record<Task["status"], Task[]>, [filteredTasks]);
-  const visibleColumns = useMemo(
-    () => showFullBoard ? columns : columns.filter((column) => focusColumnIds.includes(column.id)),
-    [showFullBoard]
-  );
+  const tasksByColumn = useMemo(() => Object.fromEntries(columns.map((column) => [column.id, filteredTasks.filter((task) => column.statuses.includes(task.status))])) as Record<BoardColumnId, Task[]>, [filteredTasks]);
   const operationalCounts = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -113,11 +105,8 @@ export default function PlanoAcao() {
         const dueDate = parseTaskDate(task.dueDate);
         return task.status !== "done" && Boolean(dueDate && dueDate < today);
       }).length,
-      active: tasksByColumn.in_progress.length,
-      waiting: tasksByColumn.waiting.length + tasksByColumn.review.length,
-      done: tasksByColumn.done.length,
     };
-  }, [filteredTasks, tasksByColumn]);
+  }, [filteredTasks]);
   const savingIds = useMemo(() => new Set(savingTaskIds), [savingTaskIds]);
   const assignees = useMemo(() => {
     const byId = new Map<string, string>();
@@ -128,12 +117,13 @@ export default function PlanoAcao() {
   }, [tasks]);
   const selectedProject = useMemo(() => projects.find((project) => project.id === filters.projectId) || null, [filters.projectId, projects]);
 
-  const handleDrop = async (taskId: string, status: Task["status"]) => {
+  const handleDrop = async (taskId: string, columnId: BoardColumnId) => {
     const task = tasks.find((item) => item.id === taskId);
-    if (!task || task.status === status || savingIds.has(task.id)) return;
+    const column = columns.find((item) => item.id === columnId);
+    if (!task || !column || column.statuses.includes(task.status) || savingIds.has(task.id)) return;
     try {
-      await updateTask(task.id, { status });
-      toast.success(`Tarefa movida para ${columns.find((column) => column.id === status)?.title}.`);
+      await updateTask(task.id, { status: column.targetStatus });
+      toast.success(`Tarefa movida para ${column.title}.`);
     } catch {
       // DataContext rolls the optimistic state back and reports the persistence error.
     }
@@ -141,9 +131,9 @@ export default function PlanoAcao() {
 
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over) return;
-    const status = String(over.id) as Task["status"];
-    if (!columns.some((column) => column.id === status)) return;
-    void handleDrop(String(active.id), status);
+    const columnId = String(over.id) as BoardColumnId;
+    if (!columns.some((column) => column.id === columnId)) return;
+    void handleDrop(String(active.id), columnId);
   };
 
   const handleToggleComplete = async (task: Task) => {
@@ -241,21 +231,15 @@ export default function PlanoAcao() {
 
       <div className="flex flex-wrap gap-2" aria-label="Atalhos operacionais">
         <Button variant={filters.overdue ? "destructive" : "outline"} size="sm" onClick={() => setFilters((current) => ({ ...current, overdue: !current.overdue, status: "all" }))}><AlertTriangle className="mr-1.5 h-4 w-4" />{operationalCounts.overdue} atrasadas</Button>
-        <Button variant={filters.status === "in_progress" ? "default" : "outline"} size="sm" onClick={() => setFilters((current) => ({ ...current, overdue: false, status: "in_progress" }))}><PlayCircle className="mr-1.5 h-4 w-4" />{operationalCounts.active} em andamento</Button>
-        <Button variant={filters.status === "waiting" ? "default" : "outline"} size="sm" onClick={() => setFilters((current) => ({ ...current, overdue: false, status: "waiting" }))}><Clock3 className="mr-1.5 h-4 w-4" />{operationalCounts.waiting} aguardando</Button>
-        <Button variant={filters.status === "done" ? "default" : "ghost"} size="sm" onClick={() => setFilters((current) => ({ ...current, overdue: false, status: "done" }))}><CheckCircle2 className="mr-1.5 h-4 w-4" />{operationalCounts.done} concluídas</Button>
       </div>
 
       {filteredTasks.length === 0 ? (
         <Card><CardContent className="py-12 text-center"><p className="font-medium">{tasks.length === 0 ? "Nenhuma tarefa cadastrada." : "Nenhuma tarefa encontrada com estes filtros."}</p><p className="mt-1 text-sm text-muted-foreground">{tasks.length === 0 ? "Crie a primeira tarefa para começar." : "Limpe ou altere os filtros para ver outros resultados."}</p></CardContent></Card>
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <div><h2 className="font-semibold">{showFullBoard ? "Fluxo completo" : "Foco operacional"}</h2><p className="text-sm text-muted-foreground">{showFullBoard ? "Todas as etapas do processo." : "Próximas ações, trabalho em curso e pendências externas."}</p></div>
-            <Button variant="outline" size="sm" onClick={() => setShowFullBoard((value) => !value)}><Columns3 className="mr-2 h-4 w-4" />{showFullBoard ? "Voltar ao foco" : "Ver fluxo completo"}</Button>
-          </div>
+          <div className="mb-3"><h2 className="font-semibold">Fluxo de trabalho</h2><p className="text-sm text-muted-foreground">Cada tarefa tem um estado simples: não iniciada, em andamento ou concluída.</p></div>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3" aria-label="Kanban de tarefas">
-            {visibleColumns.map((column) => (
+            {columns.map((column) => (
               <KanbanColumn key={column.id} status={column.id} title={column.title} count={tasksByColumn[column.id].length}>
                 {tasksByColumn[column.id].map((task) => <TaskCard key={task.id} task={task} saving={savingIds.has(task.id)} onClick={() => { setEditingTask(task); setDialogOpen(true); }} onDelete={() => setDeletingTask(task)} onToggleComplete={() => void handleToggleComplete(task)} />)}
               </KanbanColumn>

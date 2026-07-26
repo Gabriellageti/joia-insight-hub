@@ -1,11 +1,10 @@
 import { useDroppable } from "@dnd-kit/core";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { Task } from "@/types";
 import type { ReactNode } from "react";
 
 interface KanbanColumnProps {
-  status: Task["status"];
+  status: string;
   title: string;
   count: number;
   children: ReactNode;
