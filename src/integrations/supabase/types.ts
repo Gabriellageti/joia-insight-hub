@@ -151,6 +151,7 @@ export type Database = {
       }
       clients: {
         Row: {
+          address: string | null
           cnpj: string | null
           contact_email: string | null
           contact_name: string | null
@@ -160,10 +161,13 @@ export type Database = {
           money_hypothesis: number | null
           name: string
           segment: string | null
+          state_registration: string | null
           status: string | null
+          trade_name: string | null
           updated_at: string
         }
         Insert: {
+          address?: string | null
           cnpj?: string | null
           contact_email?: string | null
           contact_name?: string | null
@@ -173,10 +177,13 @@ export type Database = {
           money_hypothesis?: number | null
           name: string
           segment?: string | null
+          state_registration?: string | null
           status?: string | null
+          trade_name?: string | null
           updated_at?: string
         }
         Update: {
+          address?: string | null
           cnpj?: string | null
           contact_email?: string | null
           contact_name?: string | null
@@ -186,7 +193,9 @@ export type Database = {
           money_hypothesis?: number | null
           name?: string
           segment?: string | null
+          state_registration?: string | null
           status?: string | null
+          trade_name?: string | null
           updated_at?: string
         }
         Relationships: []
