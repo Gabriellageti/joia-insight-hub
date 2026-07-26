@@ -6,7 +6,9 @@ ALTER TABLE public.clients
   ADD COLUMN IF NOT EXISTS state_registration text,
   ADD COLUMN IF NOT EXISTS address text;
 
-WITH client_seed (name, trade_name, cnpj, state_registration, segment, contact_name, contact_phone, status, address) AS (
+WITH workspace_context AS (
+  SELECT workspace_id FROM public.clients WHERE workspace_id IS NOT NULL LIMIT 1
+), client_seed (name, trade_name, cnpj, state_registration, segment, contact_name, contact_phone, status, address) AS (
   VALUES
     ('Granel Piscinas Industria e Comercio LTDA', 'Granel Piscinas', NULL, NULL, 'Piscinas', NULL, NULL, 'ativo', NULL),
     ('Trevo', 'Trevo', NULL, NULL, 'Desenvolvimento de aplicativos e marketing', 'Ana Luíza', '5532988913858', 'ativo', NULL),
@@ -15,9 +17,10 @@ WITH client_seed (name, trade_name, cnpj, state_registration, segment, contact_n
     ('Tecidos C & S de Cataguases Ltda', 'C & S', '07622150000186', NULL, 'Comércio de tecidos', 'Nilton Carrara', '5532984978000', 'ativo', 'Praça Rui Barbosa, 168 - Centro, Cataguases - MG, CEP 36770-034'),
     ('Agua 2 O Distribuidora de Bebidas LTDA', 'Distribuidora de Bebidas H2O', '50787021000177', '004623424.00-54', 'Distribuição de bebidas', 'Francisco Monteiro', '5532991234575', 'ativo', 'Av. João Inácio Peixoto, 213 - Granjaria, Cataguases - MG, CEP 36773-560')
 )
-INSERT INTO public.clients (name, trade_name, cnpj, state_registration, segment, contact_name, contact_phone, status, address)
-SELECT name, trade_name, cnpj, state_registration, segment, contact_name, contact_phone, status, address
+INSERT INTO public.clients (workspace_id, name, trade_name, cnpj, state_registration, segment, contact_name, contact_phone, status, address)
+SELECT workspace.workspace_id, name, trade_name, cnpj, state_registration, segment, contact_name, contact_phone, status, address
 FROM client_seed seed
+CROSS JOIN workspace_context workspace
 WHERE NOT EXISTS (
   SELECT 1 FROM public.clients client
   WHERE lower(client.name) = lower(seed.name)
@@ -31,8 +34,8 @@ WITH contact_seed (client_name, name, role, phone, is_primary) AS (
     ('Tecidos C & S de Cataguases Ltda', 'Nilton Carrara', 'Contato principal', '5532984978000', true),
     ('Agua 2 O Distribuidora de Bebidas LTDA', 'Francisco Monteiro', 'Contato principal', '5532991234575', true)
 )
-INSERT INTO public.client_contacts (client_id, name, role, phone, is_primary)
-SELECT client.id, seed.name, seed.role, seed.phone, seed.is_primary
+INSERT INTO public.client_contacts (workspace_id, client_id, name, role, phone, is_primary)
+SELECT client.workspace_id, client.id, seed.name, seed.role, seed.phone, seed.is_primary
 FROM contact_seed seed
 JOIN public.clients client ON lower(client.name) = lower(seed.client_name)
 WHERE NOT EXISTS (
@@ -40,7 +43,9 @@ WHERE NOT EXISTS (
   WHERE contact.client_id = client.id AND lower(contact.name) = lower(seed.name)
 );
 
-WITH project_seed (name, client_name, objective, scope, phase, project_type, progress, status, responsible, end_date, money_hypothesis) AS (
+WITH workspace_context AS (
+  SELECT workspace_id FROM public.clients WHERE workspace_id IS NOT NULL LIMIT 1
+), project_seed (name, client_name, objective, scope, phase, project_type, progress, status, responsible, end_date, money_hypothesis) AS (
   VALUES
     ('Site Granel Piscinas', 'Granel Piscinas Industria e Comercio LTDA', 'Entregar o site institucional da Granel Piscinas.', 'Construção e entrega do site institucional.', 'Concluído', 'website', 100, 'Concluído', 'Gabriel e Gustavo', NULL::date, 1600::numeric),
     ('Aplicativo Trevo', 'Trevo', 'Concluir a implantação do aplicativo da Trevo.', 'Aplicativo, carga inicial de dados e integração com Telegram e IA.', 'Implantação', 'systems', 85, 'Aguardando cliente', 'Gabriel e Gustavo', NULL::date, 0::numeric),
@@ -54,13 +59,16 @@ WITH project_seed (name, client_name, objective, scope, phase, project_type, pro
     ('Consultoria C&S Tecidos', 'Tecidos C & S de Cataguases Ltda', 'Iniciar a consultoria após o aceite comercial.', 'Plano de ação, cronograma, diagnóstico e levantamento inicial.', 'Proposta apresentada', 'consulting', 15, 'Aguardando decisão', 'Gabriel e Matheus', NULL::date, 0::numeric),
     ('Grupo H2O', 'Agua 2 O Distribuidora de Bebidas LTDA', 'Organizar e acompanhar as demandas técnicas, operacionais e financeiras.', 'Resumo executivo, Alterdata, nota fiscal, pagamentos e próximos passos.', 'Em andamento', 'consulting', 50, 'Em andamento', 'Gabriel e Matheus', NULL::date, 0::numeric)
 )
-INSERT INTO public.projects (name, client_id, objective, scope, phase, project_type, progress, status, responsible, end_date, money_hypothesis)
-SELECT seed.name, client.id, seed.objective, seed.scope, seed.phase, seed.project_type, seed.progress, seed.status, seed.responsible, seed.end_date, seed.money_hypothesis
+INSERT INTO public.projects (workspace_id, name, client_id, objective, scope, phase, project_type, progress, status, responsible, end_date, money_hypothesis)
+SELECT workspace.workspace_id, seed.name, client.id, seed.objective, seed.scope, seed.phase, seed.project_type, seed.progress, seed.status, seed.responsible, seed.end_date, seed.money_hypothesis
 FROM project_seed seed
 LEFT JOIN public.clients client ON lower(client.name) = lower(seed.client_name)
+CROSS JOIN workspace_context workspace
 WHERE NOT EXISTS (SELECT 1 FROM public.projects project WHERE lower(project.name) = lower(seed.name));
 
-WITH task_seed (project_name, title, description, responsible, priority, status, due_date, completed_at) AS (
+WITH workspace_context AS (
+  SELECT workspace_id FROM public.clients WHERE workspace_id IS NOT NULL LIMIT 1
+), task_seed (project_name, title, description, responsible, priority, status, due_date, completed_at) AS (
   VALUES
     ('Site Granel Piscinas', 'Confirmar custo do domínio', 'Custo identificado: R$ 65,00.', 'Gabriel', 'medium', 'next', NULL::date, NULL::timestamptz),
     ('Site Granel Piscinas', 'Registrar resultado financeiro final', 'Receita de R$ 1.600,00; repasse de R$ 200,00 ao Gustavo; domínio de R$ 65,00.', 'Gabriel', 'medium', 'next', NULL::date, NULL::timestamptz),
@@ -86,17 +94,19 @@ WITH task_seed (project_name, title, description, responsible, priority, status,
     ('Grupo H2O', 'Alinhar valores relacionados à Alterdata', 'Alinhar com Helaine os valores pendentes.', 'Matheus', 'high', 'next', NULL::date, NULL::timestamptz),
     ('Grupo H2O', 'Emitir nota fiscal e acompanhar pagamentos', 'Registrar os pagamentos em aberto e acompanhar a regularização.', 'Gabriel', 'high', 'next', NULL::date, NULL::timestamptz)
 )
-INSERT INTO public.tasks (project_id, client_id, title, description, responsible, priority, status, task_type, due_date, completed_at)
-SELECT project.id, project.client_id, seed.title, seed.description, seed.responsible, seed.priority, seed.status, 'project', seed.due_date, seed.completed_at
+INSERT INTO public.tasks (workspace_id, project_id, client_id, title, description, responsible, priority, status, task_type, due_date, completed_at)
+SELECT workspace.workspace_id, project.id, project.client_id, seed.title, seed.description, seed.responsible, seed.priority, seed.status, 'project', seed.due_date, seed.completed_at
 FROM task_seed seed
 JOIN public.projects project ON lower(project.name) = lower(seed.project_name)
+CROSS JOIN workspace_context workspace
 WHERE NOT EXISTS (
   SELECT 1 FROM public.tasks task
   WHERE task.project_id = project.id AND lower(task.title) = lower(seed.title)
 );
 
-INSERT INTO public.tasks (title, description, responsible, priority, status, task_type)
-SELECT 'Confirmar identificação do Mercado Dona Euzébia', 'Cobrar Chicão sobre a reunião, identificar o supermercado e confirmar o interesse antes de criar cliente e projeto.', 'Gabriel', 'medium', 'next', 'personal'
+INSERT INTO public.tasks (workspace_id, title, description, responsible, priority, status, task_type)
+SELECT workspace.workspace_id, 'Confirmar identificação do Mercado Dona Euzébia', 'Cobrar Chicão sobre a reunião, identificar o supermercado e confirmar o interesse antes de criar cliente e projeto.', 'Gabriel', 'medium', 'next', 'personal'
+FROM (SELECT workspace_id FROM public.clients WHERE workspace_id IS NOT NULL LIMIT 1) workspace
 WHERE NOT EXISTS (
   SELECT 1 FROM public.tasks WHERE lower(title) = lower('Confirmar identificação do Mercado Dona Euzébia') AND task_type = 'personal'
 );
