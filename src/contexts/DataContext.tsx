@@ -923,6 +923,7 @@ const normalizeDiagnostic = (diagnostic: Partial<Diagnostic>): Diagnostic => {
     updatedAt: diagnostic.updatedAt || createdAt,
     totalQuestions,
     answeredQuestions,
+    answers: diagnostic.answers || {},
     autoGenerateOpportunities: diagnostic.autoGenerateOpportunities ?? true,
     responsibleName: diagnostic.responsibleName || "Equipe JoIA",
     responsibleId: diagnostic.responsibleId,
@@ -1417,6 +1418,7 @@ const mapSupabaseDiagnosticToLegacy = (diagnostic: ExtendedDiagnosticRow): Diagn
   updatedAt: formatDateFromIso(diagnostic.updated_at),
   totalQuestions: diagnostic.total_questions ?? 0,
   answeredQuestions: diagnostic.answered_questions ?? 0,
+  answers: (diagnostic.answers as Diagnostic["answers"]) || {},
   autoGenerateOpportunities: diagnostic.auto_generate_opportunities ?? true,
   responsibleName: diagnostic.responsible_name || undefined,
   responsibleId: diagnostic.responsible_id || undefined,
@@ -1444,6 +1446,7 @@ const buildSupabaseDiagnosticInsert = (diagnostic: Diagnostic): SupabaseDiagnost
     opportunities_count: diagnostic.opportunities ?? 0,
     total_questions: diagnostic.totalQuestions ?? 0,
     answered_questions: diagnostic.answeredQuestions ?? 0,
+    answers: diagnostic.answers ?? {},
     auto_generate_opportunities: diagnostic.autoGenerateOpportunities ?? true,
     responsible_name: diagnostic.responsibleName || null,
     responsible_id: toSupabaseUuid(diagnostic.responsibleId),
@@ -1471,6 +1474,7 @@ const buildSupabaseDiagnosticUpdate = (diagnostic: Partial<Diagnostic>): Supabas
   if (typeof diagnostic.opportunities !== "undefined") payload.opportunities_count = diagnostic.opportunities ?? 0;
   if (typeof diagnostic.totalQuestions !== "undefined") payload.total_questions = diagnostic.totalQuestions;
   if (typeof diagnostic.answeredQuestions !== "undefined") payload.answered_questions = diagnostic.answeredQuestions;
+  if (typeof diagnostic.answers !== "undefined") payload.answers = diagnostic.answers ?? {};
   if (typeof diagnostic.autoGenerateOpportunities !== "undefined") {
     payload.auto_generate_opportunities = diagnostic.autoGenerateOpportunities ?? true;
   }

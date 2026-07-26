@@ -1,5 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { ChevronLeft, ChevronRight, Check, Save, X, Clock, HelpCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,8 +15,8 @@ import { formatDatePtBR } from "@/lib/dates";
 interface DiagnosticExecutionProps {
   diagnostic: Diagnostic;
   template: DiagnosticTemplate;
-  onSave: (answers: Record<string, DiagnosticAnswer>, progress: number) => void;
-  onComplete: (answers: Record<string, DiagnosticAnswer>) => void;
+  onSave: (answers: Record<string, DiagnosticAnswer>, progress: number) => Promise<void>;
+  onComplete: (answers: Record<string, DiagnosticAnswer>) => Promise<void>;
   onExit: () => void;
 }
 
@@ -28,8 +27,6 @@ export function DiagnosticExecution({
   onComplete,
   onExit,
 }: DiagnosticExecutionProps) {
-  const navigate = useNavigate();
-  
   // Flatten all questions with section context
   const allQuestions = useMemo(() => {
     const questions: { section: TemplateSection; question: TemplateQuestion; globalIndex: number }[] = [];
@@ -50,8 +47,10 @@ export function DiagnosticExecution({
   }, [template.sections]);
 
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, DiagnosticAnswer>>({});
+  const [answers, setAnswers] = useState<Record<string, DiagnosticAnswer>>(diagnostic.answers || {});
   const [isSaving, setIsSaving] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
+  const hasPendingChanges = useRef(false);
 
   const currentItem = allQuestions[currentIndex];
   const totalQuestions = allQuestions.length;
@@ -61,14 +60,22 @@ export function DiagnosticExecution({
   const currentAnswer = currentItem ? answers[currentItem.question.id] : undefined;
 
   const handleAnswer = useCallback((questionId: string, value: string | number | boolean | string[] | null) => {
-    setAnswers((prev) => ({
-      ...prev,
-      [questionId]: {
-        questionId,
-        value,
-        answeredAt: formatDatePtBR(new Date()) || new Date().toISOString(),
-      },
-    }));
+    hasPendingChanges.current = true;
+    setAnswers((prev) => {
+      if (value === null || (typeof value === "string" && !value.trim()) || (Array.isArray(value) && !value.length)) {
+        const { [questionId]: _removed, ...remaining } = prev;
+        return remaining;
+      }
+
+      return {
+        ...prev,
+        [questionId]: {
+          questionId,
+          value,
+          answeredAt: formatDatePtBR(new Date()) || new Date().toISOString(),
+        },
+      };
+    });
   }, []);
 
   const handleNext = () => {
@@ -93,6 +100,8 @@ export function DiagnosticExecution({
     setIsSaving(true);
     try {
       await onSave(answers, progressPercent);
+      hasPendingChanges.current = false;
+      setLastSavedAt(new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }));
       toast.success("Progresso salvo");
     } catch {
       toast.error("Erro ao salvar");
@@ -100,6 +109,16 @@ export function DiagnosticExecution({
       setIsSaving(false);
     }
   };
+
+  useEffect(() => {
+    if (!hasPendingChanges.current) return;
+
+    const timer = window.setTimeout(() => {
+      void handleSave();
+    }, 1200);
+
+    return () => window.clearTimeout(timer);
+  }, [answers]);
 
   const handleComplete = () => {
     // Check required questions
@@ -187,6 +206,9 @@ export function DiagnosticExecution({
               <Save className="h-4 w-4 mr-2" />
               {isSaving ? "Salvando..." : "Salvar"}
             </Button>
+            {lastSavedAt && !isSaving && (
+              <span className="hidden sm:inline text-xs text-muted-foreground">Salvo às {lastSavedAt}</span>
+            )}
           </div>
         </div>
         

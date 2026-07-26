@@ -99,12 +99,17 @@ export default function DiagnosticoDetalhe() {
     progress: number
   ) => {
     const answeredCount = Object.keys(answers).length;
-    updateDiagnostic(diagnostic.id, {
+    const updated = await updateDiagnostic(diagnostic.id, {
       progress,
       answeredQuestions: answeredCount,
+      answers,
       status: progress > 0 ? "in_progress" : diagnostic.status,
       hasResponses: answeredCount > 0,
     });
+
+    if (!updated) {
+      throw new Error("Não foi possível salvar as respostas do diagnóstico.");
+    }
   };
 
   const handleComplete = async (answers: Record<string, DiagnosticAnswer>) => {
