@@ -119,7 +119,7 @@ export default function ClienteDetalhes() {
         ? "Kickoff concluído"
         : hasKickoff
           ? "Kickoff em andamento"
-          : "Execute o diagnóstico inicial para mapear oportunidades",
+          : "Execute o diagnóstico inicial para mapear dores e priorizar áreas",
       completed: kickoffCompleted,
       action: !kickoffCompleted && clientProjects.length > 0 ? () => setDiagnosticDialogOpen(true) : undefined,
       actionLabel: hasKickoff ? "Continuar" : "Iniciar Kickoff",
@@ -153,7 +153,7 @@ export default function ClienteDetalhes() {
           <AlertTitle className="text-accent">Próximo passo: Rodar o Kickoff</AlertTitle>
           <AlertDescription className="flex items-center justify-between">
             <span>
-              Execute o diagnóstico de Kickoff para mapear oportunidades e definir o norte do projeto.
+              Execute o diagnóstico de Kickoff para mapear dores e definir as áreas prioritárias do projeto.
             </span>
             <Button
               size="sm"

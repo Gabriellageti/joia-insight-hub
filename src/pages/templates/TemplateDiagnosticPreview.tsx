@@ -14,8 +14,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { TemplatePageHeader } from "./TemplatePageHeader";
 import { useData } from "@/contexts/DataContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { DiagnosticTemplate, TemplateOpportunityRule, TemplateQuestion } from "@/types";
-import { AlertCircle, ArrowLeft, Brain, CheckCircle2, RefreshCw, Sparkles } from "lucide-react";
+import { DiagnosticTemplate, TemplateQuestion } from "@/types";
+import { AlertCircle, ArrowLeft, Brain, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { AnswerValue, calculateDiagnosticScore, normalizeAnswerForScore } from "@/lib/diagnostic-evaluation";
 
@@ -40,102 +40,8 @@ const getOptionsWithWeight = (question: TemplateQuestion) => {
   return [] as { label: string; weight?: number | null }[];
 };
 
-const formatOpportunityCondition = (rule?: TemplateOpportunityRule): string | null => {
-  if (!rule?.enabled) return null;
-
-  const condition = rule.condition;
-  if (!condition) return "Condição manual";
-
-  switch (condition.type) {
-    case "yes_no":
-      return condition.expectedAnswer === "yes" ? "Quando a resposta for Sim" : "Quando a resposta for Não";
-    case "scale": {
-      const min = condition.minValue ?? "0";
-      const max = condition.maxValue ?? "10";
-      return `Escala entre ${min} e ${max}`;
-    }
-    case "number": {
-      const operators: Record<">" | ">=" | "<" | "<=" | "=", string> = {
-        ">": "Maior que",
-        ">=": "Maior ou igual a",
-        "<": "Menor que",
-        "<=": "Menor ou igual a",
-        "=": "Igual a",
-      };
-      const prefix = condition.unit === "moeda" ? "R$ " : "";
-      const suffix = condition.unit === "percentual" ? "%" : "";
-      const value = condition.value ?? 0;
-      return `${operators[condition.operator]} ${prefix}${value}${suffix}`;
-    }
-    case "multiple_choice": {
-      const options = (condition.matchingOptions || []).join(", ");
-      if (!options) return "Opções específicas";
-      return `${condition.matchStrategy === "all" ? "Todas" : "Qualquer"} das opções: ${options}`;
-    }
-    case "text":
-      return condition.keyword ? `Palavra-chave: ${condition.keyword}` : "Revisar texto manualmente";
-    default:
-      return "Gera oportunidade";
-  }
-};
-
 const normalizeAnswer = (question: TemplateQuestion, value: AnswerValue): number | null =>
   normalizeAnswerForScore(question, value);
-
-const matchesOpportunityCondition = (question: TemplateQuestion, value: AnswerValue): boolean => {
-  const rule = question.regraOportunidade;
-  if (!rule?.enabled) return false;
-
-  const condition = rule.condition;
-  if (!condition) return isAnswered(value);
-
-  switch (condition.type) {
-    case "yes_no":
-      return typeof value === "string" && condition.expectedAnswer === (value === "yes" ? "yes" : "no");
-    case "scale": {
-      if (typeof value !== "number") return false;
-      const min = condition.minValue ?? Number.MIN_SAFE_INTEGER;
-      const max = condition.maxValue ?? Number.MAX_SAFE_INTEGER;
-      return value >= min && value <= max;
-    }
-    case "number": {
-      if (typeof value !== "number") return false;
-      const target = condition.value ?? 0;
-      switch (condition.operator) {
-        case ">":
-          return value > target;
-        case ">=":
-          return value >= target;
-        case "<":
-          return value < target;
-        case "<=":
-          return value <= target;
-        case "=":
-          return value === target;
-        default:
-          return false;
-      }
-    }
-    case "multiple_choice": {
-      const selected = Array.isArray(value) ? value : typeof value === "string" ? [value] : [];
-      if (!selected.length) return false;
-      const options = condition.matchingOptions || [];
-      if (!options.length) return false;
-      if (condition.matchStrategy === "all") {
-        return options.every((option) => selected.includes(option));
-      }
-      return options.some((option) => selected.includes(option));
-    }
-    case "text":
-      if (typeof value !== "string") return false;
-      if (!condition.keyword) return value.trim().length > 0;
-      return value.toLowerCase().includes(condition.keyword.toLowerCase());
-    case "always":
-      return true;
-    default:
-      return false;
-  }
-};
 
 const getValidationMessages = (question: TemplateQuestion, value: AnswerValue): string[] => {
   const messages: string[] = [];
@@ -197,36 +103,6 @@ export default function TemplateDiagnosticPreview() {
     return calculateDiagnosticScore(template, responses);
   }, [responses, template]);
 
-  const opportunities = useMemo(() => {
-    if (!template) return [] as Array<{
-      id: string;
-      name: string;
-      description?: string;
-      questionTitle: string;
-      sectionTitle: string;
-      type: TemplateOpportunityRule["type"];
-      estimatedValue?: number | null;
-      autoGenerate: boolean;
-      conditionLabel?: string | null;
-    }>;
-
-    return template.sections.flatMap((section) =>
-      (section.questions || [])
-        .filter((question) => matchesOpportunityCondition(question, responses[question.id]))
-        .map((question) => ({
-          id: question.regraOportunidade?.id || question.id,
-          name: question.regraOportunidade?.name || "Oportunidade detectada",
-          description: question.regraOportunidade?.description,
-          questionTitle: question.title,
-          sectionTitle: section.title,
-          type: question.regraOportunidade?.type || "Outro",
-          estimatedValue: question.regraOportunidade?.estimatedValue,
-          autoGenerate: question.regraOportunidade?.autoGenerate ?? true,
-          conditionLabel: formatOpportunityCondition(question.regraOportunidade),
-        }))
-    );
-  }, [responses, template]);
-
   const handleAnswerChange = (questionId: string, value: AnswerValue) => {
     setResponses((prev) => ({ ...prev, [questionId]: value }));
   };
@@ -269,7 +145,7 @@ export default function TemplateDiagnosticPreview() {
       <TemplatePageHeader
         eyebrow="Templates"
         title={`Preview como diagnóstico: ${template.name}`}
-        description="Simule a aplicação para revisar peso das perguntas, score e oportunidades geradas. Respostas não são salvas."
+        description="Simule a aplicação para revisar perguntas, pesos e score. Respostas não são salvas."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" onClick={() => navigate(-1)}>
@@ -376,7 +252,6 @@ export default function TemplateDiagnosticPreview() {
                 <CardContent className="space-y-4">
                   {section.questions?.map((question, questionIndex) => {
                     const currentValue = responses[question.id];
-                    const triggerOpportunity = matchesOpportunityCondition(question, currentValue);
                     const normalized = normalizeAnswer(question, currentValue);
                     const optionsWithWeight = getOptionsWithWeight(question);
                     const validationMessages = getValidationMessages(question, currentValue);
@@ -530,40 +405,7 @@ export default function TemplateDiagnosticPreview() {
                             <Brain className="h-4 w-4" />
                             <span>Normalizado: {normalized !== null ? `${Math.round(normalized * 100)}%` : "—"}</span>
                           </div>
-                          {question.regraOportunidade?.enabled && (
-                            <div className="flex items-center gap-1">
-                              {triggerOpportunity ? (
-                                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                              ) : (
-                                <AlertCircle className="h-4 w-4" />
-                              )}
-                              <span>
-                                {triggerOpportunity ? "Regra de oportunidade atendida" : "Aguardando condição"}
-                              </span>
-                            </div>
-                          )}
                         </div>
-
-                        {question.regraOportunidade?.enabled && (
-                          <div className="rounded-md border bg-muted/50 p-3 text-xs space-y-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <Badge>Gera oportunidade</Badge>
-                              <Badge variant="outline">{question.regraOportunidade.type}</Badge>
-                              <Badge variant={question.regraOportunidade.autoGenerate ? "secondary" : "outline"}>
-                                {question.regraOportunidade.autoGenerate ? "Automática" : "Revisar"}
-                              </Badge>
-                              {question.regraOportunidade.estimatedValue && (
-                                <Badge variant="outline">R$ {question.regraOportunidade.estimatedValue}</Badge>
-                              )}
-                              {formatOpportunityCondition(question.regraOportunidade) && (
-                                <Badge variant="outline">{formatOpportunityCondition(question.regraOportunidade)}</Badge>
-                              )}
-                            </div>
-                            {question.regraOportunidade.description && (
-                              <p className="text-muted-foreground">{question.regraOportunidade.description}</p>
-                            )}
-                          </div>
-                        )}
                       </div>
                     );
                   })}
@@ -574,45 +416,6 @@ export default function TemplateDiagnosticPreview() {
         </div>
 
         <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4" />
-                Oportunidades previstas
-              </CardTitle>
-              <CardDescription>Regras atendidas com base nas respostas fictícias.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {opportunities.length === 0 ? (
-                <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-                  Nenhuma oportunidade seria gerada com as respostas atuais.
-                </div>
-              ) : (
-                opportunities.map((item) => (
-                  <div key={item.id} className="rounded-md border p-3 space-y-2">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <p className="font-medium">{item.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {item.sectionTitle} • {item.questionTitle}
-                        </p>
-                      </div>
-                      <Badge variant="secondary">{item.type}</Badge>
-                    </div>
-                    {item.description && <p className="text-sm text-muted-foreground">{item.description}</p>}
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                      {item.estimatedValue && <Badge variant="outline">Valor estimado: R$ {item.estimatedValue}</Badge>}
-                      <Badge variant={item.autoGenerate ? "secondary" : "outline"}>
-                        {item.autoGenerate ? "Automática" : "Revisar"}
-                      </Badge>
-                      {item.conditionLabel && <Badge variant="outline">{item.conditionLabel}</Badge>}
-                    </div>
-                  </div>
-                ))
-              )}
-            </CardContent>
-          </Card>
-
           <Card>
             <CardHeader>
               <CardTitle>Resumo do template</CardTitle>

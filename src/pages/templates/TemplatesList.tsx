@@ -16,13 +16,13 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export default function TemplatesList() {
   const navigate = useNavigate();
-  const { templates, addTemplate, deleteTemplate, updateTemplate, templatesLoading, templatesError } = useData();
+  const { templates, addTemplate, updateTemplate, templatesLoading, templatesError } = useData();
   const { user } = useAuth();
   const [search, setSearch] = useState("");
 
   const userRole = (user?.user_metadata as Record<string, string | undefined> | undefined)?.role;
   const isAnalyst = (userRole || "").toLowerCase().includes("analista");
-  const canArchive = !isAnalyst && Boolean(userRole && (userRole.toLowerCase().includes("admin") || userRole.toLowerCase().includes("gestor")));
+  const canArchive = !isAnalyst;
 
   const filteredTemplates = useMemo(() => {
     const query = search.toLowerCase();
@@ -43,17 +43,6 @@ export default function TemplatesList() {
       toast.success(`Template "${duplicated.name}" duplicado`);
     } catch (error) {
       toast.error((error as Error).message || "Não foi possível duplicar o template");
-    }
-  };
-
-  const handleDelete = async (template: DiagnosticTemplate) => {
-    if (window.confirm("Deseja remover este template?")) {
-      try {
-        await deleteTemplate(template.id);
-        toast.success(`Template "${template.name}" removido`);
-      } catch (error) {
-        toast.error((error as Error).message || "Não foi possível remover o template");
-      }
     }
   };
 
@@ -82,10 +71,6 @@ export default function TemplatesList() {
   const handleArchive = async (template: DiagnosticTemplate) => {
     if (isAnalyst) {
       toast.error("Analistas não podem arquivar templates.");
-      return;
-    }
-    if (!canArchive) {
-      toast.error("Somente Admin ou Gestor podem arquivar templates.");
       return;
     }
     try {
@@ -171,7 +156,6 @@ export default function TemplatesList() {
               onApply={handlePreview}
               onEdit={handleEdit}
               onDuplicate={handleDuplicate}
-              onDelete={handleDelete}
               onArchive={handleArchive}
               canArchive={canArchive}
               disableApply={template.status === "archived"}
