@@ -41,7 +41,7 @@ const mainNavItems = [
   { title: "Projetos", url: "/projetos", icon: FolderKanban },
   { title: "Diagnóstico", url: "/diagnostico", icon: ClipboardCheck },
   { title: "Templates", url: "/templates", icon: Shapes },
-  { title: "Plano de Ação", url: "/plano-acao", icon: ListTodo },
+  { title: "Controle de Tarefas", url: "/plano-acao", icon: ListTodo },
   { title: "Indicadores", url: "/indicadores", icon: BarChart3 },
   { title: "Reuniões", url: "/reunioes", icon: Calendar },
   { title: "Documentos", url: "/documentos", icon: FileText },

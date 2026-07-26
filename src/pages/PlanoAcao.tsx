@@ -58,10 +58,43 @@ export default function PlanoAcao() {
     if (task) { setEditingTask(task); setDialogOpen(true); }
   }, [editingTask?.id, searchParams, tasks]);
 
+  useEffect(() => {
+    const stepTitle = searchParams.get("newStep");
+    const projectId = searchParams.get("projectId");
+    if (!stepTitle || !projectId || editingTask) return;
+    const project = projects.find((item) => item.id === projectId);
+    if (!project) return;
+    const step = getDeliveryStepsForProject(project).find((item) => item.title === stepTitle);
+    setEditingTask({
+      id: "",
+      title: step?.title || stepTitle,
+      description: step ? `Etapa: ${step.title}\n\n${step.description}` : "",
+      taskType: "project",
+      projectId: project.id,
+      projectName: project.name,
+      clientId: project.clientId,
+      clientName: project.clientName,
+      type: project.projectType === "automation" || project.projectType === "ai_implementation" ? "tecnologia" : "processo",
+      responsible: project.responsible || project.responsibleNameLegacy || "",
+      priority: step?.approvalRequired ? "high" : "medium",
+      dueDate: "",
+      status: "next",
+      evidenceRequired: true,
+      what: step?.title || stepTitle,
+      why: step?.description || "",
+      how: step ? [...step.checklist, ...step.deliverables.map((item) => `Entregável: ${item}`)].join("\n") : "",
+      createdAt: "",
+    });
+    setDialogOpen(true);
+    const next = new URLSearchParams(searchParams);
+    next.delete("newStep");
+    setSearchParams(next, { replace: true });
+  }, [editingTask, projects, searchParams, setSearchParams]);
+
   const filteredTasks = useMemo(() => {
     const workspaceTasks = tasks.filter((task) => {
       if (workspace === "mine" && task.assignedTo !== user?.id && task.createdBy !== user?.id) return false;
-      if (workspace === "project" && task.taskType !== "project") return false;
+      if (workspace === "project" && !task.projectId) return false;
       return true;
     });
     return filterTasks(workspaceTasks, filters);
@@ -161,14 +194,14 @@ export default function PlanoAcao() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div><h1 className="text-2xl font-semibold">Plano de Ação</h1><p className="text-muted-foreground">Controle suas tarefas pessoais e de projetos.</p></div>
+        <div><h1 className="text-2xl font-semibold">Controle de Tarefas</h1><p className="text-muted-foreground">Central única das tarefas pessoais e dos projetos.</p></div>
         <Button onClick={() => { setEditingTask(null); setDialogOpen(true); }}><Plus className="mr-2 h-4 w-4" />Nova tarefa</Button>
       </div>
 
       {(tasksError || projectsError) && <Alert variant="destructive"><AlertDescription>{tasksError || projectsError}</AlertDescription></Alert>}
 
       <Tabs value={workspace} onValueChange={(value) => handleWorkspaceChange(value as "mine" | "project" | "consulting")}>
-        <TabsList className="h-auto w-full justify-start overflow-x-auto"><TabsTrigger value="mine" className="shrink-0"><User className="mr-2 h-4 w-4" />Meu Workspace</TabsTrigger><TabsTrigger value="project" className="shrink-0"><FolderKanban className="mr-2 h-4 w-4" />Por Projeto</TabsTrigger><TabsTrigger value="consulting" className="shrink-0"><CalendarRange className="mr-2 h-4 w-4" />Por Dia da Consultoria</TabsTrigger></TabsList>
+        <TabsList className="h-auto w-full justify-start overflow-x-auto"><TabsTrigger value="mine" className="shrink-0"><User className="mr-2 h-4 w-4" />Minhas tarefas</TabsTrigger><TabsTrigger value="project" className="shrink-0"><FolderKanban className="mr-2 h-4 w-4" />Por Projeto</TabsTrigger><TabsTrigger value="consulting" className="shrink-0"><CalendarRange className="mr-2 h-4 w-4" />Por Dia da Consultoria</TabsTrigger></TabsList>
       </Tabs>
 
       {workspace === "consulting" ? (
