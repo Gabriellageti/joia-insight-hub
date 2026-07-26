@@ -511,7 +511,7 @@ export function ProjectDialog({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>
-                    Responsável <span className="text-destructive">*</span>
+                    Responsável principal <span className="text-destructive">*</span>
                   </Label>
                   <Popover open={responsibleOpen} onOpenChange={setResponsibleOpen}>
                     <PopoverTrigger asChild>
@@ -578,6 +578,7 @@ export function ProjectDialog({
                       </Command>
                     </PopoverContent>
                   </Popover>
+                  <p className="text-xs text-muted-foreground">Inclua outros responsáveis em “Acesso da equipe” depois de salvar o projeto. Eles aparecerão ao atribuir tarefas.</p>
 
                   {formData.responsibleNameLegacy && !selectedResponsible && (
                     <div className="flex items-center gap-2 mt-1">
