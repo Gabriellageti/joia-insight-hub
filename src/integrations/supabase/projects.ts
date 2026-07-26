@@ -5,14 +5,7 @@ export type ProjectRow = Database["public"]["Tables"]["projects"]["Row"];
 type ProjectInsert = Database["public"]["Tables"]["projects"]["Insert"];
 type ProjectUpdate = Database["public"]["Tables"]["projects"]["Update"];
 
-const PROJECT_CREATOR_ROLES = [
-  "admin_joia",
-  "gestor_projetos",
-  "analista",
-  "financeiro_joia",
-  "marketing_joia",
-  "colaborador_onboarding",
-] as const;
+const PROJECT_CREATOR_ROLES = ["admin_joia"] as const;
 
 async function requireProjectCreationSession(): Promise<void> {
   const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();

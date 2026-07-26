@@ -16,6 +16,7 @@ import {
   Shapes
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   Sidebar,
   SidebarContent,
@@ -55,6 +56,7 @@ const managementNavItems = [
 
 export function AppSidebar() {
   const location = useLocation();
+  const { isAdmin } = useAuth();
   
   const isActive = (path: string) => {
     if (path === "/") return location.pathname === "/";
@@ -96,7 +98,7 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarGroup>
+        {isAdmin && <SidebarGroup>
           <Collapsible defaultOpen className="group/collapsible">
             <CollapsibleTrigger asChild>
               <SidebarGroupLabel className="text-xs text-muted-foreground uppercase tracking-wider cursor-pointer flex items-center justify-between hover:text-foreground">
@@ -121,19 +123,19 @@ export function AppSidebar() {
               </SidebarGroupContent>
             </CollapsibleContent>
           </Collapsible>
-        </SidebarGroup>
+        </SidebarGroup>}
       </SidebarContent>
 
       <SidebarFooter className="p-4 border-t border-border">
         <SidebarMenu>
-          <SidebarMenuItem>
+          {isAdmin && <SidebarMenuItem>
             <SidebarMenuButton asChild isActive={isActive("/configuracoes")}>
               <NavLink to="/configuracoes" className="flex items-center gap-3">
                 <Settings className="h-4 w-4" />
                 <span>Configurações</span>
               </NavLink>
             </SidebarMenuButton>
-          </SidebarMenuItem>
+          </SidebarMenuItem>}
         </SidebarMenu>
       </SidebarFooter>
     </Sidebar>
