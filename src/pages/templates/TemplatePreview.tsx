@@ -236,7 +236,7 @@ export default function TemplatePreview() {
                               {question.required && <Badge variant="outline">Obrigatória</Badge>}
                             </div>
                           </div>
-                          {question.regraOportunidade?.enabled && (
+                          {false && question.regraOportunidade?.enabled && (
                             <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                               <Badge>Gera oportunidade</Badge>
                               <Badge variant="outline">{question.regraOportunidade.type}</Badge>

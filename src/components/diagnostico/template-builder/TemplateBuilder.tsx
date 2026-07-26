@@ -1223,7 +1223,7 @@ export function TemplateBuilder({ initialTemplate, onSubmit, isSubmitting }: Tem
                                   </div>
                                 </div>
                               )}
-                              <div className="rounded-md border bg-muted/40 p-3 space-y-3">
+                              {false && <div className="rounded-md border bg-muted/40 p-3 space-y-3">
                                 <div className="flex items-center justify-between gap-3">
                                   <div>
                                     <p className="text-sm font-medium">Gerar oportunidade</p>
@@ -1372,7 +1372,7 @@ export function TemplateBuilder({ initialTemplate, onSubmit, isSubmitting }: Tem
                                     </div>
                                   </div>
                                 )}
-                              </div>
+                              </div>}
                             </div>
                             );
                           })}
