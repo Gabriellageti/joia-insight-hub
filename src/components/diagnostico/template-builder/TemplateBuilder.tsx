@@ -1009,23 +1009,24 @@ export function TemplateBuilder({ initialTemplate, onSubmit, isSubmitting }: Tem
                                 </div>
                               </div>
                               <div className="space-y-2">
-                                <Label>Descrição ou instrução</Label>
+                                <Label>Contexto para quem responde</Label>
                                 <Textarea
                                   value={question.description || ""}
                                   onChange={(event) =>
                                     updateQuestion(section.id, question.id, { description: event.target.value })
                                   }
-                                  placeholder="Explique o contexto ou dê exemplos de resposta."
+                                  placeholder="Explique em linguagem simples o assunto da pergunta e dê exemplos do que uma boa resposta pode trazer."
                                 />
                               </div>
                               <div className="space-y-2">
-                                <Label>Texto auxiliar</Label>
-                                <Input
+                                <Label>Guia de campo para quem aplica</Label>
+                                <Textarea
                                   value={question.helperText || ""}
                                   onChange={(event) =>
                                     updateQuestion(section.id, question.id, { helperText: event.target.value })
                                   }
-                                  placeholder="Dica rápida para quem está respondendo"
+                                  placeholder="Como fazer a pergunta, o que observar e como aprofundar a conversa se a resposta for vaga."
+                                  rows={3}
                                 />
                               </div>
 
