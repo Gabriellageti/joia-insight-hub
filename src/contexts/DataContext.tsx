@@ -915,6 +915,7 @@ const normalizeDiagnostic = (diagnostic: Partial<Diagnostic>): Diagnostic => {
     clientName: diagnostic.clientName || "",
     templateId: diagnostic.templateId || "",
     templateName,
+    templateSnapshot: diagnostic.templateSnapshot,
     status: diagnostic.status || "draft",
     progress: progressValue,
     score: diagnostic.score,
@@ -1410,6 +1411,7 @@ const mapSupabaseDiagnosticToLegacy = (diagnostic: ExtendedDiagnosticRow): Diagn
   clientName: diagnostic.client_name || "",
   templateId: diagnostic.template_id || "",
   templateName: diagnostic.template_name || "",
+  templateSnapshot: diagnostic.template_snapshot as Diagnostic["templateSnapshot"],
   status: (diagnostic.status as Diagnostic["status"]) || "draft",
   progress: diagnostic.progress ?? 0,
   score: diagnostic.score ?? undefined,
@@ -1440,6 +1442,7 @@ const buildSupabaseDiagnosticInsert = (diagnostic: Diagnostic): SupabaseDiagnost
     project_name: diagnostic.projectName || null,
     template_id: toSupabaseUuid(diagnostic.templateId),
     template_name: diagnostic.templateName || null,
+    template_snapshot: diagnostic.templateSnapshot ?? null,
     status: diagnostic.status,
     progress: diagnostic.progress ?? 0,
     score: diagnostic.score ?? null,
@@ -1468,6 +1471,7 @@ const buildSupabaseDiagnosticUpdate = (diagnostic: Partial<Diagnostic>): Supabas
   if (typeof diagnostic.projectName !== "undefined") payload.project_name = diagnostic.projectName || null;
   if (typeof diagnostic.templateId !== "undefined") payload.template_id = toSupabaseUuid(diagnostic.templateId);
   if (typeof diagnostic.templateName !== "undefined") payload.template_name = diagnostic.templateName || null;
+  if (typeof diagnostic.templateSnapshot !== "undefined") payload.template_snapshot = diagnostic.templateSnapshot ?? null;
   if (typeof diagnostic.status !== "undefined") payload.status = diagnostic.status;
   if (typeof diagnostic.progress !== "undefined") payload.progress = diagnostic.progress;
   if (typeof diagnostic.score !== "undefined") payload.score = diagnostic.score ?? null;
@@ -2198,7 +2202,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         templateQuestionCount: diagnostic.templateQuestionCount ?? template?.questionCount,
         templateName: diagnostic.templateName || template?.name || diagnostic.templateId,
       });
-      const normalized = normalizeDiagnostic(created);
+      const normalized = normalizeDiagnostic({ ...created, templateSnapshot: template });
 
       try {
         const payload = buildSupabaseDiagnosticInsert(normalized);

@@ -249,6 +249,7 @@ export interface Diagnostic {
   clientName: string;
   templateId: string;
   templateName: string;
+  templateSnapshot?: DiagnosticTemplate;
   status: "draft" | "in_progress" | "completed";
   progress: number;
   score?: number;

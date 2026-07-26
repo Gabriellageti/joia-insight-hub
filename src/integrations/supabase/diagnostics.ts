@@ -45,7 +45,7 @@ const legacyDiagnosticFields = [
   "opportunities_count",
 ];
 
-const requiredDiagnosticFields = new Set(["answers"]);
+const requiredDiagnosticFields = new Set(["answers", "template_snapshot"]);
 
 const stripLegacyDiagnosticPayload = <T extends Record<string, unknown>>(
   payload: T,
