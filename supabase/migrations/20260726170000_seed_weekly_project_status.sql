@@ -7,7 +7,7 @@ ALTER TABLE public.clients
   ADD COLUMN IF NOT EXISTS address text;
 
 WITH workspace_context AS (
-  SELECT workspace_id FROM public.workspace_members WHERE workspace_id IS NOT NULL LIMIT 1
+  SELECT '00000000-0000-0000-0000-000000000001'::uuid AS workspace_id
 ), client_seed (name, trade_name, cnpj, state_registration, segment, contact_name, contact_phone, status, address) AS (
   VALUES
     ('Granel Piscinas Industria e Comercio LTDA', 'Granel Piscinas', NULL, NULL, 'Piscinas', NULL, NULL, 'ativo', NULL),
@@ -44,7 +44,7 @@ WHERE NOT EXISTS (
 );
 
 WITH workspace_context AS (
-  SELECT workspace_id FROM public.workspace_members WHERE workspace_id IS NOT NULL LIMIT 1
+  SELECT '00000000-0000-0000-0000-000000000001'::uuid AS workspace_id
 ), project_seed (name, client_name, objective, scope, phase, project_type, progress, status, responsible, end_date, money_hypothesis) AS (
   VALUES
     ('Site Granel Piscinas', 'Granel Piscinas Industria e Comercio LTDA', 'Entregar o site institucional da Granel Piscinas.', 'Construção e entrega do site institucional.', 'Concluído', 'website', 100, 'Concluído', 'Gabriel e Gustavo', NULL::date, 1600::numeric),
