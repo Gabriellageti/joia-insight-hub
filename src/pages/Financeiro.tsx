@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   CreditCard,
   DollarSign,
@@ -57,6 +57,8 @@ import { useFinancial, type FinancialRecord } from "@/hooks/useFinancial";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ContractDialog } from "@/components/dialogs/ContractDialog";
 import type { Contract } from "@/types";
+import { toast } from "sonner";
+import { createRecurringExpense, listRecurringExpenseRules, setRecurringExpenseActive, type RecurringExpenseRule } from "@/integrations/supabase/recurring-expenses";
 
 const statusConfig = {
   Pendente: { label: "A vencer", color: "bg-yellow-100 text-yellow-700" },
@@ -118,6 +120,7 @@ export default function Financeiro() {
     deleteRecord,
     markAsPaid,
     undoPayment,
+    refresh,
   } = useFinancial();
 
   const [editingExpense, setEditingExpense] = useState<FinancialRecord | null>(null);
@@ -135,6 +138,7 @@ export default function Financeiro() {
   const [receivableStatusFilter, setReceivableStatusFilter] = useState("all");
   const [payableSearch, setPayableSearch] = useState("");
   const [payableStatusFilter, setPayableStatusFilter] = useState("all");
+  const [recurringRules, setRecurringRules] = useState<RecurringExpenseRule[]>([]);
 
   // Expense form state
   const [expenseForm, setExpenseForm] = useState({
@@ -143,7 +147,15 @@ export default function Financeiro() {
     projectId: "",
     value: "",
     date: getTodayIso(),
+    recurring: false,
+    frequency: "monthly" as "monthly" | "quarterly" | "annual",
   });
+
+  const loadRecurringRules = async () => {
+    try { setRecurringRules(await listRecurringExpenseRules()); } catch (error) { toast.error("Não foi possível carregar as despesas recorrentes.", { description: (error as Error).message }); }
+  };
+
+  useEffect(() => { void loadRecurringRules(); }, []);
 
   // Receivable form state
   const [receivableForm, setReceivableForm] = useState({
@@ -223,6 +235,8 @@ export default function Financeiro() {
       projectId: "",
       value: "",
       date: getTodayIso(),
+      recurring: false,
+      frequency: "monthly",
     });
     setEditingExpense(null);
   };
@@ -248,6 +262,8 @@ export default function Financeiro() {
       projectId: expense.projectId || "",
       value: String(expense.amount ?? ""),
       date: formatDateInputValue(expense.date),
+      recurring: false,
+      frequency: "monthly",
     });
   };
 
@@ -285,13 +301,30 @@ export default function Financeiro() {
       isInternal: true,
     };
 
-    if (editingExpense) {
-      await updateRecord(editingExpense.id, payload);
-    } else {
-      await addRecord(payload);
+    try {
+      if (expenseForm.recurring && !editingExpense) {
+        await createRecurringExpense({ description: payload.description, category: payload.category, projectId: payload.projectId, amount: payload.amount, frequency: expenseForm.frequency, startDate: payload.date });
+        await Promise.all([refresh(), loadRecurringRules()]);
+        toast.success("Despesa recorrente criada com previsão de 12 meses.");
+      } else if (editingExpense) {
+        await updateRecord(editingExpense.id, payload);
+      } else {
+        await addRecord(payload);
+      }
+    } catch (error) {
+      toast.error("Não foi possível salvar a despesa.", { description: (error as Error).message });
+      return;
     }
 
     resetExpenseForm();
+  };
+
+  const handleToggleRecurringRule = async (rule: RecurringExpenseRule) => {
+    try {
+      await setRecurringExpenseActive(rule.id, !rule.active);
+      await Promise.all([refresh(), loadRecurringRules()]);
+      toast.success(rule.active ? "Recorrência pausada e previsões futuras removidas." : "Recorrência reativada.");
+    } catch (error) { toast.error("Não foi possível atualizar a recorrência.", { description: (error as Error).message }); }
   };
 
   const handleReceivableSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -745,6 +778,14 @@ export default function Financeiro() {
                   </div>
                 </div>
 
+                {!editingExpense && <div className="rounded-lg border bg-muted/30 p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                    <div><p className="font-medium">Despesa recorrente</p><p className="text-sm text-muted-foreground">Gera contas previstas para os próximos 12 meses.</p></div>
+                    <label className="flex items-center gap-2 text-sm font-medium"><input type="checkbox" checked={expenseForm.recurring} onChange={(event) => setExpenseForm((prev) => ({ ...prev, recurring: event.target.checked }))} />Repetir despesa</label>
+                  </div>
+                  {expenseForm.recurring && <div className="mt-3 max-w-xs space-y-2"><Label htmlFor="expense-frequency">Frequência</Label><Select value={expenseForm.frequency} onValueChange={(frequency: "monthly" | "quarterly" | "annual") => setExpenseForm((prev) => ({ ...prev, frequency }))}><SelectTrigger id="expense-frequency"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="monthly">Mensal</SelectItem><SelectItem value="quarterly">Trimestral</SelectItem><SelectItem value="annual">Anual</SelectItem></SelectContent></Select></div>}
+                </div>}
+
                 <div className="flex flex-wrap gap-2">
                   <Button type="submit" disabled={!isExpenseFormValid}>
                     {editingExpense ? "Salvar alterações" : "Registrar conta"}
@@ -756,6 +797,13 @@ export default function Financeiro() {
                   )}
                 </div>
               </form>
+            </CardContent>
+          </Card>
+
+          <Card className="min-w-0 overflow-hidden">
+            <CardHeader><CardTitle>Despesas recorrentes</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              {recurringRules.length === 0 ? <p className="text-sm text-muted-foreground">Nenhuma recorrência cadastrada.</p> : recurringRules.map((rule) => <div key={rule.id} className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-medium">{rule.description}</p><p className="text-sm text-muted-foreground">{formatCurrency(Number(rule.amount))} · {{ monthly: "Mensal", quarterly: "Trimestral", annual: "Anual" }[rule.frequency]} · dia {rule.day_of_month}</p></div><Button variant={rule.active ? "outline" : "secondary"} size="sm" onClick={() => void handleToggleRecurringRule(rule)}>{rule.active ? "Pausar" : "Reativar"}</Button></div>)}
             </CardContent>
           </Card>
 
