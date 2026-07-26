@@ -7,7 +7,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { DiagnosticTemplate } from "@/types";
@@ -17,7 +16,6 @@ interface CardTemplateProps {
   onApply: (template: DiagnosticTemplate) => void;
   onEdit: (template: DiagnosticTemplate) => void;
   onDuplicate: (template: DiagnosticTemplate) => void;
-  onDelete: (template: DiagnosticTemplate) => void;
   onArchive?: (template: DiagnosticTemplate) => void;
   primaryActionLabel?: string;
   disableApply?: boolean;
@@ -29,7 +27,6 @@ export function CardTemplate({
   onApply,
   onEdit,
   onDuplicate,
-  onDelete,
   onArchive,
   primaryActionLabel,
   disableApply,
@@ -76,10 +73,6 @@ export function CardTemplate({
               {canArchive && onArchive && template.status !== "archived" && (
                 <DropdownMenuItem onClick={() => onArchive(template)}>Arquivar</DropdownMenuItem>
               )}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-destructive" onClick={() => onDelete(template)}>
-                Excluir
-              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
