@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Pencil, Plus, Route, Search, Trash, X } from "lucide-react";
+import { FolderKanban, Pencil, Plus, Route, Search, Trash, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,7 +26,7 @@ const riskClasses = {
 };
 
 export default function Clientes() {
-  const { clients, clientsLoading, clientsError, deleteClient } = useData();
+  const { clients, clientsLoading, clientsError, deleteClient, projects } = useData();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<ClientStatusFilter>("todos");
   const [riskFilter, setRiskFilter] = useState<ClientRiskFilter>("todos");
@@ -59,6 +59,12 @@ export default function Clientes() {
   const filteredClients = useMemo(() => {
     return filterClients(clients, { search, status: statusFilter, risk: riskFilter });
   }, [clients, riskFilter, search, statusFilter]);
+
+  const projectCountByClient = useMemo(() => {
+    const counts = new Map<string, number>();
+    projects.forEach((project) => counts.set(project.clientId, (counts.get(project.clientId) || 0) + 1));
+    return counts;
+  }, [projects]);
 
   const hasActiveFilters = Boolean(search) || statusFilter !== "todos" || riskFilter !== "todos";
   const clearFilters = () => {
@@ -134,10 +140,8 @@ export default function Clientes() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Cliente</TableHead>
-                  <TableHead>Segmento</TableHead>
-                  <TableHead>Localização</TableHead>
                   <TableHead>Contato principal</TableHead>
-                  <TableHead>Follow-up</TableHead>
+                  <TableHead>Projetos</TableHead>
                   <TableHead>Situação</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
@@ -150,61 +154,20 @@ export default function Clientes() {
                         <Link to={`/clientes/${client.id}`} className="hover:underline">
                           {client.nomeFantasia || client.razaoSocial}
                         </Link>
-                        <span className="text-sm text-muted-foreground">{client.razaoSocial}</span>
-                        {client.cnpj && (
-                          <span className="text-xs text-muted-foreground">CNPJ: {client.cnpj}</span>
-                        )}
-                      </div>
-                    </TableCell>
-
-                    <TableCell>
-                      {client.segmentoTags?.length ? (
-                        <div className="flex flex-wrap gap-1">
-                          {client.segmentoTags.map((tag, index) => (
-                            <Badge key={`${client.id}-segment-${index}`} variant="outline">
-                              {tag}
-                            </Badge>
-                          ))}
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
-                      )}
-                    </TableCell>
-
-                    <TableCell>
-                      <div className="flex flex-col gap-0.5">
-                        <span>
-                          {[client.endereco?.cidade, client.endereco?.uf].filter(Boolean).join(" - ") || "-"}
-                        </span>
-                        {client.endereco?.logradouro && (
-                          <span className="text-xs text-muted-foreground">
-                            {[client.endereco.logradouro, client.endereco.numero].filter(Boolean).join(", ")}
-                          </span>
-                        )}
+                        <span className="truncate text-xs text-muted-foreground">{client.razaoSocial}{client.cnpj ? ` · ${client.cnpj}` : ""}</span>
+                        {client.segmentoTags?.[0] && <span className="text-xs text-muted-foreground">{client.segmentoTags[0]}</span>}
                       </div>
                     </TableCell>
 
                     <TableCell>
                       <div className="flex flex-col gap-0.5">
                         <span>{client.contatoPrincipal?.nome || "-"}</span>
-                        {client.contatoPrincipal?.whatsapp && (
-                          <span className="text-xs text-muted-foreground">{client.contatoPrincipal.whatsapp}</span>
-                        )}
-                        {client.contatoPrincipal?.email && (
-                          <span className="text-xs text-muted-foreground">{client.contatoPrincipal.email}</span>
-                        )}
+                        <span className="text-xs text-muted-foreground">{client.contatoPrincipal?.whatsapp || client.contatoPrincipal?.email || "Sem contato informado"}</span>
                       </div>
                     </TableCell>
 
                     <TableCell>
-                      <div className="flex flex-col gap-0.5">
-                        <span>{client.preferenciasRelacionamento?.diaReuniao || "-"}</span>
-                        {client.preferenciasRelacionamento?.frequencia && (
-                          <span className="text-xs text-muted-foreground">
-                            Frequência: {followUpLabels[client.preferenciasRelacionamento.frequencia]}
-                          </span>
-                        )}
-                      </div>
+                      <div className="flex items-center gap-2 text-sm"><FolderKanban className="h-4 w-4 text-muted-foreground" />{projectCountByClient.get(client.id) || 0}</div>
                     </TableCell>
 
                     <TableCell>

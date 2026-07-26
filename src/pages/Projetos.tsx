@@ -14,6 +14,7 @@ import { Project } from "@/types";
 import { toast } from "sonner";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { isPastDate } from "@/lib/dates";
 import { getProjectTypeLabel } from "@/lib/project-delivery";
 
@@ -138,113 +139,43 @@ export default function Projetos() {
           {filteredProjects.length} projeto{filteredProjects.length === 1 ? " encontrado" : "s encontrados"}
         </p>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <Card>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Projeto</TableHead>
+                  <TableHead>Fase</TableHead>
+                  <TableHead>Próxima ação</TableHead>
+                  <TableHead>Responsável</TableHead>
+                  <TableHead>Prazo</TableHead>
+                  <TableHead>Progresso</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
         {filteredProjects.map((project) => {
           const forecastEndDate = project.forecastEndDate || project.endDate || "";
           const overdue = forecastEndDate ? isPastDate(forecastEndDate) : false;
           const completed = projectIsClosed(project);
           const nextAction = nextActionByProject.get(project.id);
           const responsibleName = project.responsible || project.responsibleNameLegacy || "Responsável pendente";
-          return (
-            <Card key={project.id} className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => navigate(`/projetos/${project.id}`)}>
-              <CardHeader className="pb-2">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="font-semibold">{project.name}</h3>
-                      {completed && (
-                        <Badge className="gap-1 bg-emerald-600 text-white hover:bg-emerald-600">
-                          <CheckCircle2 className="h-3.5 w-3.5" /> Concluído
-                        </Badge>
-                      )}
-                    </div>
-                    <p className="text-sm text-muted-foreground">{project.clientName}</p>
-                  </div>
-                  <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => e.stopPropagation()}><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent><DropdownMenuItem onClick={(e) => { e.stopPropagation(); setEditingProject(project); setDialogOpen(true); }}><Edit className="h-4 w-4 mr-2" />Editar</DropdownMenuItem><DropdownMenuItem onClick={(e) => { e.stopPropagation(); setDeleteId(project.id); }} className="text-destructive"><Trash2 className="h-4 w-4 mr-2" />Excluir</DropdownMenuItem></DropdownMenuContent></DropdownMenu>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 text-sm">
-                    <div className={`w-2 h-2 rounded-full ${completed ? "bg-emerald-500" : statusColors[project.status]}`} />
-                    <span className="text-foreground">{completed ? "Projeto concluído" : project.statusReason || "Status automático"}</span>
-                  </div>
-                  <Badge variant="outline" className="text-xs">
-                    {project.statusSource === "manual" ? "Status manual" : "Status automático"}
-                  </Badge>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Badge variant="secondary">{getProjectTypeLabel(project.projectType)}</Badge>
-                  <Badge className={phaseColors[project.phase] || "bg-muted"} variant="outline">{project.phase}</Badge>
-                </div>
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div className="space-y-1 cursor-help">
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Progresso</span>
-                          <span className="font-medium">{Math.round(project.progress)}%</span>
-                        </div>
-                        <Progress value={project.progress} className="h-2" />
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Calculado por tarefas, entregáveis e fases</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-                <div className="rounded-lg border bg-muted/30 p-3">
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Próxima ação</p>
-                  {completed ? (
-                    <p className="mt-1 text-sm font-medium text-emerald-700">
-                      Projeto concluído — nenhuma ação pendente.
-                    </p>
-                  ) : nextAction ? (
-                    <>
-                      <p className="mt-1 truncate text-sm font-medium">{nextAction.title}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {nextAction.responsible || "Responsável pendente"}{nextAction.dueDate ? ` · ${nextAction.dueDate}` : " · Sem prazo"}
-                      </p>
-                    </>
-                  ) : (
-                    <p className="mt-1 text-sm text-amber-700">Defina a próxima ação para este projeto.</p>
-                  )}
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Responsável</span>
-                  <div className="flex items-center gap-2">
-                    <Avatar className="h-8 w-8">
-                      <AvatarFallback className="bg-primary/10 text-primary">{getInitials(responsibleName)}</AvatarFallback>
-                    </Avatar>
-                    <div className="flex flex-col items-start leading-tight">
-                      <span className="text-sm font-medium text-foreground">{responsibleName}</span>
-                      {!project.responsibleUserId && (
-                        <Button
-                          type="button"
-                          variant="link"
-                          size="sm"
-                          className="h-auto px-0 text-xs"
-                          onClick={() => { setEditingProject(project); setDialogOpen(true); }}
-                        >
-                          Vincular responsável
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>{project.startDate || "Sem início"}</span>
-                  <span>→</span>
-                  <div className="flex items-center gap-2">
-                    <span>{forecastEndDate || "Sem previsão"}</span>
-                    {overdue && <Badge variant="destructive">Atrasado</Badge>}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          );
+          return <TableRow key={project.id} className="cursor-pointer hover:bg-muted/50" onClick={() => navigate(`/projetos/${project.id}`)}>
+            <TableCell className="min-w-[240px]"><div className="flex items-start gap-2"><div className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${completed ? "bg-emerald-500" : statusColors[project.status]}`} /><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="font-medium">{project.name}</p>{completed && <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">Concluído</Badge>}</div><p className="truncate text-xs text-muted-foreground">{project.clientName || "Projeto interno"} · {getProjectTypeLabel(project.projectType)}</p></div></div></TableCell>
+            <TableCell><Badge className={phaseColors[project.phase] || "bg-muted text-muted-foreground"} variant="outline">{project.phase}</Badge></TableCell>
+            <TableCell className="min-w-[220px]">{completed ? <span className="text-sm text-emerald-700">Nenhuma ação pendente</span> : nextAction ? <div><p className="max-w-[260px] truncate text-sm font-medium">{nextAction.title}</p><p className="text-xs text-muted-foreground">{nextAction.responsible || "Responsável pendente"}{nextAction.dueDate ? ` · ${nextAction.dueDate}` : " · Sem prazo"}</p></div> : <span className="text-sm text-amber-700">Sem próxima ação</span>}</TableCell>
+            <TableCell><div className="flex items-center gap-2"><Avatar className="h-7 w-7"><AvatarFallback className="bg-primary/10 text-primary">{getInitials(responsibleName)}</AvatarFallback></Avatar><span className="max-w-[140px] truncate text-sm">{responsibleName}</span></div></TableCell>
+            <TableCell>{forecastEndDate ? <div className="flex items-center gap-2 text-sm"><span>{forecastEndDate}</span>{overdue && <Badge variant="destructive">Atrasado</Badge>}</div> : <span className="text-sm text-muted-foreground">Sem previsão</span>}</TableCell>
+            <TableCell className="min-w-[110px]"><TooltipProvider><Tooltip><TooltipTrigger asChild><div className="space-y-1"><span className="text-xs">{Math.round(project.progress)}%</span><Progress value={project.progress} className="h-1.5" /></div></TooltipTrigger><TooltipContent><p>Calculado por tarefas, entregáveis e fases</p></TooltipContent></Tooltip></TooltipProvider></TableCell>
+            <TableCell className="text-right"><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8" onClick={(event) => event.stopPropagation()}><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={(event) => { event.stopPropagation(); setEditingProject(project); setDialogOpen(true); }}><Edit className="mr-2 h-4 w-4" />Editar</DropdownMenuItem><DropdownMenuItem onClick={(event) => { event.stopPropagation(); setDeleteId(project.id); }} className="text-destructive"><Trash2 className="mr-2 h-4 w-4" />Excluir</DropdownMenuItem></DropdownMenuContent></DropdownMenu></TableCell>
+          </TableRow>;
         })}
-      </div>
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
       <ProjectDialog open={dialogOpen} onOpenChange={setDialogOpen} project={editingProject} />
       <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Confirmar exclusão</AlertDialogTitle><AlertDialogDescription>Tem certeza que deseja excluir este projeto?</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleDelete}>Excluir</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
     </div>
