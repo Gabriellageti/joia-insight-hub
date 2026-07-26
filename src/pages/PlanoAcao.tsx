@@ -19,6 +19,8 @@ import { useSearchParams } from "react-router-dom";
 import { closestCorners, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { KanbanColumn } from "@/components/plano-acao/KanbanColumn";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { getDeliveryStepsForProject } from "@/lib/project-delivery";
 
 const columns: { id: Task["status"]; title: string }[] = [
   { id: "backlog", title: "Backlog" },
@@ -33,8 +35,8 @@ const focusColumnIds: Task["status"][] = ["next", "in_progress", "waiting"];
 const emptyFilters = (projectId = "all"): TaskFilterValues => ({ search: "", projectId, status: "all", priority: "all", assignedTo: "all", taskType: "all", overdue: false });
 
 export default function PlanoAcao() {
-  const { tasks, tasksLoading, tasksError, clients, projects, projectsLoading, projectsError, savingTaskIds, updateTask, deleteTask } = useData();
-  const { user } = useAuth();
+  const { tasks, tasksLoading, tasksError, clients, projects, projectsLoading, projectsError, savingTaskIds, updateTask, deleteTask, updateProject } = useData();
+  const { user, isAdmin } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const initialProjectId = searchParams.get("projectId") || "all";
   const initialWorkspace = searchParams.get("view") === "consulting" ? "consulting" : initialProjectId === "all" ? "mine" : "project";
@@ -91,6 +93,7 @@ export default function PlanoAcao() {
     });
     return [...byId].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
   }, [tasks]);
+  const selectedProject = useMemo(() => projects.find((project) => project.id === filters.projectId) || null, [filters.projectId, projects]);
 
   const handleDrop = async (taskId: string, status: Task["status"]) => {
     const task = tasks.find((item) => item.id === taskId);
@@ -141,6 +144,16 @@ export default function PlanoAcao() {
     setSearchParams(next);
   };
 
+  const handleProjectPhaseChange = async (phase: string) => {
+    if (!selectedProject || selectedProject.phase === phase) return;
+    try {
+      await updateProject(selectedProject.id, { phase });
+      toast.success(`Fase atualizada para ${phase}.`);
+    } catch {
+      toast.error("Não foi possível atualizar a fase do projeto.");
+    }
+  };
+
   if (tasksLoading || projectsLoading) {
     return <div className="space-y-4"><Skeleton className="h-9 w-56" /><Skeleton className="h-12 w-full" /><div className="flex gap-4 overflow-hidden">{[1, 2, 3].map((item) => <Skeleton key={item} className="h-80 w-80 shrink-0" />)}</div></div>;
   }
@@ -171,21 +184,33 @@ export default function PlanoAcao() {
           onRequestDelete={setDeletingTask}
         />
       ) : <>
+      {workspace === "project" && (
+        <Card className="border-primary/20 bg-primary/5">
+          <CardContent className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="font-medium">Controle por projeto</p>
+              <p className="text-sm text-muted-foreground">Escolha um projeto para ver suas ações e conduzir a fase por aqui.</p>
+            </div>
+            <div className="flex w-full flex-col gap-2 sm:flex-row md:w-auto">
+              <Select value={filters.projectId} onValueChange={(projectId) => setFilters((current) => ({ ...current, projectId }))}>
+                <SelectTrigger className="w-full md:w-64"><SelectValue placeholder="Selecione um projeto" /></SelectTrigger>
+                <SelectContent><SelectItem value="all">Todos os projetos</SelectItem>{projects.map((project) => <SelectItem key={project.id} value={project.id}>{project.name}</SelectItem>)}</SelectContent>
+              </Select>
+              {selectedProject && <Select value={selectedProject.phase} onValueChange={handleProjectPhaseChange} disabled={!isAdmin}>
+                <SelectTrigger className="w-full md:w-56"><SelectValue /></SelectTrigger>
+                <SelectContent>{getDeliveryStepsForProject(selectedProject).map((step) => <SelectItem key={step.title} value={step.title}>{step.title}</SelectItem>)}</SelectContent>
+              </Select>}
+            </div>
+          </CardContent>
+        </Card>
+      )}
       <TaskFilters projects={projects.map(({ id, name }) => ({ id, name }))} assignees={assignees} values={filters} onChange={(nextFilters) => { setFilters(nextFilters); const next = new URLSearchParams(searchParams); if (nextFilters.projectId === "all") next.delete("projectId"); else next.set("projectId", nextFilters.projectId); setSearchParams(next); }} onClear={() => { setFilters(emptyFilters()); setSearchParams({}); }} />
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Button variant="outline" className="h-auto justify-start p-3 text-left" onClick={() => setFilters((current) => ({ ...current, overdue: !current.overdue, status: "all" }))}>
-          <AlertTriangle className="mr-2 h-4 w-4 text-destructive" /><span><span className="block text-lg font-semibold">{operationalCounts.overdue}</span><span className="text-xs text-muted-foreground">Atrasadas</span></span>
-        </Button>
-        <Button variant="outline" className="h-auto justify-start p-3 text-left" onClick={() => setFilters((current) => ({ ...current, overdue: false, status: "in_progress" }))}>
-          <PlayCircle className="mr-2 h-4 w-4 text-amber-600" /><span><span className="block text-lg font-semibold">{operationalCounts.active}</span><span className="text-xs text-muted-foreground">Em andamento</span></span>
-        </Button>
-        <Button variant="outline" className="h-auto justify-start p-3 text-left" onClick={() => setFilters((current) => ({ ...current, overdue: false, status: "waiting" }))}>
-          <Clock3 className="mr-2 h-4 w-4 text-blue-600" /><span><span className="block text-lg font-semibold">{operationalCounts.waiting}</span><span className="text-xs text-muted-foreground">Aguardando ou revisão</span></span>
-        </Button>
-        <Button variant="outline" className="h-auto justify-start p-3 text-left" onClick={() => setFilters((current) => ({ ...current, overdue: false, status: "done" }))}>
-          <CheckCircle2 className="mr-2 h-4 w-4 text-emerald-600" /><span><span className="block text-lg font-semibold">{operationalCounts.done}</span><span className="text-xs text-muted-foreground">Concluídas</span></span>
-        </Button>
+      <div className="flex flex-wrap gap-2" aria-label="Atalhos operacionais">
+        <Button variant={filters.overdue ? "destructive" : "outline"} size="sm" onClick={() => setFilters((current) => ({ ...current, overdue: !current.overdue, status: "all" }))}><AlertTriangle className="mr-1.5 h-4 w-4" />{operationalCounts.overdue} atrasadas</Button>
+        <Button variant={filters.status === "in_progress" ? "default" : "outline"} size="sm" onClick={() => setFilters((current) => ({ ...current, overdue: false, status: "in_progress" }))}><PlayCircle className="mr-1.5 h-4 w-4" />{operationalCounts.active} em andamento</Button>
+        <Button variant={filters.status === "waiting" ? "default" : "outline"} size="sm" onClick={() => setFilters((current) => ({ ...current, overdue: false, status: "waiting" }))}><Clock3 className="mr-1.5 h-4 w-4" />{operationalCounts.waiting} aguardando</Button>
+        <Button variant={filters.status === "done" ? "default" : "ghost"} size="sm" onClick={() => setFilters((current) => ({ ...current, overdue: false, status: "done" }))}><CheckCircle2 className="mr-1.5 h-4 w-4" />{operationalCounts.done} concluídas</Button>
       </div>
 
       {filteredTasks.length === 0 ? (
@@ -196,7 +221,7 @@ export default function PlanoAcao() {
             <div><h2 className="font-semibold">{showFullBoard ? "Fluxo completo" : "Foco operacional"}</h2><p className="text-sm text-muted-foreground">{showFullBoard ? "Todas as etapas do processo." : "Próximas ações, trabalho em curso e pendências externas."}</p></div>
             <Button variant="outline" size="sm" onClick={() => setShowFullBoard((value) => !value)}><Columns3 className="mr-2 h-4 w-4" />{showFullBoard ? "Voltar ao foco" : "Ver fluxo completo"}</Button>
           </div>
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2 2xl:grid-cols-3" aria-label="Kanban de tarefas">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3" aria-label="Kanban de tarefas">
             {visibleColumns.map((column) => (
               <KanbanColumn key={column.id} status={column.id} title={column.title} count={tasksByColumn[column.id].length}>
                 {tasksByColumn[column.id].map((task) => <TaskCard key={task.id} task={task} saving={savingIds.has(task.id)} onClick={() => { setEditingTask(task); setDialogOpen(true); }} onDelete={() => setDeletingTask(task)} onToggleComplete={() => void handleToggleComplete(task)} />)}
