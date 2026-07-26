@@ -37,6 +37,11 @@ Antes de implementar, revisar o módulo atual e definir o que falta para que um 
 - A criação de projeto agora prioriza nome, cliente, tipo e responsável; os detalhes avançados ficaram opcionais.
 - A ficha do projeto ganhou uma visão rápida da próxima ação, entregas pendentes, diagnósticos vinculados e próximo contato.
 
+### Segundo avanço em revisão
+
+- A fase inicial passa a ser definida pelo tipo do projeto e evolui pela esteira, sem uma lista mista de opções no cadastro.
+- A lista de projetos passa a oferecer filtros rápidos para operação: em andamento, atenção, sem próxima ação e encerrados.
+
 ## Regra de trabalho
 
 Cada nova etapa começa por uma revisão do que já existe no módulo. Antes de ampliar funcionalidades, preservar os fluxos já integrados e evitar duplicar dados que tenham uma fonte de verdade em outro módulo.

@@ -67,36 +67,6 @@ const RESPONSIBLE_ROLES = [
   "analista",
 ] as const;
 
-const PHASES = [
-  "Diagnóstico",
-  "Planejamento",
-  "Execução",
-  "Acompanhamento",
-  "Encerramento",
-  "Briefing",
-  "Escopo",
-  "Design / Protótipo",
-  "Desenvolvimento",
-  "Conteúdo e SEO básico",
-  "Testes e Homologação",
-  "Publicação",
-  "Descoberta e requisitos",
-  "Arquitetura",
-  "UX/UI",
-  "Desenvolvimento do MVP",
-  "Homologação e deploy",
-  "Pós-lançamento",
-  "Diagnóstico de oportunidade",
-  "Mapeamento de dados e processos",
-  "Protótipo",
-  "Integração",
-  "Treinamento e monitoramento",
-  "Processo atual",
-  "Processo futuro",
-  "Implementação",
-  "Testes e treinamento",
-];
-
 const DURATION_OPTIONS: { value: ProjectDuration; label: string }[] = [
   { value: "2w", label: "2 semanas" },
   { value: "4w", label: "4 semanas" },
@@ -302,6 +272,10 @@ export function ProjectDialog({
   const selectedResponsible = eligibleUsers.find(
     (employee) => employee.id === formData.responsibleUserId
   );
+  const availablePhases = getDeliveryStepsForProject({
+    projectType: formData.projectType,
+    phase: formData.phase,
+  }).map((step) => step.title);
 
   const handleLinkResponsible = () => {
     if (selectedResponsible || !formData.responsibleNameLegacy) return;
@@ -528,9 +502,11 @@ export function ProjectDialog({
 
             </div>
 
-            {/* Responsible & Phase */}
+            {/* Responsible and phase correction */}
             <div className="space-y-4">
-              <h3 className="text-sm font-medium text-muted-foreground">Responsável e Fase</h3>
+              <h3 className="text-sm font-medium text-muted-foreground">
+                {isEditing ? "Responsável e Fase" : "Responsável"}
+              </h3>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -622,7 +598,7 @@ export function ProjectDialog({
                   )}
                 </div>
 
-                <div className="space-y-2">
+                {isEditing && <div className="space-y-2">
                   <Label htmlFor="phase">Fase Atual</Label>
                   <Select
                     value={formData.phase}
@@ -632,15 +608,20 @@ export function ProjectDialog({
                       <SelectValue placeholder="Selecione a fase" />
                     </SelectTrigger>
                     <SelectContent>
-                      {PHASES.map((phase) => (
+                      {availablePhases.map((phase) => (
                         <SelectItem key={phase} value={phase}>
                           {phase}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                </div>
+                </div>}
               </div>
+              {!isEditing && (
+                <p className="text-xs text-muted-foreground">
+                  A fase inicial será definida automaticamente pela esteira do tipo de projeto escolhido.
+                </p>
+              )}
             </div>
 
             {!isEditing && (
