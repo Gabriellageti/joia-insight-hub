@@ -11,6 +11,10 @@ export type TaskHistoryEntry = TaskHistoryRow & { user_name: string };
 
 const assigneeCache = new Map<string, Promise<TaskAssignee[]>>();
 
+export function invalidateTaskAssignees(projectId?: string): void {
+  assigneeCache.delete(projectId || "personal");
+}
+
 export function listTaskAssignees(projectId?: string): Promise<TaskAssignee[]> {
   const cacheKey = projectId || "personal";
   const cached = assigneeCache.get(cacheKey);
