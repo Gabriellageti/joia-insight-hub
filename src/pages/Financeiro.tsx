@@ -694,6 +694,13 @@ export default function Financeiro() {
             </CardHeader>
             <CardContent>
               <form className="grid gap-4" onSubmit={handleExpenseSubmit}>
+                {!editingExpense && <div className={`rounded-lg border p-4 ${expenseForm.recurring ? "border-primary bg-primary/5" : "bg-muted/30"}`}>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div><p className="font-medium">Esta despesa se repete?</p><p className="text-sm text-muted-foreground">Ative para criar uma previsão automática dos próximos 12 meses.</p></div>
+                    <label className="flex items-center gap-2 text-sm font-medium"><input type="checkbox" checked={expenseForm.recurring} onChange={(event) => setExpenseForm((prev) => ({ ...prev, recurring: event.target.checked }))} />Despesa recorrente</label>
+                  </div>
+                  {expenseForm.recurring && <div className="mt-3 max-w-xs space-y-2"><Label htmlFor="expense-frequency">Frequência</Label><Select value={expenseForm.frequency} onValueChange={(frequency: "monthly" | "quarterly" | "annual") => setExpenseForm((prev) => ({ ...prev, frequency }))}><SelectTrigger id="expense-frequency"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="monthly">Mensal</SelectItem><SelectItem value="quarterly">Trimestral</SelectItem><SelectItem value="annual">Anual</SelectItem></SelectContent></Select></div>}
+                </div>}
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="expense-description">Descrição</Label>
@@ -777,14 +784,6 @@ export default function Financeiro() {
                     />
                   </div>
                 </div>
-
-                {!editingExpense && <div className="rounded-lg border bg-muted/30 p-4">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                    <div><p className="font-medium">Despesa recorrente</p><p className="text-sm text-muted-foreground">Gera contas previstas para os próximos 12 meses.</p></div>
-                    <label className="flex items-center gap-2 text-sm font-medium"><input type="checkbox" checked={expenseForm.recurring} onChange={(event) => setExpenseForm((prev) => ({ ...prev, recurring: event.target.checked }))} />Repetir despesa</label>
-                  </div>
-                  {expenseForm.recurring && <div className="mt-3 max-w-xs space-y-2"><Label htmlFor="expense-frequency">Frequência</Label><Select value={expenseForm.frequency} onValueChange={(frequency: "monthly" | "quarterly" | "annual") => setExpenseForm((prev) => ({ ...prev, frequency }))}><SelectTrigger id="expense-frequency"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="monthly">Mensal</SelectItem><SelectItem value="quarterly">Trimestral</SelectItem><SelectItem value="annual">Anual</SelectItem></SelectContent></Select></div>}
-                </div>}
 
                 <div className="flex flex-wrap gap-2">
                   <Button type="submit" disabled={!isExpenseFormValid}>
