@@ -443,6 +443,7 @@ const mapSupabaseEmployee = (employee: EmployeeRow): Employee => {
 
   return {
     id: employee.id,
+    userId: employee.user_id,
     name: employee.name,
     email: employee.email || "",
     role: employee.role || "Analista",
@@ -1730,7 +1731,7 @@ const initialClientContacts: ClientContact[] = [
 // useLocalStorage removed - no longer used for templates
 
 export function DataProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const { toast } = useToast();
   const currentUserName = resolveUserName(user);
   const [clients, setClients] = useState<Client[]>(initialClients.map(normalizeClient));
@@ -1890,7 +1891,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [toast, user?.id, projectsLoading, clientsLoading]);
 
   useEffect(() => {
-    if (!user) {
+    if (!user || !isAdmin) {
       setPlaybooks(initialPlaybooks);
       return;
     }
@@ -1911,10 +1912,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
     };
 
     fetchPlaybooks();
-  }, [toast, user]);
+  }, [toast, user, isAdmin]);
 
   useEffect(() => {
-    if (!user) {
+    if (!user || !isAdmin) {
+      setExpenses([]);
       return;
     }
 
@@ -1937,10 +1939,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
     };
 
     fetchExpenses();
-  }, [toast, user]);
+  }, [toast, user, isAdmin]);
 
   useEffect(() => {
-    if (!user) {
+    if (!user || !isAdmin) {
       setEmployees([]);
       return;
     }
@@ -1961,7 +1963,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     };
 
     fetchEmployees();
-  }, [toast, user]);
+  }, [toast, user, isAdmin]);
 
   // Fetch indicators from Supabase
   useEffect(() => {
@@ -1985,7 +1987,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   // Fetch leads from Supabase
   useEffect(() => {
-    if (!user) {
+    if (!user || !isAdmin) {
       setLeads([]);
       return;
     }
@@ -2001,7 +2003,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     };
 
     fetchLeadsData();
-  }, [user]);
+  }, [user, isAdmin]);
 
   // Fetch deliverables from Supabase
   useEffect(() => {
@@ -2026,7 +2028,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   // Fetch content items from Supabase
   useEffect(() => {
-    if (!user) {
+    if (!user || !isAdmin) {
       setContentItems([]);
       return;
     }
@@ -2042,7 +2044,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     };
 
     fetchContentItemsData();
-  }, [user]);
+  }, [user, isAdmin]);
 
   // Fetch contracts from Supabase
   useEffect(() => {

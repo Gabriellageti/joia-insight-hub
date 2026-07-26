@@ -461,6 +461,7 @@ export interface Playbook {
 
 export interface Employee {
   id: string;
+  userId?: string | null;
   name: string;
   email?: string;
   role: string;

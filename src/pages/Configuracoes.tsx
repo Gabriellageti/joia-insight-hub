@@ -7,6 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { NotificationSettings } from "@/components/settings/NotificationSettings";
+import { UserAccessManager } from "@/components/settings/UserAccessManager";
 
 export default function Configuracoes() {
   return (
@@ -69,11 +70,7 @@ export default function Configuracoes() {
               <CardDescription>Adicione e gerencie membros do workspace</CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-muted-foreground text-center py-8">
-                Gestão de usuários requer autenticação configurada.
-                <br />
-                <span className="text-sm">Habilite o backend para gerenciar permissões.</span>
-              </p>
+              <UserAccessManager />
             </CardContent>
           </Card>
         </TabsContent>
@@ -89,11 +86,7 @@ export default function Configuracoes() {
               <CardDescription>Configure políticas de segurança</CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-muted-foreground text-center py-8">
-                Configurações de segurança requerem autenticação.
-                <br />
-                <span className="text-sm">Habilite o backend para configurar permissões avançadas.</span>
-              </p>
+              <p className="text-sm text-muted-foreground">Administradores têm acesso à Gestão JoIA. Colaboradores trabalham nos projetos e planos de ação, sem acesso a Playbooks, Equipe, Financeiro, Marketing ou Configurações.</p>
             </CardContent>
           </Card>
         </TabsContent>

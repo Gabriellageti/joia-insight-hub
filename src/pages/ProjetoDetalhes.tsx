@@ -8,6 +8,7 @@ import { ArrowLeft, CalendarDays, CheckCircle2, ClipboardCheck, Edit, ListTodo, 
 import { getProjectTypeLabel } from "@/lib/project-delivery";
 import { ProjectDialog } from "@/components/dialogs/ProjectDialog";
 import { TaskDialog } from "@/components/dialogs/TaskDialog";
+import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import type { Task } from "@/types";
@@ -21,6 +22,7 @@ import {
   ProjectDeliverablesList,
   ProjectDeliveryWorkflow,
 } from "@/components/projetos";
+import { ProjectAccessManager } from "@/components/projetos/ProjectAccessManager";
 
 const phaseColors: Record<string, string> = {
   Diagnóstico: "bg-blue-100 text-blue-700",
@@ -35,6 +37,7 @@ export default function ProjetoDetalhes() {
   const navigate = useNavigate();
   const { projects, clients, tasks, diagnostics, meetings, deliverables, updateProject } =
     useData();
+  const { isAdmin } = useAuth();
 
   const [projectDialogOpen, setProjectDialogOpen] = useState(false);
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
@@ -277,6 +280,13 @@ export default function ProjetoDetalhes() {
         <ProjectProgressCard project={project} />
         <ProjectStatusCard project={project} />
       </div>
+
+      {isAdmin && (
+        <Card>
+          <CardHeader><CardTitle className="text-base">Acesso da equipe</CardTitle><p className="text-sm text-muted-foreground">Operador executa o trabalho. Sócio do projeto também acessa os dados financeiros deste projeto.</p></CardHeader>
+          <CardContent><ProjectAccessManager projectId={project.id} /></CardContent>
+        </Card>
+      )}
 
       {/* Esteira de Entrega */}
       <ProjectDeliveryWorkflow
