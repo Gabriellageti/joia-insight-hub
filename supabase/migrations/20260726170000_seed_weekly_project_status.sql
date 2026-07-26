@@ -7,7 +7,7 @@ ALTER TABLE public.clients
   ADD COLUMN IF NOT EXISTS address text;
 
 WITH workspace_context AS (
-  SELECT workspace_id FROM public.clients WHERE workspace_id IS NOT NULL LIMIT 1
+  SELECT workspace_id FROM public.workspace_members WHERE workspace_id IS NOT NULL LIMIT 1
 ), client_seed (name, trade_name, cnpj, state_registration, segment, contact_name, contact_phone, status, address) AS (
   VALUES
     ('Granel Piscinas Industria e Comercio LTDA', 'Granel Piscinas', NULL, NULL, 'Piscinas', NULL, NULL, 'ativo', NULL),
@@ -44,7 +44,7 @@ WHERE NOT EXISTS (
 );
 
 WITH workspace_context AS (
-  SELECT workspace_id FROM public.clients WHERE workspace_id IS NOT NULL LIMIT 1
+  SELECT workspace_id FROM public.workspace_members WHERE workspace_id IS NOT NULL LIMIT 1
 ), project_seed (name, client_name, objective, scope, phase, project_type, progress, status, responsible, end_date, money_hypothesis) AS (
   VALUES
     ('Site Granel Piscinas', 'Granel Piscinas Industria e Comercio LTDA', 'Entregar o site institucional da Granel Piscinas.', 'Construção e entrega do site institucional.', 'Concluído', 'website', 100, 'Concluído', 'Gabriel e Gustavo', NULL::date, 1600::numeric),
@@ -66,9 +66,7 @@ LEFT JOIN public.clients client ON lower(client.name) = lower(seed.client_name)
 CROSS JOIN workspace_context workspace
 WHERE NOT EXISTS (SELECT 1 FROM public.projects project WHERE lower(project.name) = lower(seed.name));
 
-WITH workspace_context AS (
-  SELECT workspace_id FROM public.clients WHERE workspace_id IS NOT NULL LIMIT 1
-), task_seed (project_name, title, description, responsible, priority, status, due_date, completed_at) AS (
+WITH task_seed (project_name, title, description, responsible, priority, status, due_date, completed_at) AS (
   VALUES
     ('Site Granel Piscinas', 'Confirmar custo do domínio', 'Custo identificado: R$ 65,00.', 'Gabriel', 'medium', 'next', NULL::date, NULL::timestamptz),
     ('Site Granel Piscinas', 'Registrar resultado financeiro final', 'Receita de R$ 1.600,00; repasse de R$ 200,00 ao Gustavo; domínio de R$ 65,00.', 'Gabriel', 'medium', 'next', NULL::date, NULL::timestamptz),
@@ -94,19 +92,17 @@ WITH workspace_context AS (
     ('Grupo H2O', 'Alinhar valores relacionados à Alterdata', 'Alinhar com Helaine os valores pendentes.', 'Matheus', 'high', 'next', NULL::date, NULL::timestamptz),
     ('Grupo H2O', 'Emitir nota fiscal e acompanhar pagamentos', 'Registrar os pagamentos em aberto e acompanhar a regularização.', 'Gabriel', 'high', 'next', NULL::date, NULL::timestamptz)
 )
-INSERT INTO public.tasks (workspace_id, project_id, client_id, title, description, responsible, priority, status, task_type, due_date, completed_at)
-SELECT workspace.workspace_id, project.id, project.client_id, seed.title, seed.description, seed.responsible, seed.priority, seed.status, 'project', seed.due_date, seed.completed_at
+INSERT INTO public.tasks (project_id, client_id, title, description, responsible, priority, status, task_type, due_date, completed_at)
+SELECT project.id, project.client_id, seed.title, seed.description, seed.responsible, seed.priority, seed.status, 'project', seed.due_date, seed.completed_at
 FROM task_seed seed
 JOIN public.projects project ON lower(project.name) = lower(seed.project_name)
-CROSS JOIN workspace_context workspace
 WHERE NOT EXISTS (
   SELECT 1 FROM public.tasks task
   WHERE task.project_id = project.id AND lower(task.title) = lower(seed.title)
 );
 
-INSERT INTO public.tasks (workspace_id, title, description, responsible, priority, status, task_type)
-SELECT workspace.workspace_id, 'Confirmar identificação do Mercado Dona Euzébia', 'Cobrar Chicão sobre a reunião, identificar o supermercado e confirmar o interesse antes de criar cliente e projeto.', 'Gabriel', 'medium', 'next', 'personal'
-FROM (SELECT workspace_id FROM public.clients WHERE workspace_id IS NOT NULL LIMIT 1) workspace
+INSERT INTO public.tasks (title, description, responsible, priority, status, task_type)
+SELECT 'Confirmar identificação do Mercado Dona Euzébia', 'Cobrar Chicão sobre a reunião, identificar o supermercado e confirmar o interesse antes de criar cliente e projeto.', 'Gabriel', 'medium', 'next', 'personal'
 WHERE NOT EXISTS (
   SELECT 1 FROM public.tasks WHERE lower(title) = lower('Confirmar identificação do Mercado Dona Euzébia') AND task_type = 'personal'
 );
