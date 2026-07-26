@@ -3,6 +3,7 @@ import { ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { useData } from "@/contexts/DataContext";
 import { supabase } from "@/integrations/supabase/client";
+import { invalidateTaskAssignees } from "@/integrations/supabase/tasks";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type Access = "none" | "editor" | "manager";
@@ -56,6 +57,7 @@ export function ProjectAccessManager({ projectId }: { projectId: string }) {
       toast.error("Não foi possível atualizar o acesso ao projeto.");
       return;
     }
+    invalidateTaskAssignees(projectId);
     toast.success("Acesso ao projeto atualizado.");
   };
 
