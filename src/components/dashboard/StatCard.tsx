@@ -15,7 +15,7 @@ interface StatCardProps {
 
 export function StatCard({ title, value, subtitle, icon: Icon, trend, highlight }: StatCardProps) {
   return (
-    <Card className={highlight ? "border-accent bg-accent/5" : ""}>
+    <Card className={`h-full transition-colors hover:border-accent ${highlight ? "border-accent bg-accent/5" : ""}`}>
       <CardContent className="p-6">
         <div className="flex items-start justify-between">
           <div className="space-y-1">

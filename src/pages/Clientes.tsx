@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Filter, Pencil, Plus, Route, Search, Trash } from "lucide-react";
+import { Pencil, Plus, Route, Search, Trash, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,6 +9,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ClientDialog } from "@/components/dialogs/ClientDialog";
 import { useData } from "@/contexts/DataContext";
 import { toast } from "sonner";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { filterClients, type ClientRiskFilter, type ClientStatusFilter } from "@/lib/clients/filters";
 
 const followUpLabels = {
   semanal: "Semanal",
@@ -16,9 +18,18 @@ const followUpLabels = {
   mensal: "Mensal",
 };
 
+const riskLabels = { low: "Risco baixo", medium: "Risco médio", high: "Risco alto" };
+const riskClasses = {
+  low: "border-green-500/30 text-green-700",
+  medium: "border-amber-500/30 text-amber-700",
+  high: "border-destructive/30 text-destructive",
+};
+
 export default function Clientes() {
-  const { clients, deleteClient } = useData();
+  const { clients, clientsLoading, clientsError, deleteClient } = useData();
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<ClientStatusFilter>("todos");
+  const [riskFilter, setRiskFilter] = useState<ClientRiskFilter>("todos");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState<typeof clients[number] | null>(null);
 
@@ -46,26 +57,19 @@ export default function Clientes() {
   };
 
   const filteredClients = useMemo(() => {
-    const term = search.toLowerCase();
-    if (!term) return clients;
+    return filterClients(clients, { search, status: statusFilter, risk: riskFilter });
+  }, [clients, riskFilter, search, statusFilter]);
 
-    return clients.filter((client) =>
-      [
-        client.razaoSocial,
-        client.nomeFantasia,
-        client.cnpj,
-        client.segmentoTags.join(" "),
-        client.endereco?.cidade,
-        client.endereco?.uf,
-      ]
-        .filter(Boolean)
-        .some((value) => value!.toLowerCase().includes(term))
-    );
-  }, [clients, search]);
+  const hasActiveFilters = Boolean(search) || statusFilter !== "todos" || riskFilter !== "todos";
+  const clearFilters = () => {
+    setSearch("");
+    setStatusFilter("todos");
+    setRiskFilter("todos");
+  };
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-foreground">Clientes</h1>
           <p className="text-muted-foreground">Gerencie o pipeline e os relacionamentos com clientes</p>
@@ -78,8 +82,8 @@ export default function Clientes() {
 
       <Card>
         <CardHeader className="flex flex-col gap-4">
-          <div className="flex items-center gap-3">
-            <div className="relative flex-1 max-w-md">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+            <div className="relative min-w-0 flex-1 lg:max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 value={search}
@@ -88,17 +92,45 @@ export default function Clientes() {
                 className="pl-9"
               />
             </div>
-            <Button variant="outline" size="sm">
-              <Filter className="h-4 w-4 mr-2" />
-              Filtros
-            </Button>
+            <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as ClientStatusFilter)}>
+              <SelectTrigger className="w-full lg:w-40"><SelectValue placeholder="Status" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos os status</SelectItem>
+                <SelectItem value="ativo">Ativos</SelectItem>
+                <SelectItem value="inativo">Inativos</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={riskFilter} onValueChange={(value) => setRiskFilter(value as ClientRiskFilter)}>
+              <SelectTrigger className="w-full lg:w-40"><SelectValue placeholder="Risco" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos os riscos</SelectItem>
+                <SelectItem value="low">Risco baixo</SelectItem>
+                <SelectItem value="medium">Risco médio</SelectItem>
+                <SelectItem value="high">Risco alto</SelectItem>
+              </SelectContent>
+            </Select>
+            {hasActiveFilters && (
+              <Button variant="ghost" size="sm" onClick={clearFilters} className="justify-start">
+                <X className="mr-2 h-4 w-4" /> Limpar
+              </Button>
+            )}
           </div>
+          <p className="text-sm text-muted-foreground">
+            {filteredClients.length} de {clients.length} {clients.length === 1 ? "cliente" : "clientes"}
+          </p>
         </CardHeader>
         <CardContent className="p-0">
-          {filteredClients.length === 0 ? (
-            <div className="py-10 text-center text-muted-foreground">Nenhum cliente encontrado.</div>
+          {clientsLoading ? (
+            <div className="py-10 text-center text-muted-foreground">Carregando clientes...</div>
+          ) : clientsError ? (
+            <div className="py-10 text-center text-destructive">Não foi possível carregar os clientes: {clientsError}</div>
+          ) : filteredClients.length === 0 ? (
+            <div className="space-y-3 py-10 text-center text-muted-foreground">
+              <p>{hasActiveFilters ? "Nenhum cliente corresponde aos filtros." : "Nenhum cliente cadastrado."}</p>
+              {hasActiveFilters && <Button variant="outline" size="sm" onClick={clearFilters}>Limpar filtros</Button>}
+            </div>
           ) : (
-            <Table>
+            <div className="overflow-x-auto"><Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Cliente</TableHead>
@@ -106,6 +138,7 @@ export default function Clientes() {
                   <TableHead>Localização</TableHead>
                   <TableHead>Contato principal</TableHead>
                   <TableHead>Follow-up</TableHead>
+                  <TableHead>Situação</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
@@ -174,6 +207,17 @@ export default function Clientes() {
                       </div>
                     </TableCell>
 
+                    <TableCell>
+                      <div className="flex flex-col items-start gap-1">
+                        <Badge variant={client.status === "ativo" ? "default" : "secondary"}>
+                          {client.status === "ativo" ? "Ativo" : "Inativo"}
+                        </Badge>
+                        <Badge variant="outline" className={riskClasses[client.risk]}>
+                          {riskLabels[client.risk]}
+                        </Badge>
+                      </div>
+                    </TableCell>
+
                     <TableCell className="text-right space-x-2">
                       <Button variant="ghost" size="icon" asChild aria-label="Ver jornada do cliente">
                         <Link to={`/clientes/${client.id}/jornada`}>
@@ -195,7 +239,7 @@ export default function Clientes() {
                   </TableRow>
                 ))}
               </TableBody>
-            </Table>
+            </Table></div>
           )}
         </CardContent>
       </Card>
