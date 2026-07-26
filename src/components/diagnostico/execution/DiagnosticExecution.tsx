@@ -275,6 +275,14 @@ export function DiagnosticExecution({
               </div>
             </CardHeader>
             <CardContent>
+              {(currentItem.section.description || currentItem.question.helperText) && (
+                <div className="mb-5 rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm">
+                  <p className="font-medium text-primary">Como conduzir esta etapa</p>
+                  <p className="mt-1 text-muted-foreground">
+                    {currentItem.question.helperText || currentItem.section.description}
+                  </p>
+                </div>
+              )}
               <QuestionRenderer
                 question={currentItem.question}
                 value={currentAnswer?.value ?? null}
