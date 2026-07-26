@@ -20,7 +20,8 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { useData } from "@/contexts/DataContext";
-import { Project } from "@/types";
+import { Client, Project } from "@/types";
+import { ClientDialog } from "@/components/dialogs/ClientDialog";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/contexts/AuthContext";
@@ -128,6 +129,7 @@ export function ProjectDialog({
   const { addProject, updateProject, clients, employees } = useData();
   const { user } = useAuth();
   const [responsibleOpen, setResponsibleOpen] = useState(false);
+  const [clientDialogOpen, setClientDialogOpen] = useState(false);
   const [advancedDetailsOpen, setAdvancedDetailsOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const responsibleTriggerRef = useRef<HTMLButtonElement>(null);
@@ -280,6 +282,11 @@ export function ProjectDialog({
       clientId,
       clientName: clientDisplayName,
     }));
+  };
+
+  const handleClientCreated = (client: Client) => {
+    handleClientChange(client.id);
+    setClientDialogOpen(false);
   };
 
   const eligibleUsers = employees
@@ -474,6 +481,15 @@ export function ProjectDialog({
                       ))}
                     </SelectContent>
                   </Select>
+                  <Button
+                    type="button"
+                    variant="link"
+                    size="sm"
+                    className="h-auto px-0"
+                    onClick={() => setClientDialogOpen(true)}
+                  >
+                    Cliente ainda não cadastrado? Criar agora
+                  </Button>
                 </div>
               </div>
 
@@ -898,6 +914,11 @@ export function ProjectDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
+      <ClientDialog
+        open={clientDialogOpen}
+        onOpenChange={setClientDialogOpen}
+        onCreatedClient={handleClientCreated}
+      />
     </Dialog>
   );
 }

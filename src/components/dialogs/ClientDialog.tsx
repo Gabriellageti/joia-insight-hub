@@ -56,6 +56,7 @@ interface ClientDialogProps {
   onOpenChange: (open: boolean) => void;
   client?: Client | null;
   onOpenExistingClient?: (client: Client) => void;
+  onCreatedClient?: (client: Client) => void;
 }
 
 const sanitizeNumbers = (value: string) => value.replace(/\D/g, "");
@@ -112,6 +113,7 @@ export function ClientDialog({
   onOpenChange,
   client,
   onOpenExistingClient,
+  onCreatedClient,
 }: ClientDialogProps) {
   const { addClient, updateClient, clients } = useData();
   const navigate = useNavigate();
@@ -398,9 +400,13 @@ export function ClientDialog({
         onOpenChange(false);
       } else {
         const createdClient = await addClient(clientData);
-        toast.success("Cliente criado. Próximo passo: criar um projeto.");
+        toast.success("Cliente criado com sucesso.");
         onOpenChange(false);
-        navigate(`/clientes/${(createdClient as any).id}`);
+        if (onCreatedClient) {
+          onCreatedClient(createdClient as Client);
+        } else {
+          navigate(`/clientes/${(createdClient as any).id}`);
+        }
       }
     } catch (error) {
       console.error(error);
