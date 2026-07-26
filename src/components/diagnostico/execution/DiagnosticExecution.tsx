@@ -1,10 +1,9 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
-import { ChevronLeft, ChevronRight, Check, Save, X, Clock, HelpCircle } from "lucide-react";
+import { ChevronLeft, ChevronRight, Check, Save, X, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Diagnostic, DiagnosticTemplate, TemplateQuestion, TemplateSection } from "@/types";
 import { DiagnosticAnswer, DiagnosticExecutionState } from "@/types/diagnostic-execution";
 import { QuestionRenderer } from "./QuestionRenderer";
@@ -245,7 +244,8 @@ export function DiagnosticExecution({
                   <Badge variant="outline" className="mb-2">
                     {currentItem.section.title}
                   </Badge>
-                  <CardTitle className="text-xl">{currentItem.question.title}</CardTitle>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Pergunta do diagnóstico</p>
+                  <CardTitle className="mt-1 text-xl">{currentItem.question.title}</CardTitle>
                   {currentItem.question.description && (
                     <p className="text-muted-foreground mt-2">{currentItem.question.description}</p>
                   )}
@@ -257,30 +257,24 @@ export function DiagnosticExecution({
                   {currentItem.question.criticality === "alta" && (
                     <Badge className="bg-destructive/10 text-destructive text-xs">Alta criticidade</Badge>
                   )}
-                  {currentItem.question.helperText && (
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <HelpCircle className="h-4 w-4 text-muted-foreground" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent className="max-w-xs">
-                          <p>{currentItem.question.helperText}</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  )}
                 </div>
               </div>
             </CardHeader>
             <CardContent>
               {(currentItem.section.description || currentItem.question.helperText) && (
-                <div className="mb-5 rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm">
-                  <p className="font-medium text-primary">Como conduzir esta etapa</p>
-                  <p className="mt-1 text-muted-foreground">
-                    {currentItem.question.helperText || currentItem.section.description}
-                  </p>
+                <div className="mb-5 space-y-3 rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm">
+                  {currentItem.section.description && (
+                    <div>
+                      <p className="font-medium text-primary">Objetivo desta etapa</p>
+                      <p className="mt-1 text-muted-foreground">{currentItem.section.description}</p>
+                    </div>
+                  )}
+                  {currentItem.question.helperText && (
+                    <div>
+                      <p className="font-medium text-primary">Guia do aplicador</p>
+                      <p className="mt-1 text-muted-foreground">{currentItem.question.helperText}</p>
+                    </div>
+                  )}
                 </div>
               )}
               <QuestionRenderer
