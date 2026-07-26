@@ -14,7 +14,6 @@ import { Project } from "@/types";
 import { toast } from "sonner";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { isPastDate } from "@/lib/dates";
 import { getProjectTypeLabel } from "@/lib/project-delivery";
 
@@ -141,38 +140,22 @@ export default function Projetos() {
       </div>
       <Card>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Projeto</TableHead>
-                  <TableHead>Fase</TableHead>
-                  <TableHead>Próxima ação</TableHead>
-                  <TableHead>Responsável</TableHead>
-                  <TableHead>Prazo</TableHead>
-                  <TableHead>Progresso</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+          <div className="divide-y">
         {filteredProjects.map((project) => {
           const forecastEndDate = project.forecastEndDate || project.endDate || "";
           const overdue = forecastEndDate ? isPastDate(forecastEndDate) : false;
           const completed = projectIsClosed(project);
           const nextAction = nextActionByProject.get(project.id);
           const responsibleName = project.responsible || project.responsibleNameLegacy || "Responsável pendente";
-          return <TableRow key={project.id} className="cursor-pointer hover:bg-muted/50" onClick={() => navigate(`/projetos/${project.id}`)}>
-            <TableCell className="min-w-[240px]"><div className="flex items-start gap-2"><div className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${completed ? "bg-emerald-500" : statusColors[project.status]}`} /><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="font-medium">{project.name}</p>{completed && <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">Concluído</Badge>}</div><p className="truncate text-xs text-muted-foreground">{project.clientName || "Projeto interno"} · {getProjectTypeLabel(project.projectType)}</p></div></div></TableCell>
-            <TableCell><Badge className={phaseColors[project.phase] || "bg-muted text-muted-foreground"} variant="outline">{project.phase}</Badge></TableCell>
-            <TableCell className="min-w-[220px]">{completed ? <span className="text-sm text-emerald-700">Nenhuma ação pendente</span> : nextAction ? <div><p className="max-w-[260px] truncate text-sm font-medium">{nextAction.title}</p><p className="text-xs text-muted-foreground">{nextAction.responsible || "Responsável pendente"}{nextAction.dueDate ? ` · ${nextAction.dueDate}` : " · Sem prazo"}</p></div> : <span className="text-sm text-amber-700">Sem próxima ação</span>}</TableCell>
-            <TableCell><div className="flex items-center gap-2"><Avatar className="h-7 w-7"><AvatarFallback className="bg-primary/10 text-primary">{getInitials(responsibleName)}</AvatarFallback></Avatar><span className="max-w-[140px] truncate text-sm">{responsibleName}</span></div></TableCell>
-            <TableCell>{forecastEndDate ? <div className="flex items-center gap-2 text-sm"><span>{forecastEndDate}</span>{overdue && <Badge variant="destructive">Atrasado</Badge>}</div> : <span className="text-sm text-muted-foreground">Sem previsão</span>}</TableCell>
-            <TableCell className="min-w-[110px]"><TooltipProvider><Tooltip><TooltipTrigger asChild><div className="space-y-1"><span className="text-xs">{Math.round(project.progress)}%</span><Progress value={project.progress} className="h-1.5" /></div></TooltipTrigger><TooltipContent><p>Calculado por tarefas, entregáveis e fases</p></TooltipContent></Tooltip></TooltipProvider></TableCell>
-            <TableCell className="text-right"><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8" onClick={(event) => event.stopPropagation()}><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={(event) => { event.stopPropagation(); setEditingProject(project); setDialogOpen(true); }}><Edit className="mr-2 h-4 w-4" />Editar</DropdownMenuItem><DropdownMenuItem onClick={(event) => { event.stopPropagation(); setDeleteId(project.id); }} className="text-destructive"><Trash2 className="mr-2 h-4 w-4" />Excluir</DropdownMenuItem></DropdownMenuContent></DropdownMenu></TableCell>
-          </TableRow>;
+          return <div key={project.id} role="button" tabIndex={0} className="group cursor-pointer p-4 transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary" onClick={() => navigate(`/projetos/${project.id}`)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") navigate(`/projetos/${project.id}`); }}>
+            <div className="grid gap-3 lg:grid-cols-[minmax(220px,1.3fr)_minmax(220px,1.5fr)_minmax(170px,0.8fr)_auto] lg:items-center">
+              <div className="flex min-w-0 items-start gap-2"><div className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${completed ? "bg-emerald-500" : statusColors[project.status]}`} /><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="font-medium">{project.name}</p>{completed && <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">Concluído</Badge>}</div><p className="truncate text-xs text-muted-foreground">{project.clientName || "Projeto interno"} · {getProjectTypeLabel(project.projectType)}</p><Badge className={`mt-2 ${phaseColors[project.phase] || "bg-muted text-muted-foreground"}`} variant="outline">{project.phase}</Badge></div></div>
+              <div className="min-w-0 border-l-0 lg:border-l lg:pl-4"><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Próxima ação</p>{completed ? <span className="mt-1 block text-sm text-emerald-700">Nenhuma ação pendente</span> : nextAction ? <div className="mt-1"><p className="truncate text-sm font-medium">{nextAction.title}</p><p className="truncate text-xs text-muted-foreground">{nextAction.responsible || "Responsável pendente"}{nextAction.dueDate ? ` · ${nextAction.dueDate}` : " · Sem prazo"}</p></div> : <span className="mt-1 block text-sm text-amber-700">Sem próxima ação</span>}</div>
+              <div className="grid grid-cols-2 gap-3 text-sm lg:grid-cols-1"><div className="flex min-w-0 items-center gap-2"><Avatar className="h-7 w-7 shrink-0"><AvatarFallback className="bg-primary/10 text-primary">{getInitials(responsibleName)}</AvatarFallback></Avatar><span className="truncate">{responsibleName}</span></div><div className="text-muted-foreground">{forecastEndDate ? <span className={overdue ? "font-medium text-destructive" : ""}>{forecastEndDate}{overdue ? " · Atrasado" : ""}</span> : "Sem previsão"}</div></div>
+              <div className="flex items-center gap-3 lg:justify-end"><TooltipProvider><Tooltip><TooltipTrigger asChild><div className="w-20 space-y-1"><span className="text-xs">{Math.round(project.progress)}%</span><Progress value={project.progress} className="h-1.5" /></div></TooltipTrigger><TooltipContent><p>Calculado por tarefas, entregáveis e fases</p></TooltipContent></Tooltip></TooltipProvider><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8" onClick={(event) => event.stopPropagation()}><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={(event) => { event.stopPropagation(); setEditingProject(project); setDialogOpen(true); }}><Edit className="mr-2 h-4 w-4" />Editar</DropdownMenuItem><DropdownMenuItem onClick={(event) => { event.stopPropagation(); setDeleteId(project.id); }} className="text-destructive"><Trash2 className="mr-2 h-4 w-4" />Excluir</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div>
+            </div>
+          </div>;
         })}
-              </TableBody>
-            </Table>
           </div>
         </CardContent>
       </Card>

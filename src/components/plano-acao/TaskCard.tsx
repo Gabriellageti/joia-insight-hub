@@ -41,7 +41,7 @@ export function TaskCard({ task, saving = false, onClick, onDelete, onToggleComp
       {...listeners}
       {...attributes}
     >
-      <CardContent className="space-y-3 p-4">
+      <CardContent className="space-y-2 p-3">
         <div className="flex items-start gap-2">
           <Tooltip>
             <TooltipTrigger asChild>
