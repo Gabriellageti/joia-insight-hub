@@ -23,4 +23,12 @@ export default tseslint.config(
       "@typescript-eslint/no-unused-vars": "off",
     },
   },
+  {
+    files: ["src/components/ui/**/*.{ts,tsx}", "src/contexts/**/*.{ts,tsx}", "src/**/*.ui.{ts,tsx}"],
+    rules: {
+      // These modules intentionally co-locate providers/hooks or shadcn style
+      // helpers; the Fast Refresh export restriction is not applicable there.
+      "react-refresh/only-export-components": "off",
+    },
+  },
 );

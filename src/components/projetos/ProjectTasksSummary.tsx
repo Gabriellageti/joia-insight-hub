@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { CalendarDays, CheckCircle2, Circle, Clock, ListTodo, Play, ExternalLink } from "lucide-react";
+import { CalendarDays, CheckCircle2, Circle, Clock, Ban, Play, ExternalLink } from "lucide-react";
 import type { Task } from "@/types";
 
 interface ProjectTasksSummaryProps {
@@ -13,11 +13,10 @@ interface ProjectTasksSummaryProps {
 }
 
 const statusConfig = {
-  backlog: { label: "Backlog", icon: ListTodo, color: "bg-muted text-muted-foreground" },
-  next: { label: "Próximas", icon: Circle, color: "bg-blue-100 text-blue-700" },
+  not_started: { label: "Não iniciadas", icon: Circle, color: "bg-muted text-muted-foreground" },
   in_progress: { label: "Em andamento", icon: Play, color: "bg-amber-100 text-amber-700" },
   waiting: { label: "Aguardando", icon: Clock, color: "bg-orange-100 text-orange-700" },
-  review: { label: "Em revisão", icon: Clock, color: "bg-purple-100 text-purple-700" },
+  blocked: { label: "Bloqueadas", icon: Ban, color: "bg-red-100 text-red-700" },
   done: { label: "Concluídas", icon: CheckCircle2, color: "bg-green-100 text-green-700" },
 };
 
@@ -33,11 +32,10 @@ export function ProjectTasksSummary({ tasks, projectId }: ProjectTasksSummaryPro
 
   const tasksByStatus = useMemo(() => {
     const counts: Record<string, number> = {
-      backlog: 0,
-      next: 0,
+      not_started: 0,
       in_progress: 0,
       waiting: 0,
-      review: 0,
+      blocked: 0,
       done: 0,
     };
 

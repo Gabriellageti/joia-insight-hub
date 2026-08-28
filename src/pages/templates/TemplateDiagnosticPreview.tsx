@@ -167,11 +167,10 @@ export default function TemplateDiagnosticPreview() {
   const { templateId } = useParams();
   const navigate = useNavigate();
   const { templates } = useData();
-  const { user } = useAuth();
+  const { can } = useAuth();
   const [responses, setResponses] = useState<Record<string, AnswerValue>>({});
 
-  const userRole = (user?.user_metadata as Record<string, string | undefined> | undefined)?.role;
-  const isAnalyst = (userRole || "").toLowerCase().includes("analista");
+  const canUpdate = can("templates.update");
 
   const template = useMemo(() => templates.find((item) => item.id === templateId), [templateId, templates]);
 
@@ -244,8 +243,8 @@ export default function TemplateDiagnosticPreview() {
   const resetResponses = () => setResponses({});
 
   const handleBackToEdit = () => {
-    if (isAnalyst) {
-      toast.error("Analistas não podem editar templates.");
+    if (!canUpdate) {
+      toast.error("Você não tem permissão para editar templates.");
       return;
     }
     if (!template) return;
@@ -494,12 +493,12 @@ export default function TemplateDiagnosticPreview() {
                           <div className="space-y-2">
                             <div className="flex flex-wrap items-center gap-3">
                               <Button
-                                variant={isAnswered(currentValue) ? "secondary" : "outline"}
-                                onClick={() => handleAnswerChange(question.id, isAnswered(currentValue) ? null : "evidencia-mock.pdf")}
+                                variant="outline"
+                                disabled
+                                title="O upload real fica disponível ao aplicar o template a um diagnóstico."
                               >
-                                {isAnswered(currentValue) ? "Remover evidência mock" : "Simular upload"}
+                                Upload disponível no diagnóstico aplicado
                               </Button>
-                              {isAnswered(currentValue) && <span className="text-sm text-muted-foreground">evidencia-mock.pdf</span>}
                             </div>
                             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                               {question.maxFileSizeMB && <Badge variant="outline">Até {question.maxFileSizeMB} MB</Badge>}

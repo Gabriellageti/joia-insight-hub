@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useData } from "@/contexts/DataContext";
 import { Indicator } from "@/types";
 import { toast } from "sonner";
+import { NO_PROJECT_VALUE } from "@/lib/select-values";
 
 interface IndicatorDialogProps {
   open: boolean;
@@ -17,6 +18,7 @@ interface IndicatorDialogProps {
 export function IndicatorDialog({ open, onOpenChange, indicator }: IndicatorDialogProps) {
   const { addIndicator, updateIndicator, projects } = useData();
   const isEditing = Boolean(indicator?.id);
+  const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     category: "Financeiro",
@@ -64,15 +66,16 @@ export function IndicatorDialog({ open, onOpenChange, indicator }: IndicatorDial
   }, [indicator, open]);
 
   const handleProjectChange = (projectId: string) => {
-    const project = projects.find(p => p.id === projectId);
-    setFormData({ 
-      ...formData, 
-      projectId, 
+    const normalizedProjectId = projectId === NO_PROJECT_VALUE ? "" : projectId;
+    const project = projects.find(p => p.id === normalizedProjectId);
+    setFormData({
+      ...formData,
+      projectId: normalizedProjectId,
       projectName: project?.name || "",
     });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.name.trim()) {
@@ -80,14 +83,21 @@ export function IndicatorDialog({ open, onOpenChange, indicator }: IndicatorDial
       return;
     }
 
-    if (isEditing && indicator?.id) {
-      updateIndicator(indicator.id, formData);
-      toast.success("Indicador atualizado com sucesso");
-    } else {
-      addIndicator(formData);
-      toast.success("Indicador criado com sucesso");
+    setSaving(true);
+    try {
+      if (isEditing && indicator?.id) {
+        await updateIndicator(indicator.id, formData);
+        toast.success("Indicador atualizado com sucesso");
+      } else {
+        await addIndicator(formData);
+        toast.success("Indicador criado com sucesso");
+      }
+      onOpenChange(false);
+    } catch {
+      // DataContext reports the persisted failure and the dialog remains open.
+    } finally {
+      setSaving(false);
     }
-    onOpenChange(false);
   };
 
   return (
@@ -100,8 +110,8 @@ export function IndicatorDialog({ open, onOpenChange, indicator }: IndicatorDial
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
-          <div className="grid grid-cols-2 gap-4 py-4">
-            <div className="col-span-2 space-y-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4">
+            <div className="sm:col-span-2 space-y-2">
               <Label htmlFor="name">Nome *</Label>
               <Input
                 id="name"
@@ -187,21 +197,21 @@ export function IndicatorDialog({ open, onOpenChange, indicator }: IndicatorDial
                 placeholder="Nome do responsável"
               />
             </div>
-            <div className="col-span-2 space-y-2">
+            <div className="sm:col-span-2 space-y-2">
               <Label htmlFor="project">Projeto (opcional)</Label>
-              <Select value={formData.projectId} onValueChange={handleProjectChange}>
+              <Select value={formData.projectId || NO_PROJECT_VALUE} onValueChange={handleProjectChange}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione o projeto" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Nenhum</SelectItem>
+                  <SelectItem value={NO_PROJECT_VALUE}>Nenhum</SelectItem>
                   {projects.map((project) => (
                     <SelectItem key={project.id} value={project.id}>{project.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            <div className="col-span-2 space-y-2">
+            <div className="sm:col-span-2 space-y-2">
               <Label htmlFor="formula">Fórmula / Regra</Label>
               <Input
                 id="formula"
@@ -212,11 +222,11 @@ export function IndicatorDialog({ open, onOpenChange, indicator }: IndicatorDial
             </div>
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
               Cancelar
             </Button>
-            <Button type="submit" className="bg-accent text-accent-foreground hover:bg-accent/90">
-              {isEditing ? "Salvar" : "Criar"}
+            <Button type="submit" className="bg-accent text-accent-foreground hover:bg-accent/90" disabled={saving}>
+              {saving ? "Salvando..." : isEditing ? "Salvar" : "Criar"}
             </Button>
           </DialogFooter>
         </form>

@@ -2,48 +2,74 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { lazy, Suspense } from "react";
+import { BrowserRouter, Navigate, Routes, Route, useLocation } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { DataProvider } from "@/contexts/DataContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { MainLayout } from "@/components/layout/MainLayout";
-import Dashboard from "./pages/Dashboard";
-import Clientes from "./pages/Clientes";
-import Projetos from "./pages/Projetos";
-import ProjetoDetalhes from "./pages/ProjetoDetalhes";
-import Diagnostico from "./pages/Diagnostico";
-import PlanoAcao from "./pages/PlanoAcao";
-import Indicadores from "./pages/Indicadores";
-import Reunioes from "./pages/Reunioes";
-import Documentos from "./pages/Documentos";
-import Playbooks from "./pages/Playbooks";
-import Equipe from "./pages/Equipe";
-import Financeiro from "./pages/Financeiro";
-import Marketing from "./pages/Marketing";
-import Configuracoes from "./pages/Configuracoes";
-import Auth from "./pages/Auth";
-import NotFound from "./pages/NotFound";
-import ClienteDetalhes from "./pages/ClienteDetalhes";
-import ClienteJornada from "./pages/ClienteJornada";
-import DiagnosticoDetalhe from "./pages/DiagnosticoDetalhe";
-import TemplatesList from "./pages/templates/TemplatesList";
-import TemplateCreate from "./pages/templates/TemplateCreate";
-import TemplateEdit from "./pages/templates/TemplateEdit";
-import TemplatePreview from "./pages/templates/TemplatePreview";
-import TemplateDiagnosticPreview from "./pages/templates/TemplateDiagnosticPreview";
+import { ErrorBoundary } from "@/components/system/ErrorBoundary";
+import { Loader2 } from "lucide-react";
+
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const MeuDia = lazy(() => import("./pages/MeuDia"));
+const MinhasTarefas = lazy(() => import("./pages/MinhasTarefas"));
+const Pendencias = lazy(() => import("./pages/Pendencias"));
+const Clientes = lazy(() => import("./pages/Clientes"));
+const Projetos = lazy(() => import("./pages/Projetos"));
+const ProjetoDetalhes = lazy(() => import("./pages/ProjetoDetalhes"));
+const Diagnostico = lazy(() => import("./pages/Diagnostico"));
+const PlanoAcao = lazy(() => import("./pages/PlanoAcao"));
+const Indicadores = lazy(() => import("./pages/Indicadores"));
+const Reunioes = lazy(() => import("./pages/Reunioes"));
+const ReuniaoDetalhes = lazy(() => import("./pages/ReuniaoDetalhes"));
+const Documentos = lazy(() => import("./pages/Documentos"));
+const Playbooks = lazy(() => import("./pages/Playbooks"));
+const Equipe = lazy(() => import("./pages/Equipe"));
+const Atividades = lazy(() => import("./pages/Atividades"));
+const RelatorioOperacional = lazy(() => import("./pages/RelatorioOperacional"));
+const Financeiro = lazy(() => import("./pages/Financeiro"));
+const Marketing = lazy(() => import("./pages/Marketing"));
+const Configuracoes = lazy(() => import("./pages/Configuracoes"));
+const Auth = lazy(() => import("./pages/Auth"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const ClienteDetalhes = lazy(() => import("./pages/ClienteDetalhes"));
+const ClienteJornada = lazy(() => import("./pages/ClienteJornada"));
+const DiagnosticoDetalhe = lazy(() => import("./pages/DiagnosticoDetalhe"));
+const TemplatesList = lazy(() => import("./pages/templates/TemplatesList"));
+const TemplateCreate = lazy(() => import("./pages/templates/TemplateCreate"));
+const TemplateEdit = lazy(() => import("./pages/templates/TemplateEdit"));
+const TemplatePreview = lazy(() => import("./pages/templates/TemplatePreview"));
+const TemplateDiagnosticPreview = lazy(() => import("./pages/templates/TemplateDiagnosticPreview"));
 
 const queryClient = new QueryClient();
+
+function RouteBoundary({ children }: { children: React.ReactNode }) {
+  const location = useLocation();
+  return <ErrorBoundary resetKey={location.pathname}>{children}</ErrorBoundary>;
+}
+
+function RouteLoading() {
+  return (
+    <div className="min-h-[40vh] flex items-center justify-center" aria-live="polite">
+      <Loader2 className="h-7 w-7 animate-spin text-primary" aria-hidden="true" />
+      <span className="sr-only">Carregando página</span>
+    </div>
+  );
+}
 
 const App = () => (
   <ThemeProvider attribute="class" defaultTheme="light">
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <AuthProvider>
-          <DataProvider>
+        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+          <AuthProvider>
+            <DataProvider>
             <Toaster />
             <Sonner />
-            <BrowserRouter>
+              <RouteBoundary>
+                <Suspense fallback={<RouteLoading />}>
               <Routes>
                 <Route path="/auth" element={<Auth />} />
                 <Route
@@ -52,7 +78,9 @@ const App = () => (
                     <ProtectedRoute>
                       <MainLayout>
                         <Routes>
-                          <Route path="/" element={<Dashboard />} />
+                          <Route path="/" element={<Navigate to="/meu-dia" replace />} />
+                          <Route path="/meu-dia" element={<MeuDia />} />
+                          <Route path="/dashboard" element={<Dashboard />} />
                           <Route path="/clientes" element={<Clientes />} />
                           <Route path="/clientes/:id" element={<ClienteDetalhes />} />
                           <Route path="/clientes/:id/jornada" element={<ClienteJornada />} />
@@ -69,11 +97,16 @@ const App = () => (
                             element={<TemplateDiagnosticPreview />}
                           />
                           <Route path="/plano-acao" element={<PlanoAcao />} />
+                          <Route path="/minhas-tarefas" element={<MinhasTarefas />} />
+                          <Route path="/pendencias" element={<Pendencias />} />
                           <Route path="/indicadores" element={<Indicadores />} />
                           <Route path="/reunioes" element={<Reunioes />} />
+                          <Route path="/reunioes/:id" element={<ReuniaoDetalhes />} />
                           <Route path="/documentos" element={<Documentos />} />
                           <Route path="/playbooks" element={<Playbooks />} />
                           <Route path="/equipe" element={<Equipe />} />
+                          <Route path="/atividades" element={<Atividades />} />
+                          <Route path="/relatorios/operacional" element={<RelatorioOperacional />} />
                           <Route path="/financeiro" element={<Financeiro />} />
                           <Route path="/marketing" element={<Marketing />} />
                           <Route path="/configuracoes" element={<Configuracoes />} />
@@ -84,9 +117,11 @@ const App = () => (
                   }
                 />
               </Routes>
-            </BrowserRouter>
-          </DataProvider>
-        </AuthProvider>
+                </Suspense>
+              </RouteBoundary>
+            </DataProvider>
+          </AuthProvider>
+        </BrowserRouter>
       </TooltipProvider>
     </QueryClientProvider>
   </ThemeProvider>

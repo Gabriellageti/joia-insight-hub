@@ -17,6 +17,7 @@ import { Diagnostic, DiagnosticTemplate } from "@/types";
 import { formatDatePtBR, parseDatePtBR } from "@/lib/dates";
 import { buildDuplicatedTemplateDraft, createTemplateMock } from "@/lib/diagnostics";
 import { toast } from "sonner";
+import { ALL_FILTER_VALUE, normalizeDiagnosticFilter } from "@/lib/select-values";
 interface DiagnosticFilters {
   client: string;
   project: string;
@@ -54,12 +55,12 @@ function FilterContent({
     <div className="space-y-4">
       <div className="space-y-2">
         <Label>Cliente</Label>
-        <Select value={filters.client} onValueChange={(value) => onChange({ client: value })}>
+        <Select value={filters.client || ALL_FILTER_VALUE} onValueChange={(value) => onChange({ client: normalizeDiagnosticFilter(value) })}>
           <SelectTrigger>
             <SelectValue placeholder="Todos" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Todos</SelectItem>
+            <SelectItem value={ALL_FILTER_VALUE}>Todos</SelectItem>
             {uniqueClients.map((client) => (
               <SelectItem key={client} value={client}>
                 {client}
@@ -70,12 +71,12 @@ function FilterContent({
       </div>
       <div className="space-y-2">
         <Label>Projeto</Label>
-        <Select value={filters.project} onValueChange={(value) => onChange({ project: value })}>
+        <Select value={filters.project || ALL_FILTER_VALUE} onValueChange={(value) => onChange({ project: normalizeDiagnosticFilter(value) })}>
           <SelectTrigger>
             <SelectValue placeholder="Todos" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Todos</SelectItem>
+            <SelectItem value={ALL_FILTER_VALUE}>Todos</SelectItem>
             {uniqueProjects.map((project) => (
               <SelectItem key={project} value={project}>
                 {project}
@@ -86,12 +87,12 @@ function FilterContent({
       </div>
       <div className="space-y-2">
         <Label>Status</Label>
-        <Select value={filters.status} onValueChange={(value) => onChange({ status: value })}>
+        <Select value={filters.status || ALL_FILTER_VALUE} onValueChange={(value) => onChange({ status: normalizeDiagnosticFilter(value) })}>
           <SelectTrigger>
             <SelectValue placeholder="Todos" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Todos</SelectItem>
+            <SelectItem value={ALL_FILTER_VALUE}>Todos</SelectItem>
             <SelectItem value="draft">Rascunho</SelectItem>
             <SelectItem value="in_progress">Em andamento</SelectItem>
             <SelectItem value="completed">Concluído</SelectItem>
@@ -100,12 +101,12 @@ function FilterContent({
       </div>
       <div className="space-y-2">
         <Label>Responsável</Label>
-        <Select value={filters.responsible} onValueChange={(value) => onChange({ responsible: value })}>
+        <Select value={filters.responsible || ALL_FILTER_VALUE} onValueChange={(value) => onChange({ responsible: normalizeDiagnosticFilter(value) })}>
           <SelectTrigger>
             <SelectValue placeholder="Todos" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Todos</SelectItem>
+            <SelectItem value={ALL_FILTER_VALUE}>Todos</SelectItem>
             {uniqueResponsible.map((responsible) => (
               <SelectItem key={responsible} value={responsible}>
                 {responsible}

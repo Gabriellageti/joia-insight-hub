@@ -70,10 +70,10 @@ export default function TemplatePreview() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { templates, addTemplate } = useData();
-  const { user } = useAuth();
+  const { can } = useAuth();
 
-  const userRole = (user?.user_metadata as Record<string, string | undefined> | undefined)?.role;
-  const isAnalyst = (userRole || "").toLowerCase().includes("analista");
+  const canCreate = can("templates.create");
+  const canUpdate = can("templates.update");
 
   const template = useMemo(() => templates.find((item) => item.id === id), [id, templates]);
 
@@ -86,8 +86,8 @@ export default function TemplatePreview() {
   );
 
   const handleDuplicate = async () => {
-    if (isAnalyst) {
-      toast.error("Analistas não podem criar ou duplicar templates.");
+    if (!canCreate) {
+      toast.error("Você não tem permissão para criar ou duplicar templates.");
       return;
     }
     if (!template) return;
@@ -107,8 +107,8 @@ export default function TemplatePreview() {
   };
 
   const handleEdit = () => {
-    if (isAnalyst) {
-      toast.error("Analistas não podem editar templates.");
+    if (!canUpdate) {
+      toast.error("Você não tem permissão para editar templates.");
       return;
     }
     if (!template) return;

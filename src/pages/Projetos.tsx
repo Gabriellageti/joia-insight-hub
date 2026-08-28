@@ -16,6 +16,9 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { isPastDate } from "@/lib/dates";
 import { getProjectTypeLabel } from "@/lib/project-delivery";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const statusColors = { green: "bg-green-500", yellow: "bg-yellow-500", red: "bg-red-500" };
 const phaseColors: Record<string, string> = { "Diagnóstico": "bg-blue-100 text-blue-700", "Quick wins": "bg-purple-100 text-purple-700", "Estruturação": "bg-orange-100 text-orange-700", "Acompanhamento": "bg-green-100 text-green-700", "Cultura e treinamento": "bg-teal-100 text-teal-700" };
@@ -28,19 +31,44 @@ export default function Projetos() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [phaseFilter, setPhaseFilter] = useState("all");
 
-  const filteredProjects = projects.filter(p => p.name.toLowerCase().includes(search.toLowerCase()) || p.clientName.toLowerCase().includes(search.toLowerCase()));
-  const handleDelete = () => { if (deleteId) { deleteProject(deleteId); toast.success("Projeto excluído"); setDeleteId(null); } };
+  const filteredProjects = projects.filter((project) =>
+    (project.name.toLowerCase().includes(search.toLowerCase()) || project.clientName.toLowerCase().includes(search.toLowerCase()))
+    && (statusFilter === "all" || project.status === statusFilter)
+    && (phaseFilter === "all" || project.phase === phaseFilter));
+  const handleDelete = async () => {
+    if (!deleteId || deleting) return;
+    setDeleting(true);
+    try {
+      await deleteProject(deleteId);
+      toast.success("Projeto excluído");
+      setDeleteId(null);
+    } catch {
+      // DataContext displays the persisted failure and keeps the project visible.
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div><h1 className="text-2xl font-semibold text-foreground">Projetos</h1><p className="text-muted-foreground">Acompanhe projetos de consultoria, desenvolvimento, IA e transformação digital</p></div>
         <Button className="bg-accent text-accent-foreground hover:bg-accent/90" onClick={() => { setEditingProject(null); setDialogOpen(true); }}><Plus className="h-4 w-4 mr-2" />Novo Projeto</Button>
       </div>
-      <div className="flex items-center gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
         <div className="relative flex-1 max-w-sm"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input placeholder="Buscar projeto ou cliente..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} /></div>
-        <Button variant="outline" size="sm"><Filter className="h-4 w-4 mr-2" />Filtros</Button>
+        <Popover>
+          <PopoverTrigger asChild><Button variant="outline" size="sm"><Filter className="h-4 w-4 mr-2" />Filtros</Button></PopoverTrigger>
+          <PopoverContent align="end" className="space-y-4">
+            <div className="space-y-2"><Label>Status</Label><Select value={statusFilter} onValueChange={setStatusFilter}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="green">No prazo</SelectItem><SelectItem value="yellow">Atenção</SelectItem><SelectItem value="red">Crítico</SelectItem></SelectContent></Select></div>
+            <div className="space-y-2"><Label>Fase</Label><Select value={phaseFilter} onValueChange={setPhaseFilter}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Todas</SelectItem>{Object.keys(phaseColors).map((phase) => <SelectItem key={phase} value={phase}>{phase}</SelectItem>)}</SelectContent></Select></div>
+            <Button type="button" variant="ghost" className="w-full" onClick={() => { setStatusFilter("all"); setPhaseFilter("all"); }}>Limpar filtros</Button>
+          </PopoverContent>
+        </Popover>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredProjects.map((project) => {
@@ -121,7 +149,7 @@ export default function Projetos() {
         })}
       </div>
       <ProjectDialog open={dialogOpen} onOpenChange={setDialogOpen} project={editingProject} />
-      <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Confirmar exclusão</AlertDialogTitle><AlertDialogDescription>Tem certeza que deseja excluir este projeto?</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleDelete}>Excluir</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+      <AlertDialog open={!!deleteId} onOpenChange={(open) => { if (!open && !deleting) setDeleteId(null); }}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Confirmar exclusão</AlertDialogTitle><AlertDialogDescription>Tem certeza que deseja excluir este projeto?</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel><AlertDialogAction onClick={() => void handleDelete()} disabled={deleting}>{deleting ? "Excluindo..." : "Excluir"}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
     </div>
   );
 }

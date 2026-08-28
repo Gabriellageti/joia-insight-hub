@@ -8,6 +8,8 @@ import { ArrowLeft, Edit, Route, Plus } from "lucide-react";
 import { getProjectTypeLabel } from "@/lib/project-delivery";
 import { ProjectDialog } from "@/components/dialogs/ProjectDialog";
 import { TaskDialog } from "@/components/dialogs/TaskDialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScopedTasksPanel } from "@/components/plano-acao";
 import type { Task } from "@/types";
 import type { DeliveryStep } from "@/lib/project-delivery";
 import {
@@ -19,6 +21,8 @@ import {
   ProjectDeliverablesList,
   ProjectDeliveryWorkflow,
 } from "@/components/projetos";
+import { ActivityFeed } from "@/components/meetings";
+import { FavoriteButton } from "@/components/operations/FavoriteButton";
 
 const phaseColors: Record<string, string> = {
   Diagnóstico: "bg-blue-100 text-blue-700",
@@ -101,7 +105,7 @@ export default function ProjetoDetalhes() {
     responsible: project.responsible || project.responsibleNameLegacy || "",
     priority: step.approvalRequired ? "high" : "medium",
     dueDate: "",
-    status: "backlog",
+    status: "not_started",
     evidenceRequired: true,
     what: step.title,
     why: step.description,
@@ -160,6 +164,7 @@ export default function ProjetoDetalhes() {
         </div>
 
         <div className="flex items-center gap-2">
+          <FavoriteButton entityType="project" entityId={project.id} />
           <Button
             variant="outline"
             size="sm"
@@ -188,7 +193,9 @@ export default function ProjetoDetalhes() {
         </div>
       </div>
 
-      {/* Cards de Progresso e Status */}
+      <Tabs defaultValue="overview" className="space-y-5">
+        <TabsList className="h-auto w-full justify-start overflow-x-auto"><TabsTrigger value="overview">Visão Geral</TabsTrigger><TabsTrigger value="tasks">Tarefas</TabsTrigger><TabsTrigger value="kanban">Kanban</TabsTrigger><TabsTrigger value="meetings">Reuniões</TabsTrigger><TabsTrigger value="history">Histórico</TabsTrigger></TabsList>
+        <TabsContent value="overview" className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <ProjectProgressCard project={project} />
         <ProjectStatusCard project={project} />
@@ -212,7 +219,13 @@ export default function ProjetoDetalhes() {
       </div>
 
       {/* Entregáveis */}
-      <ProjectDeliverablesList deliverables={projectDeliverables} />
+      <ProjectDeliverablesList projectId={project.id} deliverables={projectDeliverables} />
+        </TabsContent>
+        <TabsContent value="tasks"><ScopedTasksPanel tasks={projectTasks} mode="list" defaultClientId={project.clientId} defaultProjectId={project.id} showCreate={false} /></TabsContent>
+        <TabsContent value="kanban"><ScopedTasksPanel tasks={projectTasks} mode="kanban" defaultClientId={project.clientId} defaultProjectId={project.id} showCreate={false} /></TabsContent>
+        <TabsContent value="meetings"><ProjectMeetingsList meetings={projectMeetings} project={project} /></TabsContent>
+        <TabsContent value="history"><ActivityFeed projectId={project.id} /></TabsContent>
+      </Tabs>
 
       {/* Dialogs */}
       <ProjectDialog
@@ -238,11 +251,13 @@ export default function ProjetoDetalhes() {
             responsible: project.responsible || project.responsibleNameLegacy || "",
             priority: "medium",
             dueDate: "",
-            status: "backlog",
+            status: "not_started",
             evidenceRequired: false,
             createdAt: "",
           }
         }
+        defaultClientId={project.clientId}
+        defaultProjectId={project.id}
       />
     </div>
   );

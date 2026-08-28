@@ -16,6 +16,7 @@ import {
   QuickFilter,
   ViewMode,
   LayoutMode,
+  FileItem,
 } from "@/types/documents";
 import { useDocuments } from "@/hooks/useDocuments";
 import { useData } from "@/contexts/DataContext";
@@ -23,7 +24,7 @@ import { useData } from "@/contexts/DataContext";
 const STORAGE_KEY = "documentos-filters";
 
 export default function Documentos() {
-  const { documents, loading, addDocument, approveDocument, rejectDocument, deleteDocument } = useDocuments();
+  const { documents, loading, error, refetch, addDocument, approveDocument, rejectDocument, deleteDocument } = useDocuments();
   const { clients, projects, tasks, diagnostics, meetings } = useData();
   
   const [search, setSearch] = useState("");
@@ -70,7 +71,9 @@ export default function Documentos() {
         if (clientId) setSelectedClientId(clientId);
         if (projectId) setSelectedProjectId(projectId);
       }
-    } catch {}
+    } catch {
+      localStorage.removeItem(STORAGE_KEY);
+    }
   }, []);
 
   // Persist filters
@@ -151,7 +154,7 @@ export default function Documentos() {
     };
   }, [documents, selectedClientId, selectedProjectId, selectedCategory]);
 
-  const handleUpload = async (newFile: any) => {
+  const handleUpload = async (newFile: Omit<FileItem, "id" | "uploadedAt">) => {
     await addDocument(newFile);
   };
 
@@ -180,10 +183,14 @@ export default function Documentos() {
     );
   }
 
+  if (error) {
+    return <div className="rounded-md border border-destructive/50 p-6 text-center space-y-3" role="alert"><p>{error}</p><Button variant="outline" onClick={() => void refetch()}>Tentar novamente</Button></div>;
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-foreground">Documentos e Evidências</h1>
           <p className="text-muted-foreground">Organize e acesse arquivos dos projetos</p>

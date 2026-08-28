@@ -100,7 +100,7 @@ export function QuestionRenderer({ question, value, onChange }: QuestionRenderer
 
   const renderNumber = () => {
     const currentValue = typeof value === "number" ? value : "";
-    const unit = (question as any).unit;
+    const unit = question.unit;
 
     return (
       <div className="max-w-md">

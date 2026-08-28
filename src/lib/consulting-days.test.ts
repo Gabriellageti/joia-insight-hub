@@ -15,7 +15,7 @@ const task = (overrides: Partial<Task>): Task => ({
   taskType: "project",
   assignedTo: "u1",
   dueDate: "",
-  status: "backlog",
+  status: "not_started",
   evidenceRequired: false,
   createdAt: "2026-07-15",
   createdBy: "u1",

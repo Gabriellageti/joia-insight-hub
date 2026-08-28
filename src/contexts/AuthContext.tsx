@@ -1,11 +1,30 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import {
+  AppRole,
+  AuthorizationPermission,
+  isAllowed,
+  WorkspaceRole,
+} from '@/lib/authorization';
+
+export interface WorkspaceMembership {
+  workspaceId: string;
+  role: WorkspaceRole;
+  isDefault: boolean;
+}
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  authorizationLoading: boolean;
+  authorizationError: string | null;
+  memberships: WorkspaceMembership[];
+  activeMembership: WorkspaceMembership | null;
+  appRoles: AppRole[];
+  can: (permission: AuthorizationPermission) => boolean;
+  refreshAuthorization: () => Promise<void>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
@@ -17,6 +36,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authorizationLoading, setAuthorizationLoading] = useState(true);
+  const [authorizationError, setAuthorizationError] = useState<string | null>(null);
+  const [memberships, setMemberships] = useState<WorkspaceMembership[]>([]);
+  const [appRoles, setAppRoles] = useState<AppRole[]>([]);
+  const authorizationRequest = useRef(0);
+
+  const loadAuthorization = useCallback(async (userId: string | null) => {
+    const requestId = ++authorizationRequest.current;
+    if (!userId) {
+      setMemberships([]);
+      setAppRoles([]);
+      setAuthorizationError(null);
+      setAuthorizationLoading(false);
+      return;
+    }
+
+    setAuthorizationLoading(true);
+    const [membershipResult, roleResult] = await Promise.all([
+      supabase
+        .from('workspace_members')
+        .select('workspace_id, role, is_default')
+        .eq('user_id', userId)
+        .order('is_default', { ascending: false }),
+      supabase.from('user_roles').select('role').eq('user_id', userId),
+    ]);
+
+    if (requestId !== authorizationRequest.current) return;
+
+    if (membershipResult.error || roleResult.error) {
+      setMemberships([]);
+      setAppRoles([]);
+      setAuthorizationError('Não foi possível validar seu acesso ao workspace.');
+    } else {
+      setMemberships(
+        membershipResult.data.map((membership) => ({
+          workspaceId: membership.workspace_id,
+          role: membership.role,
+          isDefault: membership.is_default,
+        })),
+      );
+      setAppRoles(roleResult.data.map(({ role }) => role));
+      setAuthorizationError(null);
+    }
+    setAuthorizationLoading(false);
+  }, []);
 
   useEffect(() => {
     // Set up auth state listener FIRST
@@ -25,6 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
+        void loadAuthorization(session?.user.id ?? null);
       }
     );
 
@@ -33,10 +98,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
+      void loadAuthorization(session?.user.id ?? null);
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [loadAuthorization]);
+
+  const activeMembership = useMemo(
+    () => memberships.find((membership) => membership.isDefault) ?? memberships[0] ?? null,
+    [memberships],
+  );
+
+  const can = useCallback(
+    (permission: AuthorizationPermission) => isAllowed(permission, activeMembership?.role, appRoles),
+    [activeMembership?.role, appRoles],
+  );
+
+  const refreshAuthorization = useCallback(
+    () => loadAuthorization(user?.id ?? null),
+    [loadAuthorization, user?.id],
+  );
 
   const signUp = async (email: string, password: string, fullName: string) => {
     const redirectUrl = `${window.location.origin}/`;
@@ -69,7 +150,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, signUp, signIn, signOut }}>
+    <AuthContext.Provider value={{
+      user,
+      session,
+      loading,
+      authorizationLoading,
+      authorizationError,
+      memberships,
+      activeMembership,
+      appRoles,
+      can,
+      refreshAuthorization,
+      signUp,
+      signIn,
+      signOut,
+    }}>
       {children}
     </AuthContext.Provider>
   );

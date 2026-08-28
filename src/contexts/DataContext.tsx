@@ -1,5 +1,6 @@
 
 import React, { createContext, useContext, useEffect, ReactNode, useState, useCallback, useRef } from "react";
+import { useLocation } from "react-router-dom";
 import { User } from "@supabase/supabase-js";
 import {
   Client,
@@ -7,6 +8,7 @@ import {
   Project,
   Task,
   Meeting,
+  MeetingMinutes,
   Indicator,
   Document,
   Playbook,
@@ -153,6 +155,10 @@ import {
 import type { Database } from "@/integrations/supabase/types";
 import { hasTaskValidationErrors, validateTask } from "@/lib/tasks/validation";
 import { assertExpectedTaskStatus } from "@/lib/tasks/completion";
+import { supabase } from "@/integrations/supabase/client";
+import { listMeetings, type MeetingRow } from "@/integrations/supabase/meetings";
+import { commitAfterPersistence, getFriendlyPersistenceError } from "@/lib/persistence";
+import { toJsonValue } from "@/lib/json";
 
 interface DataContextType {
   // Clients
@@ -188,28 +194,22 @@ interface DataContextType {
 
   // Deliverables
   deliverables: ProjectDeliverable[];
-  addDeliverable: (deliverable: Omit<ProjectDeliverable, "id" | "createdAt">) => void;
-  updateDeliverable: (id: string, deliverable: Partial<ProjectDeliverable>) => void;
-  deleteDeliverable: (id: string) => void;
+  addDeliverable: (deliverable: Omit<ProjectDeliverable, "id" | "createdAt">) => Promise<ProjectDeliverable>;
+  updateDeliverable: (id: string, deliverable: Partial<ProjectDeliverable>) => Promise<ProjectDeliverable>;
+  deleteDeliverable: (id: string) => Promise<void>;
 
   // Meetings
   meetings: Meeting[];
-  addMeeting: (meeting: Omit<Meeting, "id" | "createdAt">) => void;
-  updateMeeting: (id: string, meeting: Partial<Meeting>) => void;
-  deleteMeeting: (id: string) => void;
 
   // Indicators
 
   indicators: Indicator[];
-  addIndicator: (indicator: Omit<Indicator, "id" | "createdAt">) => void;
-  updateIndicator: (id: string, indicator: Partial<Indicator>) => void;
-  deleteIndicator: (id: string) => void;
+  addIndicator: (indicator: Omit<Indicator, "id" | "createdAt">) => Promise<Indicator>;
+  updateIndicator: (id: string, indicator: Partial<Indicator>) => Promise<Indicator>;
+  deleteIndicator: (id: string) => Promise<void>;
 
   // Documents
   documents: Document[];
-  addDocument: (document: Omit<Document, "id" | "createdAt" | "updatedAt">) => void;
-  updateDocument: (id: string, document: Partial<Document>) => void;
-  deleteDocument: (id: string) => void;
 
   // Playbooks
   playbooks: Playbook[];
@@ -257,9 +257,9 @@ interface DataContextType {
 
   // Contracts
   contracts: Contract[];
-  addContract: (contract: Omit<Contract, "id" | "createdAt">) => void;
-  updateContract: (id: string, contract: Partial<Contract>) => void;
-  deleteContract: (id: string) => void;
+  addContract: (contract: Omit<Contract, "id" | "createdAt">) => Promise<Contract>;
+  updateContract: (id: string, contract: Partial<Contract>) => Promise<Contract>;
+  deleteContract: (id: string) => Promise<void>;
 
   // Expenses
   expenses: Expense[];
@@ -273,9 +273,9 @@ interface DataContextType {
 
   // Client contacts
   clientContacts: ClientContact[];
-  addClientContact: (contact: Omit<ClientContact, "id">) => ClientContact;
-  updateClientContact: (id: string, contact: Partial<ClientContact>) => void;
-  deleteClientContact: (id: string) => void;
+  addClientContact: (contact: Omit<ClientContact, "id">) => Promise<ClientContact>;
+  updateClientContact: (id: string, contact: Partial<ClientContact>) => Promise<ClientContact>;
+  deleteClientContact: (id: string) => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -512,6 +512,10 @@ const mapSupabaseDeliverableToLegacy = (del: DeliverableRow): ProjectDeliverable
   title: del.title,
   status: (del.status as ProjectDeliverable["status"]) || "pending",
   dueDate: del.due_date || undefined,
+  description: del.description || undefined,
+  responsibleUserId: del.responsible_user_id || undefined,
+  responsibleName: del.responsible || undefined,
+  itemType: del.item_type === "milestone" ? "milestone" : "deliverable",
   createdAt: formatDateFromIso(del.created_at),
 });
 
@@ -572,6 +576,80 @@ const mapSupabaseExpense = (expense: ExpenseRow): Expense => ({
   date: expense.date ?? "",
   receipt: expense.receipt ?? undefined,
   createdAt: formatDateFromIso(expense.created_at),
+});
+
+type DocumentRow = Database["public"]["Tables"]["documents"]["Row"];
+
+const parseMeetingMinutes = (value: string | null): MeetingMinutes | undefined => {
+  if (!value) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (typeof parsed === "object" && parsed !== null) {
+      const candidate = parsed as Partial<MeetingMinutes>;
+      if (Array.isArray(candidate.decisions) && Array.isArray(candidate.pendencies) && Array.isArray(candidate.tasksCreated) && Array.isArray(candidate.risksIdentified)) {
+        return { ...candidate, decisions: candidate.decisions, pendencies: candidate.pendencies, tasksCreated: candidate.tasksCreated, risksIdentified: candidate.risksIdentified };
+      }
+    }
+  } catch {
+    // Legacy minutes were stored as plain text and are preserved as context.
+  }
+  return { context: value, decisions: [], pendencies: [], tasksCreated: [], risksIdentified: [] };
+};
+
+const mapMeetingToLegacy = (row: MeetingRow, clients: Client[], projects: Project[]): Meeting => {
+  const project = projects.find((item) => item.id === row.project_id);
+  const client = clients.find((item) => item.id === row.client_id);
+  const date = row.date ? new Date(row.date) : null;
+  const online = Boolean(row.meeting_link);
+  const statusMap: Record<string, Meeting["status"]> = { Agendada: "scheduled", "Em andamento": "in_progress", Realizada: "completed", Cancelada: "cancelled" };
+  return {
+    id: row.id,
+    title: row.title,
+    projectId: row.project_id || "",
+    projectName: project?.name || "",
+    clientId: row.client_id || "",
+    clientName: client?.nomeFantasia || client?.razaoSocial || client?.name || "",
+    date: date && !Number.isNaN(date.getTime()) ? formatDatePtBR(date) : "",
+    time: date && !Number.isNaN(date.getTime()) ? format(date, "HH:mm") : "",
+    type: online ? "online" : "presencial",
+    ...(online ? { link: row.meeting_link || undefined } : { location: row.location || undefined }),
+    status: statusMap[row.status || "Agendada"] || "scheduled",
+    agenda: row.agenda || undefined,
+    participants: row.participants || [],
+    hasMinutes: Boolean(row.minutes),
+    minutes: parseMeetingMinutes(row.minutes),
+    notes: row.notes || undefined,
+    endTime: row.end_date ? format(new Date(row.end_date), "HH:mm") : undefined,
+    responsibleUserId: row.responsible_user_id,
+    updatedAt: row.updated_at,
+    createdAt: formatDatePtBR(new Date(row.created_at)),
+  };
+};
+
+const documentCategoryMap: Record<string, Document["category"]> = {
+  contracts: "contrato",
+  proposals: "proposta",
+  diagnostics: "diagnóstico",
+  indicators: "indicadores",
+  evidence: "evidências",
+  meetings: "reuniões",
+  processes: "processos",
+  training: "treinamento",
+};
+
+const mapDocumentToLegacy = (row: DocumentRow, clients: Client[], projects: Project[]): Document => ({
+  id: row.id,
+  name: row.description || row.name,
+  category: documentCategoryMap[row.category || ""] || "processos",
+  projectId: row.project_id || undefined,
+  projectName: projects.find((item) => item.id === row.project_id)?.name,
+  clientId: row.client_id || undefined,
+  clientName: clients.find((item) => item.id === row.client_id)?.name,
+  tags: row.tags || [],
+  version: 1,
+  fileUrl: row.url || undefined,
+  createdAt: formatDatePtBR(new Date(row.created_at)),
+  updatedAt: formatDatePtBR(new Date(row.updated_at)),
 });
 
 const buildSupabaseExpenseInsert = (
@@ -1030,7 +1108,7 @@ const buildSeedTasks = ({
       priority: template.priority || "medium",
       dueDate,
       impact: template.impact,
-      status: index === 0 ? "next" : "backlog",
+      status: index === 0 ? "in_progress" : "not_started",
       checklist: [],
       evidenceRequired: template.evidenceRequired ?? true,
       createdAt: getDate(),
@@ -1058,7 +1136,7 @@ const mapActionPriorityToTask = (priority: ActionPriority): Task["priority"] => 
 };
 
 const initialStatusFromPriority = (priority: Task["priority"]): Task["status"] =>
-  priority === "high" ? "next" : "backlog";
+  priority === "high" ? "in_progress" : "not_started";
 
 const initialClients: Client[] = [
   normalizeClient({
@@ -1261,12 +1339,11 @@ const buildSupabaseProjectUpdate = (project: Partial<Project>): SupabaseProjectU
 
 const normalizeTaskStatus = (value?: string | null): Task["status"] => {
   const status = (value || "").trim().toLowerCase().replace(/_/g, " ");
-  if (["next", "próximas", "proximas"].includes(status)) return "next";
   if (["in progress", "em andamento"].includes(status)) return "in_progress";
-  if (["waiting", "aguardando"].includes(status)) return "waiting";
-  if (["review", "em revisão", "em revisao", "validation", "em validação", "em validacao"].includes(status)) return "review";
+  if (["waiting", "aguardando", "review", "em revisão", "em revisao", "validation", "em validação", "em validacao"].includes(status)) return "waiting";
+  if (["blocked", "bloqueada", "bloqueado"].includes(status)) return "blocked";
   if (["done", "concluída", "concluida", "concluído", "concluido"].includes(status)) return "done";
-  return "backlog";
+  return "not_started";
 };
 
 const normalizeTaskPriority = (value?: string | null): Task["priority"] => {
@@ -1289,7 +1366,7 @@ const mapSupabaseTaskToLegacy = (task: TaskRow, projectName: string, clientName:
   type: (task.type as Task["type"]) || "processo",
   responsible: task.responsible || "",
   priority: normalizeTaskPriority(task.priority),
-  taskType: task.task_type === "personal" ? "personal" : "project",
+  taskType: task.task_type === "personal" ? "personal" : task.task_type === "client" ? "client" : "project",
   assignedTo: task.assigned_to || "",
   startDate: task.start_date || "",
   dueDate: task.due_date || "",
@@ -1309,6 +1386,9 @@ const mapSupabaseTaskToLegacy = (task: TaskRow, projectName: string, clientName:
   updatedAt: task.updated_at,
   sourceDiagnosticId: task.source_diagnostic_id || undefined,
   sourceActionId: task.source_action_id || undefined,
+  sourceMeetingId: task.source_meeting_id || undefined,
+  sourceDecisionId: task.source_decision_id || undefined,
+  sourceNextStepId: task.source_next_step_id || undefined,
   consultingDay: task.consulting_day || undefined,
   createdBy: task.created_by || "",
   completedAt: task.completed_at || undefined,
@@ -1316,6 +1396,10 @@ const mapSupabaseTaskToLegacy = (task: TaskRow, projectName: string, clientName:
   previousStatus: task.previous_status
     ? normalizeTaskStatus(task.previous_status)
     : undefined,
+  observations: task.observations || "",
+  blockReason: task.block_reason || "",
+  blockReasonCategory: (task.block_reason_category as Task["blockReasonCategory"]) || undefined,
+  blockedAt: task.blocked_at || undefined,
 });
 
 type SupabaseTaskInsert = Database["public"]["Tables"]["tasks"]["Insert"];
@@ -1333,7 +1417,7 @@ const buildSupabaseTaskInsert = (task: Omit<Task, "id" | "createdAt">): Supabase
   assigned_to: task.assignedTo || null,
   start_date: toSupabaseDate(task.startDate),
   due_date: toSupabaseDate(task.dueDate),
-  status: task.status || "backlog",
+  status: task.status || "not_started",
   evidence_required: task.evidenceRequired || false,
   evidence_url: task.evidenceFile || null,
   what: task.what || null,
@@ -1349,7 +1433,13 @@ const buildSupabaseTaskInsert = (task: Omit<Task, "id" | "createdAt">): Supabase
   previous_status: task.previousStatus || null,
   source_diagnostic_id: task.sourceDiagnosticId || null,
   source_action_id: task.sourceActionId || null,
+  source_meeting_id: task.sourceMeetingId || null,
+  source_decision_id: task.sourceDecisionId || null,
+  source_next_step_id: task.sourceNextStepId || null,
   consulting_day: task.consultingDay || null,
+  observations: task.observations || null,
+  block_reason: task.blockReason || null,
+  block_reason_category: task.blockReasonCategory || null,
 });
 
 const buildSupabaseTaskUpdate = (task: Partial<Task>): SupabaseTaskUpdate => {
@@ -1386,18 +1476,20 @@ const buildSupabaseTaskUpdate = (task: Partial<Task>): SupabaseTaskUpdate => {
   if (typeof task.previousStatus !== "undefined") payload.previous_status = task.previousStatus || null;
   if (typeof task.sourceDiagnosticId !== "undefined") payload.source_diagnostic_id = task.sourceDiagnosticId || null;
   if (typeof task.sourceActionId !== "undefined") payload.source_action_id = task.sourceActionId || null;
+  if (typeof task.sourceMeetingId !== "undefined") payload.source_meeting_id = task.sourceMeetingId || null;
+  if (typeof task.sourceDecisionId !== "undefined") payload.source_decision_id = task.sourceDecisionId || null;
+  if (typeof task.sourceNextStepId !== "undefined") payload.source_next_step_id = task.sourceNextStepId || null;
   if (typeof task.consultingDay !== "undefined") payload.consulting_day = task.consultingDay || null;
+  if (typeof task.observations !== "undefined") payload.observations = task.observations || null;
+  if (typeof task.blockReason !== "undefined") payload.block_reason = task.blockReason || null;
+  if (typeof task.blockReasonCategory !== "undefined") payload.block_reason_category = task.blockReasonCategory || null;
 
   return payload;
 };
 
-// Tipos temporários para colunas que existem no banco mas ainda não estão no types.ts gerado
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type ExtendedDiagnosticRow = DiagnosticRow & Record<string, any>;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type SupabaseDiagnosticInsert = Record<string, any>;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type SupabaseDiagnosticUpdate = Record<string, any>;
+type ExtendedDiagnosticRow = DiagnosticRow;
+type SupabaseDiagnosticInsert = Database["public"]["Tables"]["diagnostics"]["Insert"];
+type SupabaseDiagnosticUpdate = Database["public"]["Tables"]["diagnostics"]["Update"];
 
 const mapSupabaseDiagnosticToLegacy = (diagnostic: ExtendedDiagnosticRow): Diagnostic => ({
   id: diagnostic.id,
@@ -1448,8 +1540,8 @@ const buildSupabaseDiagnosticInsert = (diagnostic: Diagnostic): SupabaseDiagnost
     responsible_name: diagnostic.responsibleName || null,
     responsible_id: toSupabaseUuid(diagnostic.responsibleId),
     due_date: toSupabaseDate(diagnostic.dueDate),
-    action_plan: diagnostic.actionPlan ?? null,
-    report_payload: diagnostic.reportPayload ?? null,
+    action_plan: toJsonValue(diagnostic.actionPlan),
+    report_payload: toJsonValue(diagnostic.reportPayload),
     created_at: timestamp,
     updated_at: timestamp,
   };
@@ -1477,8 +1569,8 @@ const buildSupabaseDiagnosticUpdate = (diagnostic: Partial<Diagnostic>): Supabas
   if (typeof diagnostic.responsibleName !== "undefined") payload.responsible_name = diagnostic.responsibleName || null;
   if (typeof diagnostic.responsibleId !== "undefined") payload.responsible_id = toSupabaseUuid(diagnostic.responsibleId);
   if (typeof diagnostic.dueDate !== "undefined") payload.due_date = toSupabaseDate(diagnostic.dueDate);
-  if (typeof diagnostic.actionPlan !== "undefined") payload.action_plan = diagnostic.actionPlan ?? null;
-  if (typeof diagnostic.reportPayload !== "undefined") payload.report_payload = diagnostic.reportPayload ?? null;
+  if (typeof diagnostic.actionPlan !== "undefined") payload.action_plan = toJsonValue(diagnostic.actionPlan);
+  if (typeof diagnostic.reportPayload !== "undefined") payload.report_payload = toJsonValue(diagnostic.reportPayload);
 
   return payload;
 };
@@ -1715,6 +1807,7 @@ const initialClientContacts: ClientContact[] = [
 // useLocalStorage removed - no longer used for templates
 
 export function DataProvider({ children }: { children: ReactNode }) {
+  const location = useLocation();
   const { user } = useAuth();
   const { toast } = useToast();
   const currentUserName = resolveUserName(user);
@@ -1764,7 +1857,51 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [projectAuditLogs, setProjectAuditLogs] = useState<ProjectAuditLogEntry[]>([]);
   const [clientContacts, setClientContacts] = useState<ClientContact[]>([]);
 
+  const loadMeetings = useCallback(async () => {
+    if (!user) {
+      setMeetings([]);
+      return;
+    }
+    try {
+      const rows = await listMeetings();
+      setMeetings(rows.map((row) => mapMeetingToLegacy(row, clientsRef.current, projectsRef.current)));
+    } catch {
+      toast({ title: "Não foi possível sincronizar as reuniões", description: "Alguns painéis podem ficar temporariamente desatualizados.", variant: "destructive" });
+    }
+  }, [toast, user]);
+
+  const loadDocuments = useCallback(async () => {
+    if (!user) {
+      setDocuments([]);
+      return;
+    }
+    const { data, error } = await supabase.from("documents").select("*").order("created_at", { ascending: false });
+    if (error) {
+      toast({ title: "Não foi possível sincronizar os documentos", description: "Alguns painéis podem ficar temporariamente desatualizados.", variant: "destructive" });
+      return;
+    }
+    setDocuments(data.map((row) => mapDocumentToLegacy(row, clientsRef.current, projectsRef.current)));
+  }, [toast, user]);
+
   useEffect(() => {
+    void loadMeetings();
+    void loadDocuments();
+    window.addEventListener("joia:meetings-changed", loadMeetings);
+    window.addEventListener("joia:documents-changed", loadDocuments);
+    return () => {
+      window.removeEventListener("joia:meetings-changed", loadMeetings);
+      window.removeEventListener("joia:documents-changed", loadDocuments);
+    };
+  }, [loadDocuments, loadMeetings]);
+
+  useEffect(() => {
+    if (!user) {
+      setClients([]);
+      setClientsError(null);
+      setClientsLoading(false);
+      return;
+    }
+
     const fetchClients = async () => {
       setClientsLoading(true);
       setClientsError(null);
@@ -1787,10 +1924,17 @@ export function DataProvider({ children }: { children: ReactNode }) {
     };
 
     fetchClients();
-  }, [toast]);
+  }, [toast, user]);
 
   // Fetch projetos do banco de dados
   useEffect(() => {
+    if (!user) {
+      setProjects([]);
+      setProjectsError(null);
+      setProjectsLoading(false);
+      return;
+    }
+
     const fetchProjectsData = async () => {
       setProjectsLoading(true);
       setProjectsError(null);
@@ -1822,7 +1966,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     if (!clientsLoading) {
       fetchProjectsData();
     }
-  }, [toast, clients, clientsLoading]);
+  }, [toast, clients, clientsLoading, user]);
 
   // Fetch tarefas do banco de dados
   useEffect(() => {
@@ -1842,7 +1986,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       setTasksError(null);
 
       try {
-        const tasksData = await listTasks();
+        const personalRoute = location.pathname === "/meu-dia" || location.pathname === "/minhas-tarefas";
+        const tasksData = await listTasks(personalRoute ? { assignedTo: userId } : undefined);
         const normalized = tasksData.map((task) => {
           const project = projectsRef.current.find((item) => item.id === task.project_id);
           const client = clientsRef.current.find((item) => item.id === task.client_id);
@@ -1872,7 +2017,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     if (!projectsLoading && !clientsLoading) {
       fetchTasksData();
     }
-  }, [toast, user?.id, projectsLoading, clientsLoading]);
+  }, [toast, user?.id, projectsLoading, clientsLoading, location.pathname]);
 
   useEffect(() => {
     if (!user) {
@@ -1960,13 +2105,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
         const data = await listIndicators();
         setIndicators(data.map(mapSupabaseIndicatorToLegacy));
       } catch (error) {
-        console.error("Error fetching indicators:", error);
+        toast({ title: "Erro ao carregar indicadores", description: "Tente novamente.", variant: "destructive" });
         setIndicators([]);
       }
     };
 
     fetchIndicatorsData();
-  }, [user]);
+  }, [toast, user]);
 
   // Fetch leads from Supabase
   useEffect(() => {
@@ -1980,13 +2125,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
         const data = await listLeads();
         setLeads(data.map(mapSupabaseLeadToLegacy));
       } catch (error) {
-        console.error("Error fetching leads:", error);
+        toast({ title: "Erro ao carregar leads", description: "Tente novamente.", variant: "destructive" });
         setLeads([]);
       }
     };
 
     fetchLeadsData();
-  }, [user]);
+  }, [toast, user]);
 
   // Fetch deliverables from Supabase
   useEffect(() => {
@@ -2000,13 +2145,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
         const data = await listDeliverables();
         setDeliverables(data.map(mapSupabaseDeliverableToLegacy));
       } catch (error) {
-        console.error("Error fetching deliverables:", error);
+        toast({ title: "Erro ao carregar entregáveis", description: "Tente novamente.", variant: "destructive" });
         setDeliverables([]);
       }
     };
 
     fetchDeliverablesData();
-  }, [user]);
+  }, [toast, user]);
 
 
   // Fetch content items from Supabase
@@ -2021,13 +2166,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
         const data = await listContentItems();
         setContentItems(data.map(mapSupabaseContentItemToLegacy));
       } catch (error) {
-        console.error("Error fetching content items:", error);
+        toast({ title: "Erro ao carregar conteúdos", description: "Tente novamente.", variant: "destructive" });
         setContentItems([]);
       }
     };
 
     fetchContentItemsData();
-  }, [user]);
+  }, [toast, user]);
 
   // Fetch contracts from Supabase
   useEffect(() => {
@@ -2041,13 +2186,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
         const data = await listContracts();
         setContracts(data.map(mapSupabaseContractToLegacy));
       } catch (error) {
-        console.error("Error fetching contracts:", error);
+        toast({ title: "Erro ao carregar contratos", description: "Tente novamente.", variant: "destructive" });
         setContracts([]);
       }
     };
 
     fetchContractsData();
-  }, [user]);
+  }, [toast, user]);
 
   // Fetch client contacts from Supabase
   useEffect(() => {
@@ -2061,13 +2206,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
         const data = await listClientContacts();
         setClientContacts(data.map(mapSupabaseClientContactToLegacy));
       } catch (error) {
-        console.error("Error fetching client contacts:", error);
+        toast({ title: "Erro ao carregar contatos", description: "Tente novamente.", variant: "destructive" });
         setClientContacts([]);
       }
     };
 
     fetchClientContactsData();
-  }, [user]);
+  }, [toast, user]);
 
   // Fetch audit logs from Supabase
   useEffect(() => {
@@ -2081,13 +2226,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
         const data = await listAuditLogs();
         setProjectAuditLogs(data.map(mapSupabaseAuditLogToLegacy));
       } catch (error) {
-        console.error("Error fetching audit logs:", error);
+        toast({ title: "Erro ao carregar auditoria", description: "Tente novamente.", variant: "destructive" });
         setProjectAuditLogs([]);
       }
     };
 
     fetchAuditLogsData();
-  }, [user]);
+  }, [toast, user]);
 
   // Normaliza projetos legados para novos campos de progresso
   useEffect(() => {
@@ -2164,6 +2309,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [setDiagnostics, toast, user]);
 
   const refreshTemplates = useCallback(async () => {
+    if (!user) {
+      setTemplates([]);
+      setTemplatesError(null);
+      setTemplatesLoading(false);
+      return;
+    }
+
     setTemplatesLoading(true);
     setTemplatesError(null);
 
@@ -2176,7 +2328,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     } finally {
       setTemplatesLoading(false);
     }
-  }, []);
+  }, [setTemplates, user]);
 
   useEffect(() => {
     refreshTemplates();
@@ -2713,7 +2865,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
     addTask: async (task) => {
       try {
         const project = task.taskType === "project" ? projects.find((item) => item.id === task.projectId) : undefined;
-        const client = project ? clients.find((item) => item.id === project.clientId) : undefined;
+        const client = project
+          ? clients.find((item) => item.id === project.clientId)
+          : task.taskType === "client"
+            ? clients.find((item) => item.id === task.clientId)
+            : undefined;
         const preparedTask = {
           ...task,
           assignedTo: task.assignedTo || user?.id,
@@ -2763,7 +2919,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       let optimisticTask = current;
       try {
         const completionPatch: Partial<Task> = task.status === "done" && current?.status !== "done"
-          ? { previousStatus: current?.status || "backlog", completedAt: new Date().toISOString(), completedBy: user?.id }
+          ? { previousStatus: current?.status || "not_started", completedAt: new Date().toISOString(), completedBy: user?.id }
           : current?.status === "done" && task.status && task.status !== "done"
             ? { completedAt: "", completedBy: "" }
             : {};
@@ -2815,112 +2971,104 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
 
     deliverables,
-    addDeliverable: (deliverable) => {
-      const newDeliverable = { ...deliverable, id: generateId(), createdAt: getDate() };
-      
-      void (async () => {
-        try {
-          const payload = {
-            project_id: newDeliverable.projectId,
-            title: newDeliverable.title,
-            description: null,
-            status: newDeliverable.status,
-            due_date: toSupabaseDate(newDeliverable.dueDate),
-          };
-          const created = await createSupabaseDeliverable(payload);
-          setDeliverables((prev) => prev.map((d) => d.id === newDeliverable.id ? mapSupabaseDeliverableToLegacy(created) : d));
-        } catch (error) {
-          console.error("Error creating deliverable:", error);
-        }
-      })();
-
-      setDeliverables((prev) => [...prev, newDeliverable]);
+    addDeliverable: async (deliverable) => {
+      try {
+        const created = await createSupabaseDeliverable({
+          project_id: deliverable.projectId,
+          title: deliverable.title,
+          description: deliverable.description || null,
+          status: deliverable.status,
+          due_date: toSupabaseDate(deliverable.dueDate),
+          responsible_user_id: deliverable.responsibleUserId || null,
+          responsible: deliverable.responsibleName || null,
+          item_type: deliverable.itemType || "deliverable",
+        });
+        const normalized = mapSupabaseDeliverableToLegacy(created);
+        setDeliverables((prev) => [...prev, normalized]);
+        return normalized;
+      } catch (error) {
+        toast({ title: "Não foi possível criar o entregável", description: getFriendlyPersistenceError(error), variant: "destructive" });
+        throw error;
+      }
     },
-    updateDeliverable: (id, deliverable) => {
-      setDeliverables((prev) => prev.map((d) => (d.id === id ? { ...d, ...deliverable } : d)));
-      
-      void (async () => {
-        try {
-          const payload: Record<string, unknown> = {};
-          if (deliverable.title !== undefined) payload.title = deliverable.title;
-          if (deliverable.status !== undefined) payload.status = deliverable.status;
-          if (deliverable.dueDate !== undefined) payload.due_date = toSupabaseDate(deliverable.dueDate);
-          await updateSupabaseDeliverable(id, payload);
-        } catch (error) {
-          console.error("Error updating deliverable:", error);
-        }
-      })();
+    updateDeliverable: async (id, deliverable) => {
+      try {
+        const payload: Record<string, unknown> = {};
+        if (deliverable.title !== undefined) payload.title = deliverable.title;
+        if (deliverable.status !== undefined) payload.status = deliverable.status;
+        if (deliverable.dueDate !== undefined) payload.due_date = toSupabaseDate(deliverable.dueDate);
+        if (deliverable.description !== undefined) payload.description = deliverable.description || null;
+        if (deliverable.responsibleUserId !== undefined) payload.responsible_user_id = deliverable.responsibleUserId || null;
+        if (deliverable.responsibleName !== undefined) payload.responsible = deliverable.responsibleName || null;
+        if (deliverable.itemType !== undefined) payload.item_type = deliverable.itemType;
+        const updated = mapSupabaseDeliverableToLegacy(await updateSupabaseDeliverable(id, payload));
+        setDeliverables((prev) => prev.map((item) => item.id === id ? updated : item));
+        return updated;
+      } catch (error) {
+        toast({ title: "Não foi possível atualizar o entregável", description: getFriendlyPersistenceError(error), variant: "destructive" });
+        throw error;
+      }
     },
-    deleteDeliverable: (id) => {
-      setDeliverables((prev) => prev.filter((d) => d.id !== id));
-      void deleteSupabaseDeliverable(id).catch((e) => console.error("Error deleting deliverable:", e));
+    deleteDeliverable: async (id) => {
+      try {
+        await commitAfterPersistence(() => deleteSupabaseDeliverable(id), () => setDeliverables((prev) => prev.filter((item) => item.id !== id)));
+      } catch (error) {
+        toast({ title: "Não foi possível excluir o entregável", description: getFriendlyPersistenceError(error), variant: "destructive" });
+        throw error;
+      }
     },
 
     meetings,
-    addMeeting: (meeting) =>
-      setMeetings((prev) => [...prev, { ...meeting, id: generateId(), createdAt: getDate() }]),
-    updateMeeting: (id, meeting) =>
-      setMeetings((prev) => prev.map((m) => (m.id === id ? { ...m, ...meeting } : m))),
-    deleteMeeting: (id) => setMeetings((prev) => prev.filter((m) => m.id !== id)),
 
     indicators,
-    addIndicator: (indicator) => {
-      const newIndicator = { ...indicator, id: generateId(), createdAt: getDate() };
-      
-      void (async () => {
-        try {
-          const payload = {
-            name: newIndicator.name,
-            category: newIndicator.category || null,
-            unit: newIndicator.unit || null,
-            frequency: newIndicator.frequency || null,
-            target_value: newIndicator.targetValue ?? null,
-            current_value: newIndicator.currentValue ?? null,
-            project_id: newIndicator.projectId || null,
-            trend: newIndicator.trend || "stable",
-          };
-          const created = await createSupabaseIndicator(payload);
-          setIndicators((prev) => prev.map((i) => i.id === newIndicator.id ? mapSupabaseIndicatorToLegacy(created) : i));
-        } catch (error) {
-          console.error("Error creating indicator:", error);
-        }
-      })();
-
-      setIndicators((prev) => [...prev, newIndicator]);
+    addIndicator: async (indicator) => {
+      try {
+        const created = await createSupabaseIndicator({
+          name: indicator.name,
+          category: indicator.category || null,
+          unit: indicator.unit || null,
+          frequency: indicator.frequency || null,
+          target_value: indicator.targetValue ?? null,
+          current_value: indicator.currentValue ?? null,
+          project_id: indicator.projectId || null,
+          trend: indicator.trend || "stable",
+        });
+        const normalized = mapSupabaseIndicatorToLegacy(created);
+        setIndicators((prev) => [...prev, normalized]);
+        return normalized;
+      } catch (error) {
+        toast({ title: "Não foi possível criar o indicador", description: getFriendlyPersistenceError(error), variant: "destructive" });
+        throw error;
+      }
     },
-    updateIndicator: (id, indicator) => {
-      setIndicators((prev) => prev.map((i) => (i.id === id ? { ...i, ...indicator } : i)));
-      
-      void (async () => {
-        try {
-          const payload: Record<string, unknown> = {};
-          if (indicator.name !== undefined) payload.name = indicator.name;
-          if (indicator.category !== undefined) payload.category = indicator.category;
-          if (indicator.unit !== undefined) payload.unit = indicator.unit;
-          if (indicator.frequency !== undefined) payload.frequency = indicator.frequency;
-          if (indicator.targetValue !== undefined) payload.target_value = indicator.targetValue;
-          if (indicator.currentValue !== undefined) payload.current_value = indicator.currentValue;
-          if (indicator.trend !== undefined) payload.trend = indicator.trend;
-          await updateSupabaseIndicator(id, payload);
-        } catch (error) {
-          console.error("Error updating indicator:", error);
-        }
-      })();
+    updateIndicator: async (id, indicator) => {
+      try {
+        const payload: Record<string, unknown> = {};
+        if (indicator.name !== undefined) payload.name = indicator.name;
+        if (indicator.category !== undefined) payload.category = indicator.category;
+        if (indicator.unit !== undefined) payload.unit = indicator.unit;
+        if (indicator.frequency !== undefined) payload.frequency = indicator.frequency;
+        if (indicator.targetValue !== undefined) payload.target_value = indicator.targetValue;
+        if (indicator.currentValue !== undefined) payload.current_value = indicator.currentValue;
+        if (indicator.trend !== undefined) payload.trend = indicator.trend;
+        const updated = mapSupabaseIndicatorToLegacy(await updateSupabaseIndicator(id, payload));
+        setIndicators((prev) => prev.map((item) => item.id === id ? updated : item));
+        return updated;
+      } catch (error) {
+        toast({ title: "Não foi possível atualizar o indicador", description: getFriendlyPersistenceError(error), variant: "destructive" });
+        throw error;
+      }
     },
-    deleteIndicator: (id) => {
-      setIndicators((prev) => prev.filter((i) => i.id !== id));
-      void deleteSupabaseIndicator(id).catch((e) => console.error("Error deleting indicator:", e));
+    deleteIndicator: async (id) => {
+      try {
+        await commitAfterPersistence(() => deleteSupabaseIndicator(id), () => setIndicators((prev) => prev.filter((item) => item.id !== id)));
+      } catch (error) {
+        toast({ title: "Não foi possível excluir o indicador", description: getFriendlyPersistenceError(error), variant: "destructive" });
+        throw error;
+      }
     },
 
     documents,
-    addDocument: (document) =>
-      setDocuments((prev) => [
-        ...prev,
-        { ...document, id: generateId(), createdAt: getDate(), updatedAt: getDate() },
-      ]),
-    updateDocument: (id, document) =>
-      setDocuments((prev) => prev.map((d) => (d.id === id ? { ...d, ...document, updatedAt: getDate() } : d))),
-    deleteDocument: (id) => setDocuments((prev) => prev.filter((d) => d.id !== id)),
 
     playbooks,
     addPlaybook: (playbook) => {
@@ -3314,51 +3462,49 @@ export function DataProvider({ children }: { children: ReactNode }) {
     },
 
     contracts,
-    addContract: (contract) => {
-      const newContract = { ...contract, id: generateId(), createdAt: getDate() };
-      
-      void (async () => {
-        try {
-          const payload = {
-            title: newContract.projectName || "Contrato",
-            client_id: newContract.clientId || null,
-            project_id: newContract.projectId || null,
-            value: newContract.value || null,
-            start_date: toSupabaseDate(newContract.startDate),
-            end_date: toSupabaseDate(newContract.endDate),
-            status: "ativo",
-            billing_type: newContract.billingType || null,
-            installments: newContract.installments || [],
-          };
-          const created = await createSupabaseContract(payload);
-          setContracts((prev) => prev.map((c) => c.id === newContract.id ? mapSupabaseContractToLegacy(created) : c));
-        } catch (error) {
-          console.error("Error creating contract:", error);
-        }
-      })();
-
-      setContracts((prev) => [...prev, newContract]);
+    addContract: async (contract) => {
+      try {
+        const created = mapSupabaseContractToLegacy(await createSupabaseContract({
+          title: contract.projectName || "Contrato",
+          client_id: contract.clientId || null,
+          project_id: contract.projectId || null,
+          value: contract.value || null,
+          start_date: toSupabaseDate(contract.startDate),
+          end_date: toSupabaseDate(contract.endDate),
+          status: "ativo",
+          billing_type: contract.billingType || null,
+          installments: contract.installments || [],
+        }));
+        setContracts((prev) => [...prev, created]);
+        return created;
+      } catch (error) {
+        toast({ title: "Não foi possível criar o contrato", description: getFriendlyPersistenceError(error), variant: "destructive" });
+        throw error;
+      }
     },
-    updateContract: (id, contract) => {
-      setContracts((prev) => prev.map((c) => (c.id === id ? { ...c, ...contract } : c)));
-      
-      void (async () => {
-        try {
-          const payload: Record<string, unknown> = {};
-          if (contract.value !== undefined) payload.value = contract.value;
-          if (contract.startDate !== undefined) payload.start_date = toSupabaseDate(contract.startDate);
-          if (contract.endDate !== undefined) payload.end_date = toSupabaseDate(contract.endDate);
-          if (contract.billingType !== undefined) payload.billing_type = contract.billingType;
-          if (contract.installments !== undefined) payload.installments = contract.installments;
-          await updateSupabaseContract(id, payload);
-        } catch (error) {
-          console.error("Error updating contract:", error);
-        }
-      })();
+    updateContract: async (id, contract) => {
+      try {
+        const payload: Record<string, unknown> = {};
+        if (contract.value !== undefined) payload.value = contract.value;
+        if (contract.startDate !== undefined) payload.start_date = toSupabaseDate(contract.startDate);
+        if (contract.endDate !== undefined) payload.end_date = toSupabaseDate(contract.endDate);
+        if (contract.billingType !== undefined) payload.billing_type = contract.billingType;
+        if (contract.installments !== undefined) payload.installments = contract.installments;
+        const updated = mapSupabaseContractToLegacy(await updateSupabaseContract(id, payload));
+        setContracts((prev) => prev.map((item) => item.id === id ? updated : item));
+        return updated;
+      } catch (error) {
+        toast({ title: "Não foi possível atualizar o contrato", description: getFriendlyPersistenceError(error), variant: "destructive" });
+        throw error;
+      }
     },
-    deleteContract: (id) => {
-      setContracts((prev) => prev.filter((c) => c.id !== id));
-      void deleteSupabaseContract(id).catch((e) => console.error("Error deleting contract:", e));
+    deleteContract: async (id) => {
+      try {
+        await commitAfterPersistence(() => deleteSupabaseContract(id), () => setContracts((prev) => prev.filter((item) => item.id !== id)));
+      } catch (error) {
+        toast({ title: "Não foi possível excluir o contrato", description: getFriendlyPersistenceError(error), variant: "destructive" });
+        throw error;
+      }
     },
 
     expenses,
@@ -3459,49 +3605,46 @@ export function DataProvider({ children }: { children: ReactNode }) {
     },
 
     clientContacts,
-    addClientContact: (contact) => {
-      const newContact = { ...contact, id: generateId() };
-      
-      void (async () => {
-        try {
-          const payload = {
-            client_id: newContact.clientId,
-            name: newContact.name,
-            role: newContact.role || null,
-            email: newContact.email || null,
-            phone: newContact.phone || null,
-            is_primary: newContact.hasPortalAccess || false,
-          };
-          const created = await createSupabaseClientContact(payload);
-          setClientContacts((prev) => prev.map((c) => c.id === newContact.id ? mapSupabaseClientContactToLegacy(created) : c));
-        } catch (error) {
-          console.error("Error creating client contact:", error);
-        }
-      })();
-
-      setClientContacts((prev) => [...prev, newContact]);
-      return newContact;
+    addClientContact: async (contact) => {
+      try {
+        const created = mapSupabaseClientContactToLegacy(await createSupabaseClientContact({
+          client_id: contact.clientId,
+          name: contact.name,
+          role: contact.role || null,
+          email: contact.email || null,
+          phone: contact.phone || null,
+          is_primary: contact.hasPortalAccess || false,
+        }));
+        setClientContacts((prev) => [...prev, created]);
+        return created;
+      } catch (error) {
+        toast({ title: "Não foi possível criar o contato", description: getFriendlyPersistenceError(error), variant: "destructive" });
+        throw error;
+      }
     },
-    updateClientContact: (id, contact) => {
-      setClientContacts((prev) => prev.map((c) => (c.id === id ? { ...c, ...contact } : c)));
-      
-      void (async () => {
-        try {
-          const payload: Record<string, unknown> = {};
-          if (contact.name !== undefined) payload.name = contact.name;
-          if (contact.role !== undefined) payload.role = contact.role;
-          if (contact.email !== undefined) payload.email = contact.email;
-          if (contact.phone !== undefined) payload.phone = contact.phone;
-          if (contact.hasPortalAccess !== undefined) payload.is_primary = contact.hasPortalAccess;
-          await updateSupabaseClientContact(id, payload);
-        } catch (error) {
-          console.error("Error updating client contact:", error);
-        }
-      })();
+    updateClientContact: async (id, contact) => {
+      try {
+        const payload: Record<string, unknown> = {};
+        if (contact.name !== undefined) payload.name = contact.name;
+        if (contact.role !== undefined) payload.role = contact.role;
+        if (contact.email !== undefined) payload.email = contact.email;
+        if (contact.phone !== undefined) payload.phone = contact.phone;
+        if (contact.hasPortalAccess !== undefined) payload.is_primary = contact.hasPortalAccess;
+        const updated = mapSupabaseClientContactToLegacy(await updateSupabaseClientContact(id, payload));
+        setClientContacts((prev) => prev.map((item) => item.id === id ? updated : item));
+        return updated;
+      } catch (error) {
+        toast({ title: "Não foi possível atualizar o contato", description: getFriendlyPersistenceError(error), variant: "destructive" });
+        throw error;
+      }
     },
-    deleteClientContact: (id) => {
-      setClientContacts((prev) => prev.filter((c) => c.id !== id));
-      void deleteSupabaseClientContact(id).catch((e) => console.error("Error deleting client contact:", e));
+    deleteClientContact: async (id) => {
+      try {
+        await commitAfterPersistence(() => deleteSupabaseClientContact(id), () => setClientContacts((prev) => prev.filter((item) => item.id !== id)));
+      } catch (error) {
+        toast({ title: "Não foi possível excluir o contato", description: getFriendlyPersistenceError(error), variant: "destructive" });
+        throw error;
+      }
     },
   };
 

@@ -3,9 +3,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { useData } from "@/contexts/DataContext";
 import { toast } from "@/hooks/use-toast";
 import { FileItem, DocumentCategory, EvidenceStatus, FileVisibility } from "@/types/documents";
+import type { Database } from "@/integrations/supabase/types";
+
+type DocumentRow = Database["public"]["Tables"]["documents"]["Row"];
+type DocumentUpdate = Database["public"]["Tables"]["documents"]["Update"];
+type ClientReference = { id: string; name?: string; nomeFantasia?: string; razaoSocial?: string };
+type ProjectReference = { id: string; name: string };
 
 // Map database document to FileItem
-function mapDbToFileItem(doc: any, clients: any[], projects: any[]): FileItem {
+function mapDbToFileItem(doc: DocumentRow, clients: ClientReference[], projects: ProjectReference[]): FileItem {
   const client = clients.find((c) => c.id === doc.client_id);
   const project = projects.find((p) => p.id === doc.project_id);
   
@@ -14,7 +20,7 @@ function mapDbToFileItem(doc: any, clients: any[], projects: any[]): FileItem {
     nomeArquivo: doc.name,
     nomeExibicao: doc.description || doc.name,
     clienteId: doc.client_id || undefined,
-    clienteNome: client?.name,
+    clienteNome: client?.nomeFantasia || client?.razaoSocial || client?.name,
     projetoId: doc.project_id || undefined,
     projetoNome: project?.name,
     categoriaId: (doc.category || "contracts") as DocumentCategory,
@@ -39,6 +45,7 @@ function mapDbToFileItem(doc: any, clients: any[], projects: any[]): FileItem {
 export function useDocuments() {
   const [documents, setDocuments] = useState<FileItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const { clients, projects } = useData();
   const hasFetched = useRef(false);
   const clientsRef = useRef(clients);
@@ -51,6 +58,7 @@ export function useDocuments() {
   const fetchDocuments = useCallback(async () => {
     try {
       setLoading(true);
+      setError(null);
       const { data, error } = await supabase
         .from("documents")
         .select("*")
@@ -62,11 +70,11 @@ export function useDocuments() {
         mapDbToFileItem(doc, clientsRef.current, projectsRef.current)
       );
       setDocuments(mapped);
-    } catch (error: any) {
-      console.error("Error fetching documents:", error);
+    } catch {
+      setError("Não foi possível carregar os documentos.");
       toast({
         title: "Erro ao carregar documentos",
-        description: error.message,
+        description: "Verifique sua conexão e tente novamente.",
         variant: "destructive",
       });
     } finally {
@@ -78,8 +86,10 @@ export function useDocuments() {
   useEffect(() => {
     if (!hasFetched.current) {
       hasFetched.current = true;
-      fetchDocuments();
+      void fetchDocuments();
     }
+    window.addEventListener("joia:documents-changed", fetchDocuments);
+    return () => window.removeEventListener("joia:documents-changed", fetchDocuments);
   }, [fetchDocuments]);
 
   const addDocument = useCallback(async (file: Omit<FileItem, "id" | "uploadedAt">) => {
@@ -111,6 +121,7 @@ export function useDocuments() {
 
       const newDoc = mapDbToFileItem(data, clientsRef.current, projectsRef.current);
       setDocuments((prev) => [newDoc, ...prev]);
+      window.dispatchEvent(new Event("joia:documents-changed"));
       
       toast({
         title: "Documento adicionado",
@@ -118,20 +129,19 @@ export function useDocuments() {
       });
 
       return newDoc;
-    } catch (error: any) {
-      console.error("Error adding document:", error);
+    } catch (caughtError: unknown) {
       toast({
         title: "Erro ao adicionar documento",
-        description: error.message,
+        description: "O documento não foi salvo. Tente novamente.",
         variant: "destructive",
       });
-      throw error;
+      throw caughtError;
     }
   }, []);
 
   const updateDocument = useCallback(async (id: string, updates: Partial<FileItem>) => {
     try {
-      const dbUpdates: any = {};
+      const dbUpdates: DocumentUpdate = {};
       
       if (updates.nomeExibicao !== undefined) dbUpdates.description = updates.nomeExibicao;
       if (updates.categoriaId !== undefined) dbUpdates.category = updates.categoriaId;
@@ -153,14 +163,14 @@ export function useDocuments() {
       setDocuments((prev) =>
         prev.map((doc) => (doc.id === id ? { ...doc, ...updates } : doc))
       );
-    } catch (error: any) {
-      console.error("Error updating document:", error);
+      window.dispatchEvent(new Event("joia:documents-changed"));
+    } catch (caughtError: unknown) {
       toast({
         title: "Erro ao atualizar documento",
-        description: error.message,
+        description: "As alterações não foram salvas.",
         variant: "destructive",
       });
-      throw error;
+      throw caughtError;
     }
   }, []);
 
@@ -176,26 +186,34 @@ export function useDocuments() {
 
   const deleteDocument = useCallback(async (id: string) => {
     try {
+      const document = documents.find((item) => item.id === id);
       const { error } = await supabase.from("documents").delete().eq("id", id);
 
       if (error) throw error;
 
       setDocuments((prev) => prev.filter((doc) => doc.id !== id));
+      if (document?.url) {
+        const marker = "/documents/";
+        const path = document.url.includes(marker) ? decodeURIComponent(document.url.split(marker)[1]) : document.url;
+        const { error: storageError } = await supabase.storage.from("documents").remove([path]);
+        if (storageError) toast({ title: "Documento removido", description: "O registro foi excluído; o arquivo será limpo posteriormente." });
+      }
+      window.dispatchEvent(new Event("joia:documents-changed"));
       toast({ title: "Documento excluído" });
-    } catch (error: any) {
-      console.error("Error deleting document:", error);
+    } catch (caughtError: unknown) {
       toast({
         title: "Erro ao excluir documento",
-        description: error.message,
+        description: "O documento foi mantido. Tente novamente.",
         variant: "destructive",
       });
-      throw error;
+      throw caughtError;
     }
-  }, []);
+  }, [documents]);
 
   return {
     documents,
     loading,
+    error,
     addDocument,
     updateDocument,
     approveDocument,

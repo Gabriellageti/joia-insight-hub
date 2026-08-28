@@ -1,371 +1,93 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { useData } from "@/contexts/DataContext";
-import { useClientJourney } from "@/hooks/useClientJourney";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Progress } from "@/components/ui/progress";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ArrowLeft, Building2, MapPin, PhoneCall, Shield, Trash, Rocket, FileSearch, Route, ChevronRight } from "lucide-react";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { isPastDate } from "@/lib/dates";
-import { ClientDialog } from "@/components/dialogs/ClientDialog";
-import { DiagnosticDialog } from "@/components/dialogs/DiagnosticDialog";
+import { AlertTriangle, ArrowLeft, BriefcaseBusiness, CalendarClock, CheckCircle2, Clock3, Edit, FolderKanban, ListTodo, Route, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ClientDialog } from "@/components/dialogs/ClientDialog";
+import { ScopedTasksPanel } from "@/components/plano-acao";
+import { useData } from "@/contexts/DataContext";
+import { parseTaskDate } from "@/lib/tasks/dates";
+import { TASK_PRIORITY_ORDER, TASK_STATUS_LABELS } from "@/lib/tasks/constants";
+import { ActivityFeed } from "@/components/meetings";
+import { FavoriteButton } from "@/components/operations/FavoriteButton";
 
-const riskColors = { low: "bg-green-500/10 text-green-700", medium: "bg-yellow-500/10 text-yellow-700", high: "bg-red-500/10 text-red-700" };
-const phaseColors: Record<string, string> = {
-  onboarding: 'bg-blue-500',
-  definition: 'bg-amber-500',
-  execution: 'bg-green-500',
-  validation: 'bg-purple-500',
-};
-const phaseNames: Record<string, string> = {
-  onboarding: 'Onboarding',
-  definition: 'Definição',
-  execution: 'Execução',
-  validation: 'Validação',
-};
-const riskLabels = { low: "Baixo", medium: "Médio", high: "Alto" };
-const getInitials = (value?: string) => value?.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase() || "--";
-
-// Helper to get address as string
-const getAddressString = (address?: string | { logradouro?: string; cidade?: string; uf?: string }): string => {
-  if (!address) return "";
-  if (typeof address === "string") return address;
-  const parts = [address.logradouro, address.cidade, address.uf].filter(Boolean);
-  return parts.join(", ");
-};
+const metricCards = [
+  { key: "open", label: "Tarefas abertas", icon: ListTodo },
+  { key: "progress", label: "Em andamento", icon: Clock3 },
+  { key: "overdue", label: "Atrasadas", icon: AlertTriangle },
+  { key: "done", label: "Concluídas", icon: CheckCircle2 },
+  { key: "projects", label: "Projetos ativos", icon: BriefcaseBusiness },
+] as const;
 
 export default function ClienteDetalhes() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { clients, projects, clientContacts, deleteClient, diagnostics, templates } = useData();
+  const { clients, projects, tasks, meetings, deleteClient } = useData();
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [diagnosticDialogOpen, setDiagnosticDialogOpen] = useState(false);
-
-  const client = useMemo(() => clients.find((c) => c.id === id), [clients, id]);
+  const client = useMemo(() => clients.find((item) => item.id === id), [clients, id]);
   const clientProjects = useMemo(() => projects.filter((project) => project.clientId === id), [projects, id]);
-  const contacts = useMemo(() => clientContacts.filter((contact) => contact.clientId === id), [clientContacts, id]);
-  
-  // Hook de jornada do cliente
-  const { currentPhase, phases, overallProgress } = useClientJourney(id);
-  const currentPhaseInfo = phases.find(p => p.id === currentPhase);
-  
-  // Verificar se já existe kickoff para este cliente
-  const kickoffTemplate = templates.find((t) => t.name?.toLowerCase().includes("kickoff"));
-  const hasKickoff = diagnostics.some(
-    (d) => d.clientId === id && (d.templateId === kickoffTemplate?.id || d.templateName?.toLowerCase().includes("kickoff"))
-  );
-  const kickoffCompleted = diagnostics.some(
-    (d) => d.clientId === id && (d.templateId === kickoffTemplate?.id || d.templateName?.toLowerCase().includes("kickoff")) && d.status === "completed"
-  );
+  const clientTasks = useMemo(() => tasks.filter((task) => task.clientId === id), [tasks, id]);
+  const clientMeetings = useMemo(() => meetings.filter((meeting) => meeting.clientId === id), [meetings, id]);
+
+  const today = useMemo(() => { const value = new Date(); value.setHours(0, 0, 0, 0); return value; }, []);
+  const openTasks = useMemo(() => clientTasks.filter((task) => task.status !== "done"), [clientTasks]);
+  const overdueTasks = useMemo(() => openTasks.filter((task) => { const due = parseTaskDate(task.dueDate); return Boolean(due && due < today); }), [openTasks, today]);
+  const nextTasks = useMemo(() => [...openTasks].filter((task) => parseTaskDate(task.dueDate)).sort((left, right) => (parseTaskDate(left.dueDate)?.getTime() || Infinity) - (parseTaskDate(right.dueDate)?.getTime() || Infinity)).slice(0, 5), [openTasks]);
+  const attentionTasks = useMemo(() => [...openTasks].filter((task) => task.status === "blocked" || task.priority === "urgent" || overdueTasks.some((item) => item.id === task.id)).sort((left, right) => TASK_PRIORITY_ORDER[left.priority] - TASK_PRIORITY_ORDER[right.priority]).slice(0, 5), [openTasks, overdueTasks]);
+  const responsibles = useMemo(() => [...new Set(clientTasks.map((task) => task.responsible).filter(Boolean))], [clientTasks]);
+
+  if (!client) return <div className="space-y-4"><Alert><AlertTitle>Cliente não encontrado</AlertTitle><AlertDescription>Não foi possível localizar os dados deste cliente.</AlertDescription></Alert><Button asChild variant="outline"><Link to="/clientes"><ArrowLeft className="mr-2 h-4 w-4" />Voltar para Clientes</Link></Button></div>;
+
+  const displayName = client.nomeFantasia || client.razaoSocial || client.name || "Cliente";
+  const metrics = {
+    open: openTasks.length,
+    progress: clientTasks.filter((task) => task.status === "in_progress").length,
+    overdue: overdueTasks.length,
+    done: clientTasks.filter((task) => task.status === "done").length,
+    projects: clientProjects.length,
+  };
+  const nextDue = nextTasks[0] ? parseTaskDate(nextTasks[0].dueDate)?.toLocaleDateString("pt-BR") : "Sem prazo";
 
   const handleDelete = async () => {
-    if (!client) return;
-
-    const confirmed = window.confirm(
-      `Deseja realmente excluir ${client.nomeFantasia || client.razaoSocial || client.name || "o cliente"}?`
-    );
-
-    if (!confirmed) return;
-
-    try {
-      await deleteClient(client.id);
-      toast.success("Cliente excluído com sucesso");
-      navigate("/clientes");
-    } catch (error) {
-      console.error(error);
-      toast.error("Não foi possível excluir o cliente");
-    }
+    if (!window.confirm(`Deseja realmente excluir ${displayName}?`)) return;
+    try { await deleteClient(client.id); toast.success("Cliente excluído com sucesso."); navigate("/clientes"); }
+    catch { toast.error("Não foi possível excluir o cliente."); }
   };
-
-  if (!client) {
-    return (
-      <div className="space-y-4">
-        <Alert>
-          <AlertTitle>Cliente não encontrado</AlertTitle>
-          <AlertDescription>Não foi possível localizar os dados deste cliente. Retorne para a lista para tentar novamente.</AlertDescription>
-        </Alert>
-        <Button asChild variant="outline" className="gap-2">
-          <Link to="/clientes">
-            <ArrowLeft className="h-4 w-4" />
-            Voltar para Clientes
-          </Link>
-        </Button>
-      </div>
-    );
-  }
-
-  const responsaveis = clientProjects
-    .map((project) => project.responsible || project.responsibleNameLegacy)
-    .filter(Boolean);
-
-  const checklistItems = [
-    {
-      id: "projects",
-      title: "Criar primeiro projeto",
-      description: clientProjects.length > 0 ? `${clientProjects.length} projeto(s) em andamento` : "Nenhum projeto cadastrado para este cliente",
-      completed: clientProjects.length > 0,
-    },
-    {
-      id: "kickoff",
-      title: "Rodar Kickoff",
-      description: kickoffCompleted
-        ? "Kickoff concluído"
-        : hasKickoff
-          ? "Kickoff em andamento"
-          : "Execute o diagnóstico inicial para mapear oportunidades",
-      completed: kickoffCompleted,
-      action: !kickoffCompleted && clientProjects.length > 0 ? () => setDiagnosticDialogOpen(true) : undefined,
-      actionLabel: hasKickoff ? "Continuar" : "Iniciar Kickoff",
-    },
-    {
-      id: "contacts",
-      title: "Adicionar mais contatos",
-      description: contacts.length > 0 ? `${contacts.length} contato(s) cadastrados` : "Nenhum contato registrado",
-      completed: contacts.length > 1,
-    },
-    {
-      id: "address",
-      title: "Confirmar endereço",
-      description: getAddressString(client.address) || "Endereço ainda não informado",
-      completed: Boolean(getAddressString(client.address).trim().length > 0),
-    },
-    {
-      id: "owners",
-      title: "Definir responsáveis",
-      description: responsaveis.length > 0 ? `Responsável(is): ${responsaveis.join(", ")}` : "Defina responsáveis nos projetos deste cliente",
-      completed: responsaveis.length > 0,
-    },
-  ];
 
   return (
     <div className="space-y-6">
-      {/* Banner de sugestão de Kickoff */}
-      {clientProjects.length > 0 && !hasKickoff && (
-        <Alert className="border-accent/50 bg-accent/5">
-          <Rocket className="h-4 w-4 text-accent" />
-          <AlertTitle className="text-accent">Próximo passo: Rodar o Kickoff</AlertTitle>
-          <AlertDescription className="flex items-center justify-between">
-            <span>
-              Execute o diagnóstico de Kickoff para mapear oportunidades e definir o norte do projeto.
-            </span>
-            <Button
-              size="sm"
-              className="bg-accent text-accent-foreground hover:bg-accent/90 ml-4"
-              onClick={() => setDiagnosticDialogOpen(true)}
-            >
-              <FileSearch className="h-4 w-4 mr-2" />
-              Iniciar Kickoff
-            </Button>
-          </AlertDescription>
-        </Alert>
-      )}
-
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Button asChild variant="ghost" className="h-auto px-2 text-muted-foreground hover:text-foreground">
-            <Link to="/clientes" className="flex items-center gap-2">
-              <ArrowLeft className="h-4 w-4" />
-              Voltar
-            </Link>
-          </Button>
-          <div>
-            <p className="text-sm text-muted-foreground">Cliente</p>
-            <h1 className="text-2xl font-semibold text-foreground">{client.name}</h1>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Badge variant={client.status === "ativo" ? "default" : "secondary"}>
-            {client.status === "ativo" ? "Ativo" : "Inativo"}
-          </Badge>
-          <Button variant="outline" onClick={() => navigate(`/clientes/${id}/jornada`)}>
-            <Route className="h-4 w-4 mr-2" />
-            Ver Jornada
-          </Button>
-          <Button variant="outline" onClick={() => setDialogOpen(true)}>
-            Editar
-          </Button>
-          <Button variant="ghost" className="text-destructive" onClick={handleDelete}>
-            <Trash className="h-4 w-4 mr-2" />
-            Excluir
-          </Button>
-        </div>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex items-center gap-3"><Button asChild variant="ghost" className="px-2"><Link to="/clientes"><ArrowLeft className="mr-2 h-4 w-4" />Voltar</Link></Button><div><p className="text-sm text-muted-foreground">Central do cliente</p><h1 className="text-2xl font-semibold">{displayName}</h1></div><Badge variant={client.status === "ativo" ? "default" : "secondary"}>{client.status === "ativo" ? "Ativo" : "Inativo"}</Badge></div>
+        <div className="flex flex-wrap gap-2"><FavoriteButton entityType="client" entityId={client.id} /><Button variant="outline" onClick={() => navigate(`/clientes/${id}/jornada`)}><Route className="mr-2 h-4 w-4" />Jornada</Button><Button variant="outline" onClick={() => setDialogOpen(true)}><Edit className="mr-2 h-4 w-4" />Editar</Button><Button variant="ghost" className="text-destructive" onClick={() => void handleDelete()}><Trash2 className="mr-2 h-4 w-4" />Excluir</Button></div>
       </div>
 
-      {/* Card de Fase Atual da Jornada */}
-      <Card className="border-primary/20 cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate(`/clientes/${id}/jornada`)}>
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className={`w-12 h-12 rounded-full ${phaseColors[currentPhase]} flex items-center justify-center`}>
-                <Route className="h-6 w-6 text-white" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Fase atual da jornada</p>
-                <p className="text-lg font-semibold">{phaseNames[currentPhase]}</p>
-                <p className="text-sm text-muted-foreground">
-                  {currentPhaseInfo?.description}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="text-right">
-                <p className="text-2xl font-bold text-primary">{overallProgress}%</p>
-                <p className="text-xs text-muted-foreground">progresso geral</p>
-              </div>
-              <ChevronRight className="h-5 w-5 text-muted-foreground" />
-            </div>
+      <Tabs defaultValue="overview" className="space-y-5">
+        <TabsList className="h-auto w-full justify-start overflow-x-auto"><TabsTrigger value="overview">Visão Geral</TabsTrigger><TabsTrigger value="projects">Projetos</TabsTrigger><TabsTrigger value="tasks">Tarefas</TabsTrigger><TabsTrigger value="kanban">Kanban</TabsTrigger><TabsTrigger value="meetings">Reuniões</TabsTrigger><TabsTrigger value="history">Histórico</TabsTrigger></TabsList>
+
+        <TabsContent value="overview" className="space-y-5">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+            {metricCards.map(({ key, label, icon: Icon }) => <Card key={key}><CardContent className="p-4"><div className="flex items-center justify-between"><p className="text-sm text-muted-foreground">{label}</p><Icon className={`h-4 w-4 ${key === "overdue" && metrics[key] ? "text-destructive" : "text-muted-foreground"}`} /></div><p className="mt-2 text-2xl font-semibold">{metrics[key]}</p></CardContent></Card>)}
+            <Card><CardContent className="p-4"><div className="flex items-center justify-between"><p className="text-sm text-muted-foreground">Próximo prazo</p><CalendarClock className="h-4 w-4 text-muted-foreground" /></div><p className="mt-2 text-lg font-semibold">{nextDue}</p></CardContent></Card>
           </div>
-          <Progress value={overallProgress} className="h-2 mt-4" />
-        </CardContent>
-      </Card>
-
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <Card className="xl:col-span-2">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle>Informações gerais</CardTitle>
-              <p className="text-sm text-muted-foreground">Dados principais do cliente</p>
-            </div>
-            <Badge className={riskColors[client.risk]} variant="outline">
-              Risco {riskLabels[client.risk]}
-            </Badge>
-          </CardHeader>
-          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="flex items-start gap-3 rounded-lg border border-border p-3">
-              <Building2 className="h-4 w-4 text-muted-foreground mt-1" />
-              <div>
-                <p className="text-sm text-muted-foreground">Segmento</p>
-                <p className="font-medium">{client.segment || "Não informado"}</p>
-                {client.tradeName && <p className="text-sm text-muted-foreground">{client.tradeName}</p>}
-              </div>
-            </div>
-            <div className="flex items-start gap-3 rounded-lg border border-border p-3">
-              <Shield className="h-4 w-4 text-muted-foreground mt-1" />
-              <div>
-                <p className="text-sm text-muted-foreground">NPS</p>
-                <p className="font-medium">{client.nps || 0}</p>
-                <p className="text-sm text-muted-foreground">Último contato: {client.lastContact}</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3 rounded-lg border border-border p-3">
-              <MapPin className="h-4 w-4 text-muted-foreground mt-1" />
-              <div>
-                <p className="text-sm text-muted-foreground">Localização</p>
-                <p className="font-medium">{client.city || "Cidade não informada"}</p>
-                <p className="text-sm text-muted-foreground">{getAddressString(client.address) || "Endereço não informado"}</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3 rounded-lg border border-border p-3">
-              <PhoneCall className="h-4 w-4 text-muted-foreground mt-1" />
-              <div>
-                <p className="text-sm text-muted-foreground">Contatos</p>
-                <p className="font-medium">{contacts.length} contato(s)</p>
-                <p className="text-sm text-muted-foreground">
-                  {client.followUpFrequency ? `Follow-up ${client.followUpFrequency}` : "Frequência de acompanhamento não definida"}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Próximos passos</CardTitle>
-            <p className="text-sm text-muted-foreground">Checklist dinâmico com base nos dados deste cliente.</p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {checklistItems.map((item) => (
-              <div key={item.id}>
-                <div className="flex items-start gap-3">
-                  <Checkbox checked={item.completed} aria-label={item.title} disabled className="mt-1" />
-                  <div>
-                    <p className="font-medium leading-none">{item.title}</p>
-                    <p className="text-sm text-muted-foreground mt-1">{item.description}</p>
-                  </div>
-                </div>
-                {item.id !== checklistItems[checklistItems.length - 1].id && <Separator className="my-3" />}
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle>Projetos relacionados</CardTitle>
-            <p className="text-sm text-muted-foreground">Visão rápida dos projetos deste cliente.</p>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Card><CardHeader><CardTitle className="text-base">Próximas atividades</CardTitle></CardHeader><CardContent className="space-y-3">{nextTasks.length ? nextTasks.map((task) => <div key={task.id} className="flex items-center justify-between gap-3 rounded-md border p-3"><div className="min-w-0"><p className="truncate font-medium">{task.title}</p><p className="text-sm text-muted-foreground">{task.projectName || "Atividade do cliente"} · {task.responsible || "Sem responsável"}</p></div><span className="shrink-0 text-sm">{parseTaskDate(task.dueDate)?.toLocaleDateString("pt-BR")}</span></div>) : <p className="text-sm text-muted-foreground">Nenhuma atividade com prazo definido.</p>}</CardContent></Card>
+            <Card><CardHeader><CardTitle className="text-base">Tarefas que precisam de atenção</CardTitle></CardHeader><CardContent className="space-y-3">{attentionTasks.length ? attentionTasks.map((task) => <div key={task.id} className="flex items-center justify-between gap-3 rounded-md border border-destructive/20 p-3"><div className="min-w-0"><p className="truncate font-medium">{task.title}</p><p className="text-sm text-muted-foreground">{task.responsible || "Sem responsável"}</p></div><Badge variant={overdueTasks.some((item) => item.id === task.id) ? "destructive" : "secondary"}>{overdueTasks.some((item) => item.id === task.id) ? "Atrasada" : TASK_STATUS_LABELS[task.status]}</Badge></div>) : <p className="text-sm text-muted-foreground">Nenhuma tarefa exige atenção imediata.</p>}</CardContent></Card>
           </div>
-          <Button asChild variant="outline">
-            <Link to="/projetos">Ver todos</Link>
-          </Button>
-        </CardHeader>
-        <CardContent>
-          {clientProjects.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nenhum projeto cadastrado para este cliente.</p>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {clientProjects.map((project) => {
-                const responsibleName = project.responsible || project.responsibleNameLegacy || "Responsável pendente";
-                const forecastEndDate = project.forecastEndDate || project.endDate || "";
-                const overdue = forecastEndDate ? isPastDate(forecastEndDate) : false;
-                return (
-                  <div key={project.id} className="rounded-lg border border-border p-3 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <p className="font-medium">{project.name}</p>
-                      <Badge variant="outline">{project.phase}</Badge>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-foreground">
-                      <Avatar className="h-7 w-7">
-                        <AvatarFallback className="bg-primary/10 text-primary">{getInitials(responsibleName)}</AvatarFallback>
-                      </Avatar>
-                      <span>{responsibleName}</span>
-                    </div>
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div className="space-y-1 cursor-help">
-                            <div className="flex items-center justify-between text-xs text-muted-foreground">
-                              <span>Progresso</span>
-                              <span className="font-semibold text-foreground">{Math.round(project.progress)}%</span>
-                            </div>
-                            <Progress value={project.progress} className="h-1.5" />
-                          </div>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Calculado por tarefas, entregáveis e fases</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                    <div className="flex items-center justify-between text-xs text-muted-foreground">
-                      <span>{project.startDate || "Sem início"}</span>
-                      <span>→</span>
-                      <div className="flex items-center gap-2">
-                        <span>{forecastEndDate || "Sem previsão"}</span>
-                        {overdue && <Badge variant="destructive">Atrasado</Badge>}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          <Card><CardHeader><CardTitle className="flex items-center gap-2 text-base"><Users className="h-4 w-4" />Responsáveis</CardTitle></CardHeader><CardContent><p className="text-sm text-muted-foreground">{responsibles.length ? responsibles.join(", ") : "Nenhum responsável associado às tarefas."}</p></CardContent></Card>
+        </TabsContent>
+
+        <TabsContent value="projects"><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{clientProjects.length ? clientProjects.map((project) => <Card key={project.id}><CardHeader><CardTitle className="text-base"><Link className="hover:text-primary" to={`/projetos/${project.id}`}>{project.name}</Link></CardTitle></CardHeader><CardContent className="space-y-2 text-sm"><p>Fase: {project.phase}</p><p className="text-muted-foreground">Responsável: {project.responsible || project.responsibleNameLegacy || "Não definido"}</p><p className="text-muted-foreground">Progresso: {Math.round(project.progress)}%</p></CardContent></Card>) : <Card><CardContent className="py-10 text-sm text-muted-foreground">Nenhum projeto relacionado.</CardContent></Card>}</div></TabsContent>
+        <TabsContent value="tasks"><ScopedTasksPanel tasks={clientTasks} mode="list" defaultClientId={client.id} /></TabsContent>
+        <TabsContent value="kanban"><ScopedTasksPanel tasks={clientTasks} mode="kanban" defaultClientId={client.id} /></TabsContent>
+        <TabsContent value="meetings"><div className="grid gap-3 md:grid-cols-2">{clientMeetings.length ? clientMeetings.map((meeting) => <Link key={meeting.id} to={`/reunioes/${meeting.id}`}><Card className="h-full transition-colors hover:bg-muted/40"><CardContent className="p-4"><p className="font-medium">{meeting.title}</p><p className="mt-1 text-sm text-muted-foreground">{meeting.date} {meeting.time} · {meeting.projectName || displayName}</p><Badge className="mt-3" variant="outline">{meeting.status === "completed" ? "Concluída" : meeting.status === "cancelled" ? "Cancelada" : meeting.status === "in_progress" ? "Em andamento" : "Agendada"}</Badge></CardContent></Card></Link>) : <Card><CardContent className="py-10 text-sm text-muted-foreground">Nenhuma reunião relacionada.</CardContent></Card>}</div></TabsContent>
+        <TabsContent value="history"><ActivityFeed clientId={client.id} /></TabsContent>
+      </Tabs>
 
       <ClientDialog open={dialogOpen} onOpenChange={setDialogOpen} client={client} />
-      <DiagnosticDialog 
-        open={diagnosticDialogOpen} 
-        onOpenChange={setDiagnosticDialogOpen}
-        defaultTemplateId={kickoffTemplate?.id}
-      />
     </div>
   );
 }

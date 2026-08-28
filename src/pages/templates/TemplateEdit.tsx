@@ -16,11 +16,10 @@ export default function TemplateEdit() {
   const navigate = useNavigate();
   const { id } = useParams();
   const { templates, updateTemplate, addTemplate, templatesLoading, templatesError } = useData();
-  const { user } = useAuth();
+  const { can } = useAuth();
   const [isSaving, setIsSaving] = useState(false);
 
-  const userRole = (user?.user_metadata as Record<string, string | undefined> | undefined)?.role;
-  const isAnalyst = (userRole || "").toLowerCase().includes("analista");
+  const canUpdate = can("templates.update");
 
   const template = useMemo(() => templates.find((item) => item.id === id), [id, templates]);
 
@@ -58,8 +57,8 @@ export default function TemplateEdit() {
   }
 
   const handleSubmit = async (payload: Parameters<typeof updateTemplate>[1], action: TemplateBuilderAction) => {
-    if (isAnalyst) {
-      toast.error("Analistas não podem criar, editar ou publicar templates.");
+    if (!canUpdate) {
+      toast.error("Você não tem permissão para editar ou publicar templates.");
       return;
     }
 

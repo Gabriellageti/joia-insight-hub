@@ -160,10 +160,9 @@ const sanitizeFileTypesInput = (value: string) =>
     .filter(Boolean);
 
 export function TemplateBuilder({ initialTemplate, onSubmit, isSubmitting }: TemplateBuilderProps) {
-  const { user } = useAuth();
-  const userRole = (user?.user_metadata as Record<string, string | undefined> | undefined)?.role;
-  const canArchive = Boolean(userRole && (userRole.toLowerCase().includes("admin") || userRole.toLowerCase().includes("gestor")));
-  const isAnalyst = (userRole || "").toLowerCase().includes("analista");
+  const { can } = useAuth();
+  const canEditTemplates = can("templates.update");
+  const canArchive = can("templates.archive");
   const [formState, setFormState] = useState<TemplateFormState>({
     name: initialTemplate?.name || "",
     description: initialTemplate?.description || "",
@@ -674,8 +673,8 @@ export function TemplateBuilder({ initialTemplate, onSubmit, isSubmitting }: Tem
   };
 
   const handleAction = (action: TemplateBuilderAction) => {
-    if (isAnalyst) {
-      toast.error("Analistas não podem criar, editar ou publicar templates.");
+    if (!canEditTemplates) {
+      toast.error("Você não tem permissão para criar, editar ou publicar templates.");
       return;
     }
 
@@ -692,8 +691,8 @@ export function TemplateBuilder({ initialTemplate, onSubmit, isSubmitting }: Tem
   };
 
   const handlePublishConfirm = () => {
-    if (isAnalyst) {
-      toast.error("Analistas não podem criar, editar ou publicar templates.");
+    if (!canEditTemplates) {
+      toast.error("Você não tem permissão para criar, editar ou publicar templates.");
       setPublishDialogOpen(false);
       return;
     }
@@ -1405,7 +1404,7 @@ export function TemplateBuilder({ initialTemplate, onSubmit, isSubmitting }: Tem
           </Alert>
         )}
         <Card>
-          {isAnalyst && (
+          {!canEditTemplates && (
             <Alert variant="destructive" className="mx-6 mt-6">
               <AlertCircle className="h-4 w-4" />
               <AlertTitle>Acesso restrito</AlertTitle>
@@ -1428,7 +1427,7 @@ export function TemplateBuilder({ initialTemplate, onSubmit, isSubmitting }: Tem
                 variant="outline"
                 className="gap-2"
                 onClick={() => handleAction("draft")}
-                disabled={isAnalyst || submitting}
+                disabled={!canEditTemplates || submitting}
               >
                 <Save className="h-4 w-4" />
                 Salvar rascunho
@@ -1437,7 +1436,7 @@ export function TemplateBuilder({ initialTemplate, onSubmit, isSubmitting }: Tem
                 variant="outline"
                 className="gap-2"
                 onClick={() => handleAction("preview")}
-                disabled={isAnalyst || submitting}
+                disabled={!canEditTemplates || submitting}
               >
                 <Eye className="h-4 w-4" />
                 Preview completo
@@ -1446,12 +1445,12 @@ export function TemplateBuilder({ initialTemplate, onSubmit, isSubmitting }: Tem
                 variant="secondary"
                 className="gap-2"
                 onClick={() => handleAction("duplicate")}
-                disabled={isAnalyst || submitting}
+                disabled={!canEditTemplates || submitting}
               >
                 <Copy className="h-4 w-4" />
                 Duplicar
               </Button>
-              <Button className="gap-2" onClick={() => handleAction("publish")} disabled={isAnalyst || submitting}>
+              <Button className="gap-2" onClick={() => handleAction("publish")} disabled={!canEditTemplates || submitting}>
                 <Send className="h-4 w-4" />
                 Publicar
               </Button>
@@ -1538,7 +1537,7 @@ export function TemplateBuilder({ initialTemplate, onSubmit, isSubmitting }: Tem
               <Button variant="outline" onClick={() => setPublishDialogOpen(false)}>
                 Cancelar
               </Button>
-              <Button onClick={handlePublishConfirm} disabled={isAnalyst}>
+              <Button onClick={handlePublishConfirm} disabled={!canEditTemplates}>
                 Publicar template
               </Button>
             </DialogFooter>

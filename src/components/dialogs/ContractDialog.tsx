@@ -146,9 +146,9 @@ export function ContractDialog({ open, onOpenChange, contract }: ContractDialogP
 
     try {
       if (isEditing && contract) {
-        updateContract(contract.id, payload);
+        await updateContract(contract.id, payload);
       } else {
-        addContract(payload);
+        await addContract(payload);
 
         if (generateReceivables) {
           const labelBase =

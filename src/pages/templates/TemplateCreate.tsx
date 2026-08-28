@@ -12,15 +12,14 @@ import { useAuth } from "@/contexts/AuthContext";
 export default function TemplateCreate() {
   const navigate = useNavigate();
   const { addTemplate } = useData();
-  const { user } = useAuth();
+  const { can } = useAuth();
   const [isSaving, setIsSaving] = useState(false);
 
-  const userRole = (user?.user_metadata as Record<string, string | undefined> | undefined)?.role;
-  const isAnalyst = (userRole || "").toLowerCase().includes("analista");
+  const canCreate = can("templates.create");
 
   const handleSubmit = async (template: Parameters<typeof addTemplate>[0], action: TemplateBuilderAction) => {
-    if (isAnalyst) {
-      toast.error("Analistas não podem criar, editar ou publicar templates.");
+    if (!canCreate) {
+      toast.error("Você não tem permissão para criar ou publicar templates.");
       return;
     }
 

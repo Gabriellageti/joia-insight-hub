@@ -27,7 +27,7 @@ export function getConsultingDayMetrics(tasks: Task[], now = new Date()): Consul
   }).length;
   const total = deliverables.length;
   const pending = total - completed;
-  const started = deliverables.some((task) => !["backlog", "next"].includes(task.status));
+  const started = deliverables.some((task) => task.status !== "not_started");
   const situation: ConsultingDaySituation = overdue > 0
     ? "overdue"
     : total > 0 && completed === total

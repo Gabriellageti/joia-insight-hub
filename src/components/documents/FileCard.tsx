@@ -27,6 +27,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { FileItem, EvidenceStatus } from "@/types/documents";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 interface FileCardProps {
   file: FileItem;
@@ -91,10 +93,27 @@ export function FileCard({
   onReject,
   onDelete,
 }: FileCardProps) {
+  const [opening, setOpening] = useState(false);
   const { icon: FileIcon, colorClass } = getFileIcon(file.mimeType);
   const isEvidence = file.tipo === "Evidência";
   const displayTags = file.tags.slice(0, 2);
   const remainingTags = file.tags.length - 2;
+
+  const openDocument = async () => {
+    if (!file.url || opening) return;
+    setOpening(true);
+    try {
+      const marker = "/documents/";
+      const path = file.url.includes(marker) ? decodeURIComponent(file.url.split(marker)[1]) : file.url;
+      const { data, error } = await supabase.storage.from("documents").createSignedUrl(path, 60);
+      if (error) throw error;
+      window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+    } catch {
+      toast.error("Não foi possível abrir este documento.");
+    } finally {
+      setOpening(false);
+    }
+  };
 
   return (
     <Card className="hover:shadow-md transition-shadow group">
@@ -171,21 +190,18 @@ export function FileCard({
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                aria-label={`Abrir ações de ${file.nomeExibicao}`}
               >
                 <MoreVertical className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48 bg-popover z-50">
               <DropdownMenuItem 
-                onClick={() => {
-                  if (file.url) {
-                    window.open(file.url, "_blank");
-                  }
-                }}
-                disabled={!file.url}
+                onClick={() => void openDocument()}
+                disabled={!file.url || opening}
               >
                 <Download className="h-4 w-4 mr-2" />
-                Abrir / Baixar
+                {opening ? "Abrindo..." : "Abrir / Baixar"}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => onRename?.(file.id, file.nomeExibicao)}>
                 <Pencil className="h-4 w-4 mr-2" />
