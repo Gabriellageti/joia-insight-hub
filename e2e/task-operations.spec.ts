@@ -86,14 +86,12 @@ test("CRUD e persistência do Kanban usam o mesmo registro", async ({ page }) =>
 
   const card = page.getByText("Auditoria financeira revisada", { exact: true }).locator("xpath=ancestor::*[@role='button'][1]");
   const inProgress = page.locator('section[aria-labelledby="column-in_progress"]');
-  const cardBox = await card.boundingBox();
-  const targetBox = await inProgress.boundingBox();
-  if (!cardBox || !targetBox) throw new Error("Kanban card or target column is not visible");
-  await page.mouse.move(cardBox.x + cardBox.width / 2, cardBox.y + cardBox.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(cardBox.x + cardBox.width / 2 + 20, cardBox.y + cardBox.height / 2, { steps: 4 });
-  await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, { steps: 12 });
-  await page.mouse.up();
+  await card.focus();
+  await expect(card).toBeFocused();
+  await page.keyboard.press("Space");
+  for (let step = 0; step < 14; step += 1) await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("Space");
+  await expect.poll(() => backend.tasks[0].status).toBe("in_progress");
   await expect(inProgress.getByText("Auditoria financeira revisada", { exact: true })).toBeVisible();
   await page.reload();
   await expect(page.locator('section[aria-labelledby="column-in_progress"]').getByText("Auditoria financeira revisada", { exact: true })).toBeVisible();

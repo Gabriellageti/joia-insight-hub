@@ -39,7 +39,7 @@ export function TaskCard({ task, saving = false, onClick, onDelete, onToggleComp
       ref={setNodeRef}
       aria-busy={saving}
       style={transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : undefined}
-      className={`group cursor-grab touch-none transition-shadow hover:shadow-md active:cursor-grabbing ${saving ? "pointer-events-none opacity-70" : ""} ${isDragging ? "z-50 opacity-60 shadow-lg" : ""}`}
+      className={`group cursor-grab touch-none select-none transition-shadow hover:shadow-md active:cursor-grabbing ${saving ? "pointer-events-none opacity-70" : ""} ${isDragging ? "z-50 opacity-60 shadow-lg" : ""}`}
       onClick={onClick}
       {...listeners}
       {...attributes}
