@@ -966,6 +966,7 @@ export default function Financeiro() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead>Título</TableHead>
                       <TableHead>Cliente</TableHead>
                       <TableHead>Projeto</TableHead>
                       <TableHead>Valor</TableHead>
@@ -989,6 +990,7 @@ export default function Financeiro() {
                         : contract.installments?.filter((i) => i.status === "paid").length || 0;
                       return (
                         <TableRow key={contract.id}>
+                          <TableCell className="font-medium">{contract.title}</TableCell>
                           <TableCell className="font-medium">
                             {contract.clientName || getClientName(contract.clientId)}
                           </TableCell>
