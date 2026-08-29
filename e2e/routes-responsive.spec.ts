@@ -77,7 +77,7 @@ async function installAuthorizedBackend(page: Page) {
 const routes = [
   "/", "/meu-dia", "/dashboard", "/minhas-tarefas", "/clientes", "/projetos", "/diagnostico", "/templates", "/plano-acao",
   "/indicadores", "/reunioes", "/documentos", "/playbooks", "/equipe", "/pendencias", "/atividades", "/relatorios/operacional",
-  "/financeiro", "/marketing", "/configuracoes", "/rota-inexistente",
+  "/financeiro", "/marketing", "/comercial", "/configuracoes", "/rota-inexistente",
 ];
 const widths = [320, 375, 768, 1024, 1440];
 

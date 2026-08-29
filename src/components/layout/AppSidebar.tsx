@@ -54,6 +54,7 @@ const mainNavItems = [
   { title: "Minhas Tarefas", url: "/minhas-tarefas", icon: ClipboardCheck },
   { title: "Pendências", url: "/pendencias", icon: Siren },
   { title: "Reuniões", url: "/reunioes", icon: Calendar },
+  { title: "Comercial", url: "/comercial", icon: Megaphone },
 ];
 
 const supportNavItems = [
@@ -71,7 +72,6 @@ const managementNavItems = [
   { title: "Relatório Operacional", url: "/relatorios/operacional", icon: FileBarChart },
   { title: "Relatórios de Consultoria", url: "/relatorios/consultoria", icon: FileText },
   { title: "Financeiro", url: "/financeiro", icon: DollarSign },
-  { title: "Marketing", url: "/marketing", icon: Megaphone },
 ];
 
 export function AppSidebar() {

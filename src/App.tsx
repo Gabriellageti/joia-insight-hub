@@ -33,6 +33,7 @@ const Atividades = lazy(() => import("./pages/Atividades"));
 const RelatorioOperacional = lazy(() => import("./pages/RelatorioOperacional"));
 const Financeiro = lazy(() => import("./pages/Financeiro"));
 const Marketing = lazy(() => import("./pages/Marketing"));
+const Commercial = lazy(() => import("./pages/Commercial"));
 const Configuracoes = lazy(() => import("./pages/Configuracoes"));
 const Auth = lazy(() => import("./pages/Auth"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -119,6 +120,7 @@ const App = () => (
                           <Route path="/atividades" element={<AdminRoute><Atividades /></AdminRoute>} />
                           <Route path="/relatorios/operacional" element={<AdminRoute><RelatorioOperacional /></AdminRoute>} />
                           <Route path="/financeiro" element={<AdminRoute><Financeiro /></AdminRoute>} />
+                          <Route path="/comercial" element={<Commercial />} />
                           <Route path="/marketing" element={<AdminRoute><Marketing /></AdminRoute>} />
                           <Route path="/configuracoes" element={<AdminRoute><Configuracoes /></AdminRoute>} />
                           <Route path="*" element={<NotFound />} />

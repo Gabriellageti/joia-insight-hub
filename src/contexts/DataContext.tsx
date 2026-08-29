@@ -501,6 +501,16 @@ const mapSupabaseIndicatorToLegacy = (indicator: IndicatorRow): Indicator => ({
   createdAt: formatDateFromIso(indicator.created_at),
 });
 
+const toLegacyLeadStatus = (status?: string | null): Lead["status"] => {
+  const normalized = status?.toLowerCase();
+  if (normalized === "won") return "won";
+  if (normalized === "lost") return "lost";
+  if (normalized === "meeting") return "meeting";
+  if (["proposal", "negotiation"].includes(normalized || "")) return "proposal";
+  if (["contacted", "first_contact", "qualification"].includes(normalized || "")) return "contacted";
+  return "new";
+};
+
 const mapSupabaseLeadToLegacy = (lead: LeadRow): Lead => ({
   id: lead.id,
   company: lead.company || "",
@@ -508,7 +518,7 @@ const mapSupabaseLeadToLegacy = (lead: LeadRow): Lead => ({
   email: lead.email || undefined,
   phone: lead.phone || undefined,
   source: lead.source || "Inbound",
-  status: (lead.status?.toLowerCase() as Lead["status"]) || "new",
+  status: toLegacyLeadStatus(lead.status),
   value: (lead as { value?: number }).value || 0,
   nextAction: (lead as { next_action?: string }).next_action || "",
   nextActionDate: (lead as { next_action_date?: string }).next_action_date || undefined,
@@ -2099,7 +2109,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [toast, user, isAdmin]);
 
   useEffect(() => {
-    if (!user || !isAdmin) {
+    if (!user) {
       setEmployees([]);
       return;
     }
@@ -2120,7 +2130,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     };
 
     fetchEmployees();
-  }, [toast, user, isAdmin]);
+  }, [toast, user]);
 
   // Fetch indicators from Supabase
   useEffect(() => {
