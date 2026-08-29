@@ -67,6 +67,7 @@ const managementNavItems = [
   { title: "Equipe", url: "/equipe", icon: UserCog },
   { title: "Atividades", url: "/atividades", icon: Activity },
   { title: "Relatório Operacional", url: "/relatorios/operacional", icon: FileBarChart },
+  { title: "Relatórios de Consultoria", url: "/relatorios/consultoria", icon: FileText },
   { title: "Financeiro", url: "/financeiro", icon: DollarSign },
   { title: "Marketing", url: "/marketing", icon: Megaphone },
 ];

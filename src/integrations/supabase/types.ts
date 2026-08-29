@@ -429,6 +429,91 @@ export type Database = {
           },
         ]
       }
+      consulting_reports: {
+        Row: {
+          client_id: string
+          created_at: string
+          created_by: string | null
+          finalized_at: string | null
+          finalized_by: string | null
+          id: string
+          period_end: string
+          period_start: string
+          project_ids: string[]
+          sections: Json
+          source_snapshot: Json
+          status: string
+          title: string
+          updated_at: string
+          updated_by: string | null
+          version_group_id: string
+          version_number: number
+          workspace_id: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          created_by?: string | null
+          finalized_at?: string | null
+          finalized_by?: string | null
+          id?: string
+          period_end: string
+          period_start: string
+          project_ids?: string[]
+          sections?: Json
+          source_snapshot?: Json
+          status?: string
+          title?: string
+          updated_at?: string
+          updated_by?: string | null
+          version_group_id: string
+          version_number?: number
+          workspace_id?: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          finalized_at?: string | null
+          finalized_by?: string | null
+          id?: string
+          period_end?: string
+          period_start?: string
+          project_ids?: string[]
+          sections?: Json
+          source_snapshot?: Json
+          status?: string
+          title?: string
+          updated_at?: string
+          updated_by?: string | null
+          version_group_id?: string
+          version_number?: number
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consulting_reports_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consulting_reports_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "operational_client_health"
+            referencedColumns: ["client_id"]
+          },
+          {
+            foreignKeyName: "consulting_reports_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       content_items: {
         Row: {
           author: string | null
@@ -3627,6 +3712,10 @@ export type Database = {
         Args: { _channel: string; _comment_id: string; _recipient_id: string }
         Returns: boolean
       }
+      create_consulting_report_version: {
+        Args: { p_report_id: string }
+        Returns: string
+      }
       create_financial_recurring_expense: {
         Args: {
           p_amount: number
@@ -3671,6 +3760,15 @@ export type Database = {
           p_name: string
           p_source_project_id: string
           p_start_date: string
+        }
+        Returns: string
+      }
+      generate_consulting_report: {
+        Args: {
+          p_client_id: string
+          p_period_end: string
+          p_period_start: string
+          p_project_ids?: string[]
         }
         Returns: string
       }
