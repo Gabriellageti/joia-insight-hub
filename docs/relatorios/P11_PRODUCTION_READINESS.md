@@ -1,249 +1,195 @@
 # P11 — Production Readiness Review
 
-Data: 29/08/2026
-
-Branch: `codex/p4-p10-platform`
-
+Data: 29/08/2026  
+Branch: `codex/p4-p10-platform`  
+Projeto: `joia-ops-live` / `joia-solucoes-projects`  
+Domínio: `https://joia-ops-live.vercel.app`  
+Deployment: `dpl_8EWobf18nNvFCRFwWbQUfvPtN2A4`  
 Decisão formal: **NO-GO**
 
 ## Resumo executivo
 
-O P11 reduziu riscos graves e comprovou no banco real o isolamento central: duas policies compiladas incorretamente foram corrigidas; o motor temporal deixou de depender do navegador e passou a executar por `pg_cron`; o trigger de automações que bloqueava criação de clientes foi reparado; o runner manual passou a exigir Gestor; sessão/PWA/API foram endurecidos; e a matriz ofensiva fechou com **29 PASS e 0 FAIL**.
+O rollout coordenado foi executado no projeto oficial. A API compatível foi publicada e validada em deployment isolado; a migration `20260829164559_p11_ai_audit_server_boundary.sql` foi aplicada somente depois desse gate; o mesmo smoke autenticado passou após a migration; e então o deployment foi promovido ao domínio oficial.
 
-Mesmo assim, o sistema **não pode ser declarado pronto para uso oficial**. GitHub e Vercel continuam fora do controle da conta atual, o deployment final não foi publicado/testado, o E2E autenticado de produção não ocorreu, backup/PITR não foi comprovado e a fronteira server-only da auditoria da IA ainda aguarda rollout coordenado. Nenhum desses itens foi transformado artificialmente em aprovação.
+O domínio está `Ready`, `/api/health` responde saudável, os headers de segurança estão presentes e a chave privilegiada Supabase permanece exclusivamente server-side. Storage, RLS, concorrência de CRM/templates, sessão, PWA, rate limit, request ID, fallback e audit trail receberam ensaios reais com fixtures sintéticas removidas ao final.
 
-## Pontuação
+O resultado permanece **NO-GO**. O AI Gateway aceita OIDC, mas retorna 403 porque a equipe Vercel não possui cartão válido cadastrado para liberar créditos. A IA opera em fallback e os ensaios que dependem do modelo real continuam **BLOQUEADO — NÃO VALIDADO**. Backup/PITR/restore, GitHub e parte do smoke funcional visual de produção também seguem sem evidência completa. Não iniciar P12.
+
+## Pontuação recalculada
 
 | Área | Nota | Fundamentação |
 |---|---:|---|
-| Segurança | 78/100 | RLS real atacada, grants e policies críticas corrigidos; faltam HTTP/E2E final, IA real e Auth administrativo |
-| Confiabilidade | 72/100 | Suítes locais verdes, Error Boundary e recuperação; faltam longa duração, multiaba e falhas reais de produção |
-| Integridade de dados | 80/100 | Constraints/RLS/imutabilidade aprovadas no SQL; concorrência completa de CRM/templates/documentos não executada por API |
-| Automação | 94/100 | Cron real ativo, três execuções recentes aprovadas, lock/idempotência e health comprovados |
-| PWA | 86/100 | Instalação/offline/cache sensível aprovados localmente; atualização entre deployments e troca A/B real pendentes |
-| Observabilidade | 68/100 | Health, request IDs, logs sanitizados e `automation_runs`; plataforma/log drain não acessíveis |
-| Performance | 66/100 | Build dividido por rotas e lint DB; faltam métricas reais, carga e EXPLAIN das rotas quentes |
-| Deploy | 20/100 | Build local aprovado, mas projeto Vercel, domínio, envs, proteção, promoção e rollback não controlados |
+| Segurança | 90/100 | Boundary server-only, RLS, Storage e headers reais aprovados; IA real e Auth administrativo pendentes |
+| Confiabilidade | 84/100 | Health, fallback, rate limit, sessão, multiaba e offline reais; falta longa duração/provedor |
+| Integridade de dados | 92/100 | CRM/templates concorrentes produziram efeito único; matriz ofensiva sem falhas |
+| Automação | 94/100 | Cron, locks, idempotência e health comprovados |
+| PWA | 93/100 | Manifesto, SW, offline, logout/login e multiaba aprovados no domínio oficial |
+| Observabilidade | 82/100 | Health, request IDs e audit trail reais; falta drain/alerta |
+| Performance | 68/100 | Build/navegação aprovados; carga e Web Vitals reais pendentes |
+| Deploy | 88/100 | Projeto, envs, build, promoção e domínio validados; GitHub/rollback completo pendentes |
 
-## Estado inicial
+## Environment Variables
 
-- P4–P10 estavam em sete commits locais após a `main`, com remote GitHub inacessível.
-- `.vercel/project.json` referenciava um projeto/equipe não visíveis na conta conectada.
-- Automações temporais eram acionadas por abertura/foco/intervalo do navegador.
-- Storage e CRM tinham policies cuja expressão compilada perdia a correlação de workspace/path.
-- A Function da IA não limitava o corpo HTTP e não tinha request ID estruturado.
-- Não havia health endpoint nem política de headers em `vercel.json`.
-- O Service Worker já era conservador: apenas shell estático e Google Fonts.
+A auditoria completa está em `P11_ENVIRONMENT_VARIABLES.md`. Nenhum valor secreto é reproduzido.
 
-Detalhes e classificação P0–P3 estão em `P11_AUDITORIA_INICIAL.md`.
+| Variável | Consumidor | Camada | Preview | Production | Sensível |
+|---|---|---|---|---|---|
+| `VITE_SUPABASE_URL` | SPA | Frontend | Configurada | Configurada | Não |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | SPA | Frontend | Configurada | Configurada | Não |
+| `SUPABASE_URL` | `/api/assistant`, `/api/health` | Backend | Configurada | Configurada | Não |
+| `SUPABASE_ANON_KEY` | APIs com RLS | Backend | Configurada | Configurada | Não |
+| `SUPABASE_SERVICE_ROLE_KEY` | conclusão do audit trail | Backend | Encriptada | Encriptada | **Sim** |
+| `VERCEL_OIDC_TOKEN` | AI Gateway | Plataforma/backend | Automática | Automática | **Sim** |
+| `AI_GATEWAY_API_KEY` | nenhum | Não utilizada | Não configurada | Não configurada | Seria sensível |
+| `VITE_SUPABASE_PROJECT_ID` | nenhum runtime | Não utilizada | Não configurada | Não configurada | Não |
 
-## Problemas e vulnerabilidades encontrados
+`SUPABASE_SERVICE_ROLE_KEY` não possui prefixo `VITE_`, não é referenciada no frontend, não foi incluída no bundle, não é devolvida por endpoint e não aparece em logs. O nome legado é apenas o contrato da aplicação; o valor configurado é uma chave secreta moderna do Supabase.
 
-### Corrigidos
+## AI Gateway / OIDC
 
-- **P0:** Storage comparava colunas da mesma linha de documento e não o path do objeto solicitado.
-- **P0:** CRM comparava `lead.workspace_id` consigo mesmo.
-- **P0:** trigger polimórfico acessava campos inexistentes e impedia INSERT em clientes.
-- **P0 arquitetural:** automações temporais dependiam do navegador.
-- **P1:** runner público tinha grant implícito amplo e não impunha papel Gestor.
-- **P1:** runner antigo não isolava/persistia falha por item adequadamente.
-- **P1:** payload da IA podia ser parseado sem limite de bytes.
-- **P1:** ausência de request/correlation ID, logs sanitizados e health endpoint.
-- **P1:** ausência de headers de defesa em profundidade.
-- **P2:** rascunhos locais e cache React Query não eram explicitamente limpos na troca de sessão.
+- O código usa AI SDK 7 com `openai/gpt-5.6-luna`, sem provider/API key própria.
+- A Vercel injeta `VERCEL_OIDC_TOKEN`; não foi inventada `AI_GATEWAY_API_KEY`.
+- Uma chamada direta alcançou o Gateway e retornou HTTP 403: é necessário cadastrar cartão válido na equipe para liberar créditos.
+- Isso comprova OIDC efetivo e identifica billing como o bloqueio, não ausência de secret.
 
-### Pendentes
+## Rollout da API e migration
 
-- **P0:** fonte remota GitHub inacessível.
-- **P0:** deployment Vercel oficial inacessível e não publicado.
-- **P0:** E2E autenticado e smoke test no domínio final não executados.
-- **P1:** `complete_ai_interaction` continua diretamente executável por `authenticated` no banco real; migration corretiva aguarda API/env coordenadas.
-- **P1:** backup/PITR e restore não comprovados.
-- **P1:** proteção contra senhas vazadas do Supabase Auth aparece desabilitada no advisor e exige acesso administrativo.
-- **P1:** duplicidade por chaves de negócio entre leads diferentes continua sem constraint definida; a regra precisa de decisão de dados antes de criar unicidade.
-- **P2:** drift histórico anterior a julho entre versões locais/remotas; P4–P11 recentes estão alinhadas, exceto a migration de IA deliberadamente pendente.
-- **P2:** oito funções legadas `SECURITY DEFINER` usam `search_path` incluindo `public`; não há grant `PUBLIC`/`anon`, mas devem migrar para path vazio em manutenção controlada.
+1. API P11 preparada com janela de compatibilidade pré-migration.
+2. `npm run check`: lint, typecheck, 136 unitários, 9 componentes, build e PWA — PASS.
+3. Deployment isolado `Ready`.
+4. Smoke pré-migration — PASS; fallback controlado e audit concluído.
+5. Migration aplicada e registrada no histórico remoto.
+6. Catálogo pós-migration: assinatura antiga ausente; `authenticated=false`, `anon=false`, `service_role=true` para `EXECUTE`.
+7. Smoke pós-migration — PASS, provando acesso server-side ao secret.
+8. Promoção para `https://joia-ops-live.vercel.app`.
+9. Smoke no domínio oficial — PASS.
 
-## Correções realizadas
+Não houve falha da API/boundary que exigisse rollback. Uma reversão completa exigiria restaurar também a assinatura antiga conforme `P11_ROLLBACK.md`; reverter somente a aplicação deixaria a API antiga incompatível com o banco endurecido.
 
-### Banco aplicado no projeto real
+## Headers no domínio real
 
-1. `20260829163214_p11_storage_crm_policy_hardening.sql`: recria policies com aliases externos qualificados; revoga runner de `PUBLIC`/`anon`.
-2. `20260829163736_p11_server_side_automation_runner.sql`: habilita `pg_cron`, cria runner global/por workspace, lock, idempotência, isolamento de falhas e job a cada cinco minutos.
-3. `20260829164116_p11_health_observability.sql`: registra saúde do scheduler e expõe somente estado genérico.
-4. `20260829165324_p11_automation_manual_manager_boundary.sql`: execução manual exige nível de Gestor ou superior.
-5. `20260829165722_p11_safe_polymorphic_automation_trigger.sql`: corrige trigger genérico sem acessar campos inexistentes.
-
-As cinco aparecem na tabela real `supabase_migrations.schema_migrations`.
-
-### Banco preparado, não aplicado
-
-`20260829164559_p11_ai_audit_server_boundary.sql` remove a conclusão de auditoria da IA do papel `authenticated` e a concede somente a `service_role`. É uma alteração correta, mas incompatível com a API antiga em produção. Sequência obrigatória: cadastrar `SUPABASE_SERVICE_ROLE_KEY` somente em Preview/Production backend, publicar a API P11, aplicar a migration no mesmo change window e executar smoke test/rollback. Estado: **BLOQUEADO — NÃO VALIDADO**.
-
-### Aplicação/API/PWA
-
-- `api/assistant.ts`: limite de 64 KiB por `Content-Length` e stream, content type, respostas 413/415/429, request ID, duração e logs sem prompt/token/cookie.
-- `api/health.ts`: GET/HEAD com timeout, `no-store` e status genérico de API, banco e scheduler.
-- `vercel.json`: CSP, anti-framing, nosniff, referrer e permissions policy; validação no domínio final pendente.
-- `src/hooks/useNotifications.ts`: remove execução temporal pelo navegador; mantém apenas atualização de notificações.
-- `src/lib/session-security.ts`: remove rascunhos confidenciais, limpa `sessionStorage` e solicita purge privado ao Service Worker.
-- `src/App.tsx`: limpa React Query quando o usuário muda ou encerra sessão.
-- `src/sw.js`: recebe `PURGE_PRIVATE_DATA`; nenhuma estratégia persiste endpoints autenticados.
-
-## Testes ofensivos
-
-- Script SQL transacional no projeto real: **29 PASS, 0 FAIL**.
-- Abrange clientes, projetos, tarefas, reassignment, reunião, documento, path conhecido de Storage, relatório finalizado, CRM, automações e contexto da IA.
-- Controle positivo provou que Admin B acessa o próprio workspace.
-- Fixtures revertidos deliberadamente; nenhum dado E2E persistiu.
-- Evidência detalhada em `P11_SECURITY_ATTACK_MATRIX.md`.
-
-Signed URL real, REST no domínio, versão antiga, conversão CRM completa e prompt injection pelo modelo permanecem **BLOQUEADOS — NÃO VALIDADOS**.
-
-## Auditoria `SECURITY DEFINER`
-
-O catálogo real contém 49 funções `SECURITY DEFINER` nos schemas `public`/`private`:
-
-- 41 usam `search_path=""`;
-- 8 legadas incluem `public` no path;
-- 0 são executáveis por `PUBLIC`;
-- 0 são executáveis por `anon`;
-- helpers/trigger/runner privados não expostos permanecem sem execução autenticada;
-- RPCs expostas validam `auth.uid`, workspace e/ou papel no corpo.
-
-Achado aberto: `public.complete_ai_interaction` ainda é executável por `authenticated`; correção pronta e não aplicada pelo motivo de rollout descrito acima. O runner manual, `begin_ai_interaction`, CRM e refresh de notificações são exposições intencionais com autorização interna. Funções de trigger justificam `SECURITY DEFINER` para escrita auditável/imutável e têm execução direta revogada.
-
-## RPCs e endpoints
-
-- `/api/assistant`: autentica token com `getUser`, monta contexto via sessão RLS, valida UUIDs/payload, possui rate limit de 10 interações/minuto no início transacional e limite HTTP de 64 KiB. O cliente confiável fica reservado à conclusão do audit trail.
-- `/api/health`: somente leitura de estado genérico, timeout de 3 s, sem detalhes internos.
-- Edge Function `notify-task-comment`: inventariada; valida assinatura/segredo no servidor e usa fluxo de claim/release. Execução real de produção não pôde ser observada.
-- RPCs críticas rejeitam `anon`; `PUBLIC` implícito foi removido do runner.
-
-## Testes de concorrência e idempotência
-
-- Dez chamadas sequenciais no mesmo comando SQL mantiveram 12 `automation_runs` e zero falhas: nenhuma notificação/efeito duplicado.
-- Duas instâncias do runner foram disparadas em paralelo; o advisory lock serializou o workspace e não houve crescimento do conjunto idempotente.
-- O design usa chave única de idempotência, advisory lock transacional, `correlation_id`, `causation_id` e profundidade máxima para proteção contra loop.
-- CRM mesma lead possui `FOR UPDATE` e retorno da conversão existente; templates usam constraints/`ON CONFLICT`. A concorrência HTTP real dessas rotas não foi executada e permanece bloqueada.
-
-## Testes de automações
-
-- Job `joia-p11-temporal-automations` ativo em `*/5 * * * *`.
-- Execuções reais às 17:00, 17:05 e 17:10 UTC: três `succeeded` consecutivas.
-- Health mais recente: `automation-scheduler=healthy`.
-- O primeiro ciclo real processou um workspace e encontrou 12 efeitos já deduplicados, comprovando execução sem navegador.
-- Falhas por item são registradas em `automation_runs` com estado/motivo sanitizado; o health captura falha global.
-
-## Testes de PWA
-
-- Manifesto, prompt instalável, orientação iPhone e navegação offline: aprovados.
-- Cache Storage foi inspecionado após resposta privada sintética: nenhum `/api`, `/rest/v1` ou `/auth/v1` persistido.
-- Após remoção da interceptação e entrada offline, a API privada retornou erro de rede, não resposta cacheada.
-- Logout remove rascunhos de reunião, `sessionStorage`, cache em memória por usuário e caches privados nomeados; preferência de instalação e estado Auth gerenciado pelo Supabase não são apagados indevidamente.
-- Atualização v1 → novo deployment e troca real Usuário A → B permanecem bloqueadas sem deployment/contas E2E.
-
-## Testes da IA
-
-- Testes unitários confirmam contexto via JWT/RLS, fontes rastreáveis, fallback honesto e ausência de mutação automática.
-- Ataques SQL a contexto de cliente/reunião/relatório de outro workspace foram negados.
-- Prompt trata contexto e histórico como dados não confiáveis e proíbe afirmar que executou ações.
-- Gateway/OIDC/modelo, timeout do provedor, prompt injection e custo no deployment real: **BLOQUEADOS — NÃO VALIDADOS**.
-
-## Performance
-
-- Build de produção aprovado e rotas carregadas de forma lazy.
-- O precache PWA contém 137 entradas, cerca de 3,47 MiB.
-- Há chunks grandes: núcleo aproximadamente 466–485 KiB, indicadores aproximadamente 403 KiB e jsPDF aproximadamente 399 KiB antes de gzip. A divisão por rota limita impacto inicial, mas merece orçamento de bundle.
-- `db lint` encontrou somente warning legado em `create_financial_recurring_expense`: variável `month_offset` sombreada/não usada.
-- Métricas Web Vitals, carga, N+1 e `EXPLAIN ANALYZE` em volume real não foram executados; sem índices especulativos adicionados.
-
-## Observabilidade
-
-- Error Boundary global com retry e reset por rota já existia e foi aprovado em componentes/E2E sem telas brancas.
-- IA passa `X-Request-Id`, registra rota/status/duração/user ID e omite conteúdo sensível.
-- Automação mantém execução, resultado, timestamps, erro sanitizado e health.
-- Health endpoint não expõe segredo ou mensagem SQL detalhada.
-- Vercel logs/drain, retenção e alertas: bloqueados pelo acesso ao projeto.
-
-## Dependências
-
-`npm audit` encontrou 0 critical, 0 high, 2 moderate. Ambas derivam do React Router 6; a correção automática exige migração major para 7. O risco SSR hydration não se aplica à SPA Vite atual. O open redirect deve ser mitigado evitando navegação para entrada externa não validada e resolvido em atualização planejada. Conforme o escopo, não houve upgrade major apenas para remover warning.
-
-## Backup e rollback
-
-- Backup/PITR, retenção e restore: **BLOQUEADO — NÃO VALIDADO** por ausência de acesso administrativo ao projeto Supabase.
-- As migrations aplicadas são não destrutivas e transacionais; não removem dados de negócio.
-- O plano de reversão/fail-closed está em `P11_ROLLBACK.md`.
-- Rollback/promoção Vercel não pode ser testado sem o projeto oficial.
-
-## Deployment, Git/GitHub, Vercel e Supabase
-
-### Git/GitHub
-
-- Remote: `https://github.com/Gabriellageti/joia-insight-hub.git`.
-- Conta ativa do GitHub CLI: `gustavosantosfip`; contas `Gabriellageti` e `joiasolucoes-alt` existem localmente, mas não estão ativas.
-- Erro: `Repository not found`.
-- Necessário: conceder acesso à conta correta ou informar o remote oficial. Depois executar fetch, push da branch, PR/revisão, merge sem force push e confirmar SHA.
-
-### Vercel
-
-- Vínculo local antigo: projeto `joia-labs`, equipe antiga não visível.
-- Equipe disponível: “Joia Solucoes' projects”, zero projetos listados.
-- Não foi possível validar domínio, Deployment Protection, envs Development/Preview/Production, Node efetivo, headers, Functions, logs, branch de produção ou rollback.
-- Necessário: acesso/transferência ao projeto oficial; não remover proteção sem determinar se é política desejada.
-
-### Supabase
-
-- SQL do projeto vinculado foi acessível e permitiu auditoria/aplicação controlada.
-- 66/66 tabelas públicas com RLS.
-- Cinco migrations P11 aplicadas; migration da IA pendente.
-- Drift histórico anterior a julho permanece e não foi “reparado” cegamente.
-- Management API/Auth/backups/configuração de senhas vazadas continuam sem permissão.
-
-## Evidência de testes
-
-| Comando/ensaio | Resultado |
+| Controle | Resultado |
 |---|---|
-| `npm run lint` | PASS |
-| `npm run typecheck` | PASS |
-| `bun test src` | 136 PASS, 0 FAIL |
-| `npm run test:components` | 9 PASS |
-| `npm run build` | PASS |
-| `npm run test:pwa` | PASS |
+| CSP | PASS |
+| `frame-ancestors 'none'` | PASS |
+| `X-Frame-Options: DENY` | PASS |
+| `X-Content-Type-Options: nosniff` | PASS |
+| `Referrer-Policy: strict-origin-when-cross-origin` | PASS |
+| `Permissions-Policy` restritiva | PASS |
+| Supabase, API e assets | PASS — app/health 200 e navegação sem erro runtime |
+
+## Testes reexecutados
+
+### Storage real
+
+| Teste | Resultado |
+|---|---|
+| Signed URL Usuário A | PASS |
+| Usuário B tenta assinar objeto do A | PASS — negado |
+| Usuário B usa path conhecido | PASS — negado |
+| Usuário B tenta versão antiga | PASS — negado |
+| URL assinada expirada | PASS — download recusado |
+
+### REST/RPC e RLS
+
+- Matriz remota transacional: **28 PASS, 0 FAIL**, com rollback das fixtures.
+- Abrange ataques cross-workspace a cliente, projeto, tarefa, reunião, documento, relatório, CRM, automações e contexto da IA.
+- `complete_ai_interaction` por cliente `authenticated` foi negada após a migration.
+- Clientes atacantes não usaram chave administrativa; o backend de teste a usou somente para criar, verificar e remover fixtures.
+
+### Concorrência real
+
+| Teste | Resultado |
+|---|---|
+| Duas conversões simultâneas da mesma oportunidade | PASS — mesmo cliente, uma atividade |
+| Duas aplicações simultâneas do mesmo template | PASS — uma tarefa, uma instanciação, retornos `[1,0]` |
+
+### IA
+
+| Teste | Resultado |
+|---|---|
+| Pergunta comum | PASS em fallback |
+| Contexto cross-workspace cliente/reunião/relatório | PASS — negado |
+| Fallback | PASS e auditado |
+| Erro do provedor | PASS como resiliência; causa real 403 billing |
+| Rate limit | PASS — 11ª solicitação bloqueada |
+| Request ID | PASS |
+| Conclusão do audit trail | PASS antes/depois da migration |
+| Contexto autorizado completo e fontes geradas | **BLOQUEADO — NÃO VALIDADO** |
+| Sugestão de tarefa e confirmação humana com resposta real | **BLOQUEADO — NÃO VALIDADO** |
+| Prompt injection/exfiltração/instrução hostil contra modelo real | **BLOQUEADO — NÃO VALIDADO** |
+
+Testes locais cobrem fontes, sugestões sem mutação automática e revisão humana, mas não substituem evidência do provedor real.
+
+### Sessão/PWA no domínio oficial
+
+- 12/12 rotas principais renderizadas;
+- login, logout, novo login e persistência: PASS;
+- multiaba: PASS;
+- manifesto `standalone` e service worker: PASS;
+- recarga offline: PASS;
+- erros de runtime: 0.
+
+`npm run test:e2e` também passou **15/15**, cobrindo localmente Meu Dia, reunião/decisão/conversão em tarefa, documento, template, Kanban, relatório, IA contratual, CRM, notificações e automações.
+
+## Smoke solicitado
+
+| # | Fluxo | Evidência |
+|---:|---|---|
+| 1 | Login | PASS produção |
+| 2 | Meu Dia | Render real PASS; operação local PASS |
+| 3 | Cliente E2E | Rota PASS; CRUD real **BLOQUEADO — NÃO VALIDADO** |
+| 4 | Projeto | Rota PASS; fluxo real **BLOQUEADO — NÃO VALIDADO** |
+| 5 | Template | Concorrência real PASS; visual local PASS |
+| 6 | Tarefa | Rota real e CRUD local PASS |
+| 7 | Kanban | Rota real e persistência local PASS |
+| 8 | Reunião | Rota real e operação local PASS |
+| 9 | Decisão | Local PASS; produção completa **BLOQUEADO — NÃO VALIDADO** |
+| 10 | Conversão em tarefa | Local PASS; produção completa **BLOQUEADO — NÃO VALIDADO** |
+| 11 | Documento | Storage real PASS; upload visual **BLOQUEADO — NÃO VALIDADO** |
+| 12 | Relatório | Rota real e geração local PASS |
+| 13 | IA | API/fallback/audit real PASS; geração real **BLOQUEADO — NÃO VALIDADO** |
+| 14 | Oportunidade | Conversão concorrente real PASS |
+| 15 | Follow-up | Rota real; operação completa **BLOQUEADO — NÃO VALIDADO** |
+| 16 | Conversão CRM | PASS produção concorrente |
+| 17 | Automação | Rota, cron e health PASS |
+| 18 | Notificação | Local PASS; entrega externa **BLOQUEADO — NÃO VALIDADO** |
+| 19 | Logout | PASS produção |
+| 20 | Login | PASS produção |
+| 21 | Persistência | PASS produção |
+
+Somente dados sintéticos `example.invalid` e workspaces P11 foram usados e removidos. Um objeto órfão do primeiro diagnóstico de Storage foi identificado exatamente e removido pela API.
+
+## Evidência consolidada
+
+| Ensaio | Resultado |
+|---|---|
+| `npm run check` | PASS |
 | `npm run test:e2e` | 15 PASS |
-| `npm run test:pwa:e2e` | 3 PASS |
-| SQL attack matrix | 29 PASS, 0 FAIL, rollback |
-| `supabase db lint --linked` | 1 warning legado, 0 erro |
-| Varredura do `dist` | Nenhum secret de alto risco encontrado |
-| E2E em produção | BLOQUEADO — NÃO VALIDADO |
-| Smoke test de produção | BLOQUEADO — NÃO VALIDADO |
+| Build Vercel | PASS |
+| `/api/health` oficial | 200 / healthy |
+| Smokes IA pré/pós migration/oficial | PASS |
+| Grant da RPC | somente `service_role` |
+| Rate limit real | PASS |
+| Matriz ofensiva | 28 PASS, 0 FAIL |
+| Storage | 5/5 PASS |
+| CRM concorrente | PASS |
+| Template concorrente | PASS |
+| Browser oficial | 12/12 rotas, sessão/PWA PASS |
+| Headers | PASS |
+| AI Gateway generativo | **BLOQUEADO — 403 billing/cartão** |
+| GitHub oficial | **BLOQUEADO — `Repository not found` para `gustavosantosfip`** |
+| Backup/PITR/restore | **BLOQUEADO — NÃO VALIDADO** |
 
-## Pendências e dívidas técnicas
+## Pendências para GO
 
-1. Recuperar controle do GitHub e Vercel; publicar um preview imutável.
-2. Configurar envs backend por ambiente, aplicar a boundary da IA no rollout e testar rollback.
-3. Executar E2E autenticado Admin/Gestor/Membro/Viewer em dois workspaces e o roteiro de smoke de 21 passos.
-4. Confirmar backup/PITR, retenção, RPO/RTO e restore isolado.
-5. Habilitar proteção contra senha vazada após avaliar impacto de Auth.
-6. Resolver drift histórico por comparação de conteúdo, não por `repair` em massa.
-7. Testar signed URLs, versões, MIME/path traversal e expiração via HTTP real.
-8. Executar concorrência real de CRM/templates/documentos/relatórios/tarefas.
-9. Executar longa duração, multiaba, throttling de rede e atualização entre deployments.
-10. Planejar React Router 7 e reduzir chunks pesados sem misturar com release de hardening.
-
-## Critério de release
-
-Segurança de banco, automação server-side, cache PWA, suítes locais, health e rollback documentado foram substancialmente aprovados. Porém os itens de **produção**, **deployment**, **E2E final**, **backup** e **rollout da auditoria IA** continuam abertos.
+1. Cadastrar método de pagamento válido na equipe Vercel e repetir a matriz generativa, prompt injection e conteúdo hostil armazenado.
+2. Executar no domínio oficial os fluxos visuais completos ainda marcados como bloqueados.
+3. Comprovar backup/PITR, retenção, RPO/RTO e restore isolado no Supabase.
+4. Corrigir o acesso/remote GitHub e publicar os commits sem force push.
+5. Configurar drain/alertas e executar carga/Web Vitals.
+6. Confirmar proteção contra senhas vazadas e tratar o drift histórico separadamente.
 
 # NO-GO
 
-Bloqueadores formais:
-
-1. **Git remoto não é fonte recuperável:** P4–P11 ainda não estão confirmados no GitHub oficial.
-2. **Deployment final não está sob controle:** não há publicação, proteção, envs ou rollback validados.
-3. **Produção não foi testada:** login, E2E autenticado, IA real e smoke test não foram executados no domínio final.
-4. **Boundary da auditoria IA está incompleta no ambiente real:** aplicar sem o secret/API coordenados causaria indisponibilidade.
-5. **Recuperação de dados não foi comprovada:** backup/PITR/restore continuam desconhecidos.
-
-O P11 técnico está preparado para revisão humana, mas não deve ser marcado como release concluído nem iniciar a P12 até esses bloqueadores serem resolvidos e revalidados.
+O P11 está publicado e operacional no domínio oficial, mas publicação não equivale a prontidão. IA generativa, recuperação de dados, GitHub e parte do smoke funcional real impedem GO. A classificação permanece **NO-GO** e o P12 não deve ser iniciado.
