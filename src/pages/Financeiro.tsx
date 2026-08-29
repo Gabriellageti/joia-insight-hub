@@ -59,6 +59,7 @@ import { ContractDialog } from "@/components/dialogs/ContractDialog";
 import type { Contract } from "@/types";
 import { toast } from "sonner";
 import { createRecurringExpense, listRecurringExpenseRules, setRecurringExpenseActive, type RecurringExpenseRule } from "@/integrations/supabase/recurring-expenses";
+import { getLocalTodayIso } from "@/lib/contract-billing";
 
 const statusConfig = {
   Pendente: { label: "A vencer", color: "bg-yellow-100 text-yellow-700" },
@@ -92,7 +93,10 @@ const formatCurrency = (value: number) => {
 
 const formatDate = (value?: string) => {
   if (!value) return "-";
-  const parsed = new Date(value);
+  // Date-only values represent a calendar date, not an instant in UTC. Parsing
+  // them at local noon prevents negative offsets from displaying the day before.
+  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T12:00:00` : value;
+  const parsed = new Date(dateOnly);
   if (Number.isNaN(parsed.getTime())) return value;
   return parsed.toLocaleDateString("pt-BR");
 };
@@ -105,7 +109,7 @@ const formatDateInputValue = (value?: string) => {
   return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
 };
 
-const getTodayIso = () => new Date().toISOString().split("T")[0];
+const getTodayIso = getLocalTodayIso;
 
 export default function Financeiro() {
   const { projects, clients, contracts, deleteContract } = useData();
