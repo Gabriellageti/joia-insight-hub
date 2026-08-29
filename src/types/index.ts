@@ -509,6 +509,7 @@ export interface Lead {
 
 export interface Contract {
   id: string;
+  title: string;
   clientId: string;
   clientName: string;
   projectId?: string;

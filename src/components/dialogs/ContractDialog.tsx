@@ -60,7 +60,7 @@ export function ContractDialog({ open, onOpenChange, contract }: ContractDialogP
   useEffect(() => {
     if (open) {
       if (contract) {
-        setTitle(contract.projectName || "");
+        setTitle(contract.title || "");
         setClientId(contract.clientId || "");
         setProjectId(contract.projectId || "");
         setBillingType(contract.billingType || "mensal");
@@ -127,6 +127,7 @@ export function ContractDialog({ open, onOpenChange, contract }: ContractDialogP
           }));
 
     const payload = {
+      title,
       clientId,
       clientName,
       projectId: projectId || undefined,
