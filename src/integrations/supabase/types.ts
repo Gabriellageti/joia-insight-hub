@@ -536,21 +536,31 @@ export type Database = {
       }
       documents: {
         Row: {
+          archived_at: string | null
+          archived_by: string | null
           category: string | null
           client_id: string | null
           created_at: string
           description: string | null
           diagnostic_id: string | null
+          display_name: string
           evidence_status: string | null
+          external_id: string | null
+          external_url: string | null
           file_size: number | null
           file_type: string | null
           id: string
           is_internal: boolean | null
+          is_current_version: boolean
           meeting_id: string | null
           mime_type: string | null
           name: string
           project_id: string | null
+          previous_version_id: string | null
           rejection_reason: string | null
+          search_vector: unknown
+          source_provider: string
+          storage_path: string | null
           tags: string[] | null
           task_id: string | null
           type: string | null
@@ -558,23 +568,36 @@ export type Database = {
           uploaded_by: string | null
           url: string | null
           visibility: string | null
+          version_group_id: string
+          version_number: number
+          workspace_id: string
         }
         Insert: {
+          archived_at?: string | null
+          archived_by?: string | null
           category?: string | null
           client_id?: string | null
           created_at?: string
           description?: string | null
           diagnostic_id?: string | null
+          display_name: string
           evidence_status?: string | null
+          external_id?: string | null
+          external_url?: string | null
           file_size?: number | null
           file_type?: string | null
           id?: string
           is_internal?: boolean | null
+          is_current_version?: boolean
           meeting_id?: string | null
           mime_type?: string | null
           name: string
           project_id?: string | null
+          previous_version_id?: string | null
           rejection_reason?: string | null
+          search_vector?: unknown
+          source_provider?: string
+          storage_path?: string | null
           tags?: string[] | null
           task_id?: string | null
           type?: string | null
@@ -582,23 +605,36 @@ export type Database = {
           uploaded_by?: string | null
           url?: string | null
           visibility?: string | null
+          version_group_id?: string
+          version_number?: number
+          workspace_id?: string
         }
         Update: {
+          archived_at?: string | null
+          archived_by?: string | null
           category?: string | null
           client_id?: string | null
           created_at?: string
           description?: string | null
           diagnostic_id?: string | null
+          display_name?: string
           evidence_status?: string | null
+          external_id?: string | null
+          external_url?: string | null
           file_size?: number | null
           file_type?: string | null
           id?: string
           is_internal?: boolean | null
+          is_current_version?: boolean
           meeting_id?: string | null
           mime_type?: string | null
           name?: string
           project_id?: string | null
+          previous_version_id?: string | null
           rejection_reason?: string | null
+          search_vector?: unknown
+          source_provider?: string
+          storage_path?: string | null
           tags?: string[] | null
           task_id?: string | null
           type?: string | null
@@ -606,6 +642,9 @@ export type Database = {
           uploaded_by?: string | null
           url?: string | null
           visibility?: string | null
+          version_group_id?: string
+          version_number?: number
+          workspace_id?: string
         }
         Relationships: [
           {
@@ -630,6 +669,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "documents_previous_version_id_fkey"
+            columns: ["previous_version_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "documents_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
@@ -641,6 +687,51 @@ export type Database = {
             columns: ["task_id"]
             isOneToOne: false
             referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      document_events: {
+        Row: {
+          action: string
+          actor_id: string | null
+          changes: Json
+          created_at: string
+          document_id: string | null
+          id: string
+          workspace_id: string
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          changes?: Json
+          created_at?: string
+          document_id?: string | null
+          id?: string
+          workspace_id: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          changes?: Json
+          created_at?: string
+          document_id?: string | null
+          id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_events_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_events_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
             referencedColumns: ["id"]
           },
         ]

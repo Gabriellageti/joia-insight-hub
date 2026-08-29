@@ -14,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScopedTasksPanel } from "@/components/plano-acao";
 import type { Task } from "@/types";
 import type { DeliveryStep } from "@/lib/project-delivery";
+import { DocumentsWorkspace } from "@/components/documents";
 import {
   ProjectProgressCard,
   ProjectStatusCard,
@@ -198,7 +199,7 @@ export default function ProjetoDetalhes() {
       </div>
 
       <Tabs defaultValue="overview" className="space-y-5">
-        <TabsList className="h-auto w-full justify-start overflow-x-auto"><TabsTrigger value="overview">Visão Geral</TabsTrigger><TabsTrigger value="tasks">Tarefas</TabsTrigger><TabsTrigger value="kanban">Kanban</TabsTrigger><TabsTrigger value="meetings">Reuniões</TabsTrigger><TabsTrigger value="history">Histórico</TabsTrigger></TabsList>
+        <TabsList className="h-auto w-full justify-start overflow-x-auto"><TabsTrigger value="overview">Visão Geral</TabsTrigger><TabsTrigger value="tasks">Tarefas</TabsTrigger><TabsTrigger value="kanban">Kanban</TabsTrigger><TabsTrigger value="meetings">Reuniões</TabsTrigger><TabsTrigger value="documents">Documentos</TabsTrigger><TabsTrigger value="history">Histórico</TabsTrigger></TabsList>
         <TabsContent value="overview" className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <ProjectProgressCard project={project} />
@@ -235,6 +236,7 @@ export default function ProjetoDetalhes() {
         <TabsContent value="tasks"><ScopedTasksPanel tasks={projectTasks} mode="list" defaultClientId={project.clientId} defaultProjectId={project.id} showCreate={false} /></TabsContent>
         <TabsContent value="kanban"><ScopedTasksPanel tasks={projectTasks} mode="kanban" defaultClientId={project.clientId} defaultProjectId={project.id} showCreate={false} /></TabsContent>
         <TabsContent value="meetings"><ProjectMeetingsList meetings={projectMeetings} project={project} /></TabsContent>
+        <TabsContent value="documents"><DocumentsWorkspace clientId={project.clientId} projectId={project.id} compact /></TabsContent>
         <TabsContent value="history"><ActivityFeed projectId={project.id} /></TabsContent>
       </Tabs>
 

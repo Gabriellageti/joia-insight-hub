@@ -1,8 +1,9 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { Upload, X, Check, ChevronsUpDown, Loader2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -56,6 +57,7 @@ interface UploadModalProps {
   defaultClientId?: string | null;
   defaultProjectId?: string | null;
   defaultMeetingId?: string | null;
+  versionOf?: FileItem | null;
 }
 
 export function UploadModal({
@@ -70,6 +72,7 @@ export function UploadModal({
   defaultClientId,
   defaultProjectId,
   defaultMeetingId,
+  versionOf,
 }: UploadModalProps) {
   const { user, activeMembership } = useAuth();
   const [file, setFile] = useState<File | null>(null);
@@ -81,11 +84,28 @@ export function UploadModal({
   const [tags, setTags] = useState<string[]>([]);
   const [customTag, setCustomTag] = useState("");
   const [descricaoCurta, setDescricaoCurta] = useState("");
+  const [nomeExibicao, setNomeExibicao] = useState("");
+  const [descricao, setDescricao] = useState("");
   const [taskId, setTaskId] = useState<string | null>(null);
   const [diagnosticId, setDiagnosticId] = useState<string | null>(null);
   const [meetingId, setMeetingId] = useState<string | null>(defaultMeetingId ?? null);
   const [tagsPopoverOpen, setTagsPopoverOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setClientId(versionOf?.clienteId ?? defaultClientId ?? null);
+    setProjectId(versionOf?.projetoId ?? defaultProjectId ?? null);
+    setCategory(versionOf?.categoriaId ?? "contracts");
+    setTipo(versionOf?.tipo ?? "Documento");
+    setVisibilidade(versionOf?.visibilidade ?? "Interno");
+    setTags(versionOf?.tags ?? []);
+    setNomeExibicao(versionOf?.nomeExibicao ?? "");
+    setDescricao(versionOf?.descricao ?? "");
+    setTaskId(versionOf?.vinculos.taskId ?? null);
+    setDiagnosticId(versionOf?.vinculos.diagnosticId ?? null);
+    setMeetingId(versionOf?.vinculos.meetingId ?? defaultMeetingId ?? null);
+  }, [defaultClientId, defaultMeetingId, defaultProjectId, open, versionOf]);
 
   const availableProjects = useMemo(() => {
     if (clientId) {
@@ -181,12 +201,15 @@ export function UploadModal({
       });
       return;
     }
+    if (file.size > 50 * 1024 * 1024) {
+      toast({ title: "Arquivo muito grande", description: "O limite por arquivo é 50 MB.", variant: "destructive" });
+      return;
+    }
 
     setIsUploading(true);
 
     try {
       // Generate unique file path
-      const fileExt = file.name.split(".").pop();
       const timestamp = Date.now();
       const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
       if (!activeMembership) throw new Error("Sua conta não possui um workspace ativo.");
@@ -207,7 +230,8 @@ export function UploadModal({
 
       const fileItem: Omit<FileItem, "id" | "uploadedAt"> = {
         nomeArquivo: file.name,
-        nomeExibicao: suggestedName || file.name,
+        nomeExibicao: nomeExibicao.trim() || suggestedName || file.name,
+        descricao: descricao.trim() || undefined,
         clienteId: clientId ?? undefined,
         clienteNome: selectedClient?.name,
         projetoId: projectId ?? undefined,
@@ -226,6 +250,12 @@ export function UploadModal({
         mimeType: file.type || "application/octet-stream",
         uploadedBy: user?.id,
         url: filePath,
+        storagePath: filePath,
+        versionGroupId: versionOf?.versionGroupId ?? crypto.randomUUID(),
+        versao: versionOf ? versionOf.versao + 1 : 1,
+        isCurrentVersion: true,
+        previousVersionId: versionOf?.id,
+        sourceProvider: "supabase_storage",
       };
 
       try {
@@ -249,6 +279,8 @@ export function UploadModal({
       setVisibilidade("Interno");
       setTags([]);
       setDescricaoCurta("");
+      setNomeExibicao("");
+      setDescricao("");
       setTaskId(null);
       setDiagnosticId(null);
       setMeetingId(defaultMeetingId ?? null);
@@ -277,7 +309,8 @@ export function UploadModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Upload de arquivo</DialogTitle>
+          <DialogTitle>{versionOf ? `Adicionar versão ${versionOf.versao + 1}` : "Upload de arquivo"}</DialogTitle>
+          <DialogDescription>Envie um arquivo e defina seus vínculos, categoria e visibilidade.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
@@ -322,7 +355,7 @@ export function UploadModal({
           </div>
 
           {/* Client & Project */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label>Cliente</Label>
               <Select value={clientId ?? "none"} onValueChange={handleClientChange}>
@@ -362,7 +395,7 @@ export function UploadModal({
           </div>
 
           {/* Category & Type */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label>Categoria *</Label>
               <Select value={category} onValueChange={(v) => setCategory(v as DocumentCategory)}>
@@ -462,6 +495,28 @@ export function UploadModal({
                 ))}
               </div>
             )}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="document-display-name">Nome de exibição</Label>
+            <Input
+              id="document-display-name"
+              placeholder={suggestedName || "Nome do documento"}
+              value={nomeExibicao}
+              onChange={(event) => setNomeExibicao(event.target.value)}
+              maxLength={180}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="document-description">Descrição</Label>
+            <Input
+              id="document-description"
+              placeholder="Contexto ou finalidade do arquivo"
+              value={descricao}
+              onChange={(event) => setDescricao(event.target.value)}
+              maxLength={500}
+            />
           </div>
 
           {/* Description for auto name */}

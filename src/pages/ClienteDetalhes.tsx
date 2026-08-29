@@ -14,6 +14,7 @@ import { parseTaskDate } from "@/lib/tasks/dates";
 import { TASK_PRIORITY_ORDER, TASK_STATUS_LABELS } from "@/lib/tasks/constants";
 import { ActivityFeed } from "@/components/meetings";
 import { FavoriteButton } from "@/components/operations/FavoriteButton";
+import { DocumentsWorkspace } from "@/components/documents";
 
 const metricCards = [
   { key: "open", label: "Tarefas abertas", icon: ListTodo },
@@ -66,7 +67,7 @@ export default function ClienteDetalhes() {
       </div>
 
       <Tabs defaultValue="overview" className="space-y-5">
-        <TabsList className="h-auto w-full justify-start overflow-x-auto"><TabsTrigger value="overview">Visão Geral</TabsTrigger><TabsTrigger value="projects">Projetos</TabsTrigger><TabsTrigger value="tasks">Tarefas</TabsTrigger><TabsTrigger value="kanban">Kanban</TabsTrigger><TabsTrigger value="meetings">Reuniões</TabsTrigger><TabsTrigger value="history">Histórico</TabsTrigger></TabsList>
+        <TabsList className="h-auto w-full justify-start overflow-x-auto"><TabsTrigger value="overview">Visão Geral</TabsTrigger><TabsTrigger value="projects">Projetos</TabsTrigger><TabsTrigger value="tasks">Tarefas</TabsTrigger><TabsTrigger value="kanban">Kanban</TabsTrigger><TabsTrigger value="meetings">Reuniões</TabsTrigger><TabsTrigger value="documents">Documentos</TabsTrigger><TabsTrigger value="history">Histórico</TabsTrigger></TabsList>
 
         <TabsContent value="overview" className="space-y-5">
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
@@ -84,6 +85,7 @@ export default function ClienteDetalhes() {
         <TabsContent value="tasks"><ScopedTasksPanel tasks={clientTasks} mode="list" defaultClientId={client.id} /></TabsContent>
         <TabsContent value="kanban"><ScopedTasksPanel tasks={clientTasks} mode="kanban" defaultClientId={client.id} /></TabsContent>
         <TabsContent value="meetings"><div className="grid gap-3 md:grid-cols-2">{clientMeetings.length ? clientMeetings.map((meeting) => <Link key={meeting.id} to={`/reunioes/${meeting.id}`}><Card className="h-full transition-colors hover:bg-muted/40"><CardContent className="p-4"><p className="font-medium">{meeting.title}</p><p className="mt-1 text-sm text-muted-foreground">{meeting.date} {meeting.time} · {meeting.projectName || displayName}</p><Badge className="mt-3" variant="outline">{meeting.status === "completed" ? "Concluída" : meeting.status === "cancelled" ? "Cancelada" : meeting.status === "in_progress" ? "Em andamento" : "Agendada"}</Badge></CardContent></Card></Link>) : <Card><CardContent className="py-10 text-sm text-muted-foreground">Nenhuma reunião relacionada.</CardContent></Card>}</div></TabsContent>
+        <TabsContent value="documents"><DocumentsWorkspace clientId={client.id} compact /></TabsContent>
         <TabsContent value="history"><ActivityFeed clientId={client.id} /></TabsContent>
       </Tabs>
 

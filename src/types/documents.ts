@@ -2,7 +2,14 @@
 
 export type DocumentCategory =
   | "contracts"
+  | "proposals"
+  | "reports"
   | "diagnostics"
+  | "spreadsheets"
+  | "presentations"
+  | "client_documents"
+  | "internal_documents"
+  | "other"
   | "indicators"
   | "evidence"
   | "meetings"
@@ -25,6 +32,7 @@ export interface FileItem {
   id: string;
   nomeArquivo: string;
   nomeExibicao: string;
+  descricao?: string;
   clienteId?: string;
   clienteNome?: string;
   projetoId?: string;
@@ -40,7 +48,15 @@ export interface FileItem {
   mimeType: string;
   uploadedAt: string;
   uploadedBy?: string;
+  uploadedByName?: string;
   url?: string;
+  storagePath?: string;
+  versionGroupId: string;
+  versao: number;
+  isCurrentVersion: boolean;
+  previousVersionId?: string;
+  archivedAt?: string;
+  sourceProvider: "supabase_storage" | "google_drive" | "external";
 }
 
 export interface CategoryInfo {
@@ -52,7 +68,14 @@ export interface CategoryInfo {
 export const DOCUMENT_CATEGORIES: CategoryInfo[] = [
   { id: "all", name: "Todos" },
   { id: "contracts", name: "Contratos e Propostas" },
+  { id: "proposals", name: "Propostas" },
+  { id: "reports", name: "Relatórios" },
   { id: "diagnostics", name: "Diagnósticos" },
+  { id: "spreadsheets", name: "Planilhas" },
+  { id: "presentations", name: "Apresentações" },
+  { id: "client_documents", name: "Enviados pelo cliente" },
+  { id: "internal_documents", name: "Documentos internos" },
+  { id: "other", name: "Outros" },
   { id: "indicators", name: "Indicadores" },
   { id: "evidence", name: "Evidências de Execução" },
   { id: "meetings", name: "Reuniões e Atas" },
@@ -76,3 +99,19 @@ export type QuickFilter = "all" | "unlinked" | "pending" | "rejected";
 
 export type ViewMode = "category" | "tree";
 export type LayoutMode = "grid" | "list";
+
+export interface DocumentQueryFilters {
+  search?: string;
+  clientId?: string | null;
+  projectId?: string | null;
+  meetingId?: string | null;
+  taskId?: string | null;
+  category?: DocumentCategory | "all";
+  uploadedBy?: string | null;
+  fileType?: FileType | "all";
+  dateFrom?: string | null;
+  dateTo?: string | null;
+  archived?: "active" | "archived" | "all";
+  page?: number;
+  pageSize?: number;
+}
