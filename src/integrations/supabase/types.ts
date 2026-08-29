@@ -1551,42 +1551,57 @@ export type Database = {
       }
       internal_notifications: {
         Row: {
+          action_url: string | null
           body: string | null
           client_id: string | null
           created_at: string
           dedupe_key: string
+          delivery_channels: Json
           id: string
+          meeting_id: string | null
           notification_type: string
+          priority: string
           project_id: string | null
           read_at: string | null
+          resolved_at: string | null
           task_id: string | null
           title: string
           user_id: string
           workspace_id: string
         }
         Insert: {
+          action_url?: string | null
           body?: string | null
           client_id?: string | null
           created_at?: string
           dedupe_key: string
+          delivery_channels?: Json
           id?: string
+          meeting_id?: string | null
           notification_type: string
+          priority?: string
           project_id?: string | null
           read_at?: string | null
+          resolved_at?: string | null
           task_id?: string | null
           title: string
           user_id: string
           workspace_id: string
         }
         Update: {
+          action_url?: string | null
           body?: string | null
           client_id?: string | null
           created_at?: string
           dedupe_key?: string
+          delivery_channels?: Json
           id?: string
+          meeting_id?: string | null
           notification_type?: string
+          priority?: string
           project_id?: string | null
           read_at?: string | null
+          resolved_at?: string | null
           task_id?: string | null
           title?: string
           user_id?: string
@@ -1606,6 +1621,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "operational_client_health"
             referencedColumns: ["client_id"]
+          },
+          {
+            foreignKeyName: "internal_notifications_meeting_id_fkey"
+            columns: ["meeting_id"]
+            isOneToOne: false
+            referencedRelation: "meetings"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "internal_notifications_project_id_fkey"
@@ -2055,26 +2077,47 @@ export type Database = {
       }
       notification_preferences: {
         Row: {
+          channel_config: Json
+          client_notifications: boolean
           created_at: string
           email_notifications: boolean
           id: string
+          in_app_notifications: boolean
+          meeting_notifications: boolean
+          mention_notifications: boolean
+          project_notifications: boolean
           push_notifications: boolean
+          task_notifications: boolean
           updated_at: string
           user_id: string
         }
         Insert: {
+          channel_config?: Json
+          client_notifications?: boolean
           created_at?: string
           email_notifications?: boolean
           id?: string
+          in_app_notifications?: boolean
+          meeting_notifications?: boolean
+          mention_notifications?: boolean
+          project_notifications?: boolean
           push_notifications?: boolean
+          task_notifications?: boolean
           updated_at?: string
           user_id: string
         }
         Update: {
+          channel_config?: Json
+          client_notifications?: boolean
           created_at?: string
           email_notifications?: boolean
           id?: string
+          in_app_notifications?: boolean
+          meeting_notifications?: boolean
+          mention_notifications?: boolean
+          project_notifications?: boolean
           push_notifications?: boolean
+          task_notifications?: boolean
           updated_at?: string
           user_id?: string
         }
@@ -3657,6 +3700,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      refresh_my_notifications: { Args: never; Returns: number }
       refresh_my_task_notifications: { Args: never; Returns: number }
       release_task_comment_notification: {
         Args: { _channel: string; _comment_id: string; _recipient_id: string }
@@ -3679,7 +3723,7 @@ export type Database = {
       save_task_template: {
         Args: {
           p_checklist: Json
-          p_default_assignee_id: string | null
+          p_default_assignee_id: string
           p_description: string
           p_due_offset_days: number
           p_initial_status: string

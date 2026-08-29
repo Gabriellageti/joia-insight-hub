@@ -9,36 +9,43 @@ export function useNotifications() {
   const { user } = useAuth();
   const [notifications, setNotifications] = useState<InternalNotification[]>([]);
   const [loading, setLoading] = useState(false);
-
+  const [error, setError] = useState<string | null>(null);
+  const loadNotifications = useCallback(async () => {
+    if (!user) { setNotifications([]); return; }
+    const { data, error: selectError } = await supabase.from("internal_notifications").select("*").eq("user_id", user.id).is("resolved_at", null).order("created_at", { ascending: false }).limit(50);
+    if (selectError) throw selectError;
+    setNotifications(data ?? []);
+  }, [user]);
   const refresh = useCallback(async () => {
     if (!user) { setNotifications([]); return; }
-    setLoading(true);
-    await supabase.rpc("refresh_my_task_notifications");
-    const { data } = await supabase.from("internal_notifications").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(20);
-    setNotifications(data ?? []);
-    setLoading(false);
-  }, [user]);
-
+    setLoading(true); setError(null);
+    try {
+      const { error: refreshError } = await supabase.rpc("refresh_my_notifications");
+      if (refreshError) throw refreshError;
+      await loadNotifications();
+    } catch (requestError) { setError((requestError as Error).message || "Não foi possível carregar as notificações."); }
+    finally { setLoading(false); }
+  }, [loadNotifications, user]);
   useEffect(() => {
     void refresh();
+    if (!user) return;
     const handleFocus = () => void refresh();
+    const interval = window.setInterval(() => void refresh(), 5 * 60 * 1000);
+    const channel = supabase.channel(`notifications:${user.id}`).on("postgres_changes", { event: "*", schema: "public", table: "internal_notifications", filter: `user_id=eq.${user.id}` }, () => void loadNotifications().catch(() => setError("Não foi possível atualizar as notificações."))).subscribe();
     window.addEventListener("focus", handleFocus);
-    return () => window.removeEventListener("focus", handleFocus);
-  }, [refresh]);
-
+    return () => { window.clearInterval(interval); window.removeEventListener("focus", handleFocus); void supabase.removeChannel(channel); };
+  }, [loadNotifications, refresh, user]);
   const markRead = useCallback(async (id: string) => {
     const readAt = new Date().toISOString();
-    const { error } = await supabase.from("internal_notifications").update({ read_at: readAt }).eq("id", id);
-    if (!error) setNotifications((current) => current.map((item) => item.id === id ? { ...item, read_at: readAt } : item));
+    const { error: updateError } = await supabase.from("internal_notifications").update({ read_at: readAt }).eq("id", id);
+    if (!updateError) setNotifications((current) => current.map((item) => item.id === id ? { ...item, read_at: readAt } : item));
   }, []);
-
   const markAllRead = useCallback(async () => {
     if (!user) return;
     const readAt = new Date().toISOString();
-    const { error } = await supabase.from("internal_notifications").update({ read_at: readAt }).eq("user_id", user.id).is("read_at", null);
-    if (!error) setNotifications((current) => current.map((item) => ({ ...item, read_at: item.read_at || readAt })));
+    const { error: updateError } = await supabase.from("internal_notifications").update({ read_at: readAt }).eq("user_id", user.id).is("read_at", null);
+    if (!updateError) setNotifications((current) => current.map((item) => ({ ...item, read_at: item.read_at || readAt })));
   }, [user]);
-
   const unreadCount = useMemo(() => notifications.filter((item) => !item.read_at).length, [notifications]);
-  return { notifications, unreadCount, loading, refresh, markRead, markAllRead };
+  return { notifications, unreadCount, loading, error, refresh, markRead, markAllRead };
 }
