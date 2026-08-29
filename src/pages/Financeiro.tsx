@@ -220,6 +220,20 @@ export default function Financeiro() {
     [sortedReceivables, receivableSearch, receivableStatusFilter, clients, projects]
   );
 
+  const paidInstallmentsByContract = useMemo(() => {
+    const paidByContract = new Map<string, Set<string>>();
+
+    receivables.forEach((record) => {
+      if (record.status !== "Pago" || !record.contractId || !record.installmentId) return;
+
+      const installments = paidByContract.get(record.contractId) ?? new Set<string>();
+      installments.add(record.installmentId);
+      paidByContract.set(record.contractId, installments);
+    });
+
+    return paidByContract;
+  }, [receivables]);
+
   const cashFlowRecords = useMemo(
     () => [...records].sort((a, b) => (b.paidAt || b.date || "").localeCompare(a.paidAt || a.date || "")),
     [records]
@@ -965,7 +979,14 @@ export default function Financeiro() {
                   <TableBody>
                     {contracts.map((contract) => {
                       const total = contract.installments?.length || 0;
-                      const paid = contract.installments?.filter((i) => i.status === "paid").length || 0;
+                      // The receivables hook refreshes as soon as a payment is
+                      // registered, so this count updates without requiring a
+                      // page reload. The JSON remains the fallback for legacy
+                      // contracts that do not have linked receivables.
+                      const linkedPaid = paidInstallmentsByContract.get(contract.id);
+                      const paid = linkedPaid
+                        ? linkedPaid.size
+                        : contract.installments?.filter((i) => i.status === "paid").length || 0;
                       return (
                         <TableRow key={contract.id}>
                           <TableCell className="font-medium">
@@ -979,6 +1000,8 @@ export default function Financeiro() {
                             <Badge variant="outline">
                               {contract.billingType === "mensal"
                                 ? "Mensal"
+                                : contract.billingType === "semanal"
+                                  ? "Semanal"
                                 : contract.billingType === "parcela"
                                   ? "Parcelado"
                                   : "Projeto"}
