@@ -77,7 +77,7 @@ async function installAuthorizedBackend(page: Page) {
 const routes = [
   "/", "/meu-dia", "/dashboard", "/minhas-tarefas", "/clientes", "/projetos", "/diagnostico", "/templates", "/plano-acao",
   "/indicadores", "/reunioes", "/documentos", "/playbooks", "/equipe", "/pendencias", "/atividades", "/relatorios/operacional",
-  "/financeiro", "/marketing", "/comercial", "/configuracoes", "/rota-inexistente",
+  "/financeiro", "/marketing", "/comercial", "/automacoes", "/configuracoes", "/rota-inexistente",
 ];
 const widths = [320, 375, 768, 1024, 1440];
 
@@ -90,7 +90,7 @@ test("formulário de autenticação é acessível e não gera overflow", async (
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 });
 
-test("21 rotas principais renderizam sem tela branca, erro de console ou overflow", async ({ page }) => {
+test("22 rotas principais renderizam sem tela branca, erro de console ou overflow", async ({ page }) => {
   await installAuthorizedBackend(page);
   const consoleErrors: string[] = [];
   page.on("console", (message) => {

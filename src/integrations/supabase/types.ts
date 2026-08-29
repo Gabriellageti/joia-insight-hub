@@ -39,6 +39,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      automation_connectors: {
+        Row: { config: Json; id: string; label: string; provider: string; status: string; updated_at: string; updated_by: string | null; workspace_id: string }
+        Insert: { config?: Json; id?: string; label: string; provider: string; status?: string; updated_at?: string; updated_by?: string | null; workspace_id?: string }
+        Update: { config?: Json; id?: string; label?: string; provider?: string; status?: string; updated_at?: string; updated_by?: string | null; workspace_id?: string }
+        Relationships: []
+      }
+      automation_events: {
+        Row: { causation_id: string | null; correlation_id: string; created_at: string; depth: number; entity_id: string | null; entity_type: string; error_message: string | null; event_type: string; id: string; payload: Json; processed_at: string | null; status: string; workspace_id: string }
+        Insert: { causation_id?: string | null; correlation_id?: string; created_at?: string; depth?: number; entity_id?: string | null; entity_type: string; error_message?: string | null; event_type: string; id?: string; payload?: Json; processed_at?: string | null; status?: string; workspace_id?: string }
+        Update: { causation_id?: string | null; correlation_id?: string; created_at?: string; depth?: number; entity_id?: string | null; entity_type?: string; error_message?: string | null; event_type?: string; id?: string; payload?: Json; processed_at?: string | null; status?: string; workspace_id?: string }
+        Relationships: []
+      }
+      automation_rules: {
+        Row: { action_config: Json; action_type: string; condition_config: Json; description: string; enabled: boolean; event_type: string; id: string; is_system: boolean; name: string; rule_key: string; updated_at: string; updated_by: string | null; workspace_id: string }
+        Insert: { action_config?: Json; action_type: string; condition_config?: Json; description: string; enabled?: boolean; event_type: string; id?: string; is_system?: boolean; name: string; rule_key: string; updated_at?: string; updated_by?: string | null; workspace_id?: string }
+        Update: { action_config?: Json; action_type?: string; condition_config?: Json; description?: string; enabled?: boolean; event_type?: string; id?: string; is_system?: boolean; name?: string; rule_key?: string; updated_at?: string; updated_by?: string | null; workspace_id?: string }
+        Relationships: []
+      }
+      automation_runs: {
+        Row: { duration_ms: number | null; entity_id: string | null; entity_type: string; error_message: string | null; event_id: string | null; finished_at: string | null; id: string; idempotency_key: string; result: Json; rule_id: string; started_at: string; status: string; workspace_id: string }
+        Insert: { duration_ms?: number | null; entity_id?: string | null; entity_type: string; error_message?: string | null; event_id?: string | null; finished_at?: string | null; id?: string; idempotency_key: string; result?: Json; rule_id: string; started_at?: string; status: string; workspace_id?: string }
+        Update: { duration_ms?: number | null; entity_id?: string | null; entity_type?: string; error_message?: string | null; event_id?: string | null; finished_at?: string | null; id?: string; idempotency_key?: string; result?: Json; rule_id?: string; started_at?: string; status?: string; workspace_id?: string }
+        Relationships: []
+      }
       activity_logs: {
         Row: {
           action_type: string
@@ -3892,6 +3916,7 @@ export type Database = {
         Returns: boolean
       }
       refresh_my_notifications: { Args: never; Returns: number }
+      run_scheduled_automations: { Args: never; Returns: Json }
       refresh_my_task_notifications: { Args: never; Returns: number }
       release_task_comment_notification: {
         Args: { _channel: string; _comment_id: string; _recipient_id: string }

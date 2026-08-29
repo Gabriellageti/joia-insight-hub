@@ -20,6 +20,7 @@ import {
   Siren,
   Layers3,
   Bot,
+  Workflow,
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -63,6 +64,7 @@ const supportNavItems = [
   { title: "Modelos de Projeto", url: "/modelos-projeto", icon: Layers3 },
   { title: "Indicadores", url: "/indicadores", icon: BarChart3 },
   { title: "Documentos", url: "/documentos", icon: FileText },
+  { title: "Automações", url: "/automacoes", icon: Workflow },
 ];
 
 const managementNavItems = [

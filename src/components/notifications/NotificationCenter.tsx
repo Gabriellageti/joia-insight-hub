@@ -8,7 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useNotifications } from "@/hooks/useNotifications";
 
-const typeLabel: Record<string, string> = { task_assigned: "Atribuição", due_soon: "Prazo próximo", overdue: "Atraso", comment: "Comentário", mention: "Menção", status_changed: "Atualização", blocked: "Bloqueio", meeting_upcoming: "Reunião", meeting_unfinished: "Reunião pendente", project_risk: "Projeto", client_attention: "Cliente" };
+const typeLabel: Record<string, string> = { task_assigned: "Atribuição", due_soon: "Prazo próximo", overdue: "Atraso", comment: "Comentário", mention: "Menção", status_changed: "Atualização", blocked: "Bloqueio", meeting_upcoming: "Reunião", meeting_unfinished: "Reunião pendente", project_risk: "Projeto", client_attention: "Cliente", automation_alert: "Automação", automation_suggestion: "Sugestão", automation_pending: "Pendência" };
 const priorityLabel: Record<string, string> = { info: "Informação", attention: "Atenção", important: "Importante", urgent: "Urgente" };
 const priorityClass: Record<string, string> = { info: "border-blue-300 text-blue-700", attention: "border-amber-300 text-amber-700", important: "border-orange-300 text-orange-700", urgent: "border-red-300 text-red-700" };
 
