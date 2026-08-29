@@ -1,51 +1,42 @@
 
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, CalendarRange, FolderKanban, Plus, User } from "lucide-react";
+import { CalendarRange, CalendarX2, KanbanSquare, List, Plus, User } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TaskDialog } from "@/components/dialogs/TaskDialog";
-import { ConsultingDayWorkspace, TaskCard, TaskFilters } from "@/components/plano-acao";
-import { filterTasks, type TaskFilterValues } from "@/lib/tasks/filters";
-import { useData } from "@/contexts/DataContext";
+import { ConsultingDayWorkspace, TaskFilters, TaskKanban, TaskList } from "@/components/plano-acao";
 import { useAuth } from "@/contexts/AuthContext";
+import { useData } from "@/contexts/DataContext";
 import { getCompletionPatch } from "@/lib/tasks/completion";
 import { parseTaskDate } from "@/lib/tasks/dates";
+import { filterTasks, type TaskFilterValues } from "@/lib/tasks/filters";
+import { TASK_STATUS_LABELS } from "@/lib/tasks/constants";
 import type { Task } from "@/types";
 import { toast } from "sonner";
-import { useSearchParams } from "react-router-dom";
-import { closestCorners, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
-import { KanbanColumn } from "@/components/plano-acao/KanbanColumn";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { getDeliveryStepsForProject } from "@/lib/project-delivery";
 
-type BoardColumnId = "not_started" | "in_progress" | "done";
-const columns: { id: BoardColumnId; title: string; statuses: Task["status"][]; targetStatus: Task["status"] }[] = [
-  { id: "not_started", title: "Não iniciadas", statuses: ["backlog", "next"], targetStatus: "backlog" },
-  { id: "in_progress", title: "Em andamento", statuses: ["in_progress", "waiting", "review"], targetStatus: "in_progress" },
-  { id: "done", title: "Concluídas", statuses: ["done"], targetStatus: "done" },
-];
+type TaskView = "kanban" | "list" | "today" | "overdue" | "mine" | "consulting";
 
-const emptyFilters = (projectId = "all"): TaskFilterValues => ({ search: "", projectId, status: "all", priority: "all", assignedTo: "all", taskType: "all", overdue: false });
+const emptyFilters = (clientId = "all", projectId = "all"): TaskFilterValues => ({
+  search: "", clientId, projectId, status: "all", priority: "all", assignedTo: "all", taskType: "all", due: "all", mine: false,
+});
 
 export default function PlanoAcao() {
-  const { tasks, tasksLoading, tasksError, clients, projects, projectsLoading, projectsError, savingTaskIds, updateTask, deleteTask, updateProject } = useData();
-  const { user, isAdmin } = useAuth();
+  const { tasks, tasksLoading, tasksError, clients, projects, projectsLoading, projectsError, savingTaskIds, updateTask, deleteTask } = useData();
+  const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const initialProjectId = searchParams.get("projectId") || "all";
-  const initialWorkspace = searchParams.get("view") === "consulting" ? "consulting" : initialProjectId === "all" ? "mine" : "project";
-  const [workspace, setWorkspace] = useState<"mine" | "project" | "consulting">(initialWorkspace);
-  const [filters, setFilters] = useState<TaskFilterValues>(() => emptyFilters(initialProjectId));
+  const initialClientId = searchParams.get("clientId") || "all";
+  const requestedView = searchParams.get("view") as TaskView | null;
+  const [view, setView] = useState<TaskView>(requestedView && ["kanban", "list", "today", "overdue", "mine", "consulting"].includes(requestedView) ? requestedView : "kanban");
+  const [filters, setFilters] = useState<TaskFilterValues>(() => emptyFilters(initialClientId, initialProjectId));
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [deletingTask, setDeletingTask] = useState<Task | null>(null);
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(KeyboardSensor)
-  );
 
   useEffect(() => {
     const taskId = searchParams.get("taskId");
@@ -54,208 +45,109 @@ export default function PlanoAcao() {
     if (task) { setEditingTask(task); setDialogOpen(true); }
   }, [editingTask?.id, searchParams, tasks]);
 
-  useEffect(() => {
-    const stepTitle = searchParams.get("newStep");
-    const projectId = searchParams.get("projectId");
-    if (!stepTitle || !projectId || editingTask) return;
-    const project = projects.find((item) => item.id === projectId);
-    if (!project) return;
-    const step = getDeliveryStepsForProject(project).find((item) => item.title === stepTitle);
-    setEditingTask({
-      id: "",
-      title: step?.title || stepTitle,
-      description: step ? `Etapa: ${step.title}\n\n${step.description}` : "",
-      taskType: "project",
-      projectId: project.id,
-      projectName: project.name,
-      clientId: project.clientId,
-      clientName: project.clientName,
-      type: project.projectType === "automation" || project.projectType === "ai_implementation" ? "tecnologia" : "processo",
-      responsible: project.responsible || project.responsibleNameLegacy || "",
-      priority: step?.approvalRequired ? "high" : "medium",
-      dueDate: "",
-      status: "next",
-      evidenceRequired: true,
-      what: step?.title || stepTitle,
-      why: step?.description || "",
-      how: step ? [...step.checklist, ...step.deliverables.map((item) => `Entregável: ${item}`)].join("\n") : "",
-      createdAt: "",
-    });
-    setDialogOpen(true);
-    const next = new URLSearchParams(searchParams);
-    next.delete("newStep");
-    setSearchParams(next, { replace: true });
-  }, [editingTask, projects, searchParams, setSearchParams]);
-
   const filteredTasks = useMemo(() => {
-    const workspaceTasks = tasks.filter((task) => {
-      if (workspace === "mine" && task.assignedTo !== user?.id && task.createdBy !== user?.id) return false;
-      if (workspace === "project" && !task.projectId) return false;
-      return true;
-    });
-    return filterTasks(workspaceTasks, filters);
-  }, [filters, tasks, user?.id, workspace]);
-
-  const tasksByColumn = useMemo(() => Object.fromEntries(columns.map((column) => [column.id, filteredTasks.filter((task) => column.statuses.includes(task.status))])) as Record<BoardColumnId, Task[]>, [filteredTasks]);
-  const operationalCounts = useMemo(() => {
+    let result = filterTasks(tasks, filters, new Date(), user?.id);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    return {
-      overdue: filteredTasks.filter((task) => {
-        const dueDate = parseTaskDate(task.dueDate);
-        return task.status !== "done" && Boolean(dueDate && dueDate < today);
-      }).length,
-    };
-  }, [filteredTasks]);
-  const savingIds = useMemo(() => new Set(savingTaskIds), [savingTaskIds]);
+    if (view === "mine") result = result.filter((task) => task.assignedTo === user?.id);
+    if (view === "today") result = result.filter((task) => parseTaskDate(task.dueDate)?.getTime() === today.getTime());
+    if (view === "overdue") result = result.filter((task) => {
+      const due = parseTaskDate(task.dueDate);
+      return task.status !== "done" && Boolean(due && due < today);
+    });
+    return result;
+  }, [filters, tasks, user?.id, view]);
+
   const assignees = useMemo(() => {
     const byId = new Map<string, string>();
-    tasks.forEach((task) => {
-      if (task.assignedTo) byId.set(task.assignedTo, task.responsible || "Usuário sem nome");
-    });
+    tasks.forEach((task) => { if (task.assignedTo) byId.set(task.assignedTo, task.responsible || "Usuário sem nome"); });
     return [...byId].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
   }, [tasks]);
-  const selectedProject = useMemo(() => projects.find((project) => project.id === filters.projectId) || null, [filters.projectId, projects]);
+  const myTaskSummary = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const nextWeek = new Date(today);
+    nextWeek.setDate(nextWeek.getDate() + 7);
+    const mine = tasks.filter((task) => task.assignedTo === user?.id && task.status !== "done");
+    return {
+      today: mine.filter((task) => parseTaskDate(task.dueDate)?.getTime() === today.getTime()).length,
+      overdue: mine.filter((task) => { const due = parseTaskDate(task.dueDate); return Boolean(due && due < today); }).length,
+      upcoming: mine.filter((task) => { const due = parseTaskDate(task.dueDate); return Boolean(due && due > today && due <= nextWeek); }).length,
+      progress: mine.filter((task) => task.status === "in_progress").length,
+      waiting: mine.filter((task) => task.status === "waiting").length,
+    };
+  }, [tasks, user?.id]);
 
-  const handleDrop = async (taskId: string, columnId: BoardColumnId) => {
-    const task = tasks.find((item) => item.id === taskId);
-    const column = columns.find((item) => item.id === columnId);
-    if (!task || !column || column.statuses.includes(task.status) || savingIds.has(task.id)) return;
-    try {
-      await updateTask(task.id, { status: column.targetStatus });
-      toast.success(`Tarefa movida para ${column.title}.`);
-    } catch {
-      // DataContext rolls the optimistic state back and reports the persistence error.
+  const handleStatusChange = async (task: Task, status: Task["status"]) => {
+    if (status === "blocked") {
+      setEditingTask({ ...task, status: "blocked", blockReasonCategory: task.blockReasonCategory || "other" });
+      setDialogOpen(true);
+      return;
     }
-  };
-
-  const handleDragEnd = ({ active, over }: DragEndEvent) => {
-    if (!over) return;
-    const columnId = String(over.id) as BoardColumnId;
-    if (!columns.some((column) => column.id === columnId)) return;
-    void handleDrop(String(active.id), columnId);
+    try { await updateTask(task.id, { status }); toast.success(`Tarefa movida para ${TASK_STATUS_LABELS[status]}.`); }
+    catch { /* rollback and feedback are centralized in DataContext */ }
   };
 
   const handleToggleComplete = async (task: Task) => {
-    if (savingIds.has(task.id)) return;
-    const patch = getCompletionPatch(task, user?.id);
-    try {
-      await updateTask(task.id, patch);
-      if (task.status === "done") {
-        toast.success("Tarefa reaberta.", { description: task.title });
-      } else {
-        toast.success("Tarefa concluída.", {
-          description: task.title,
-          action: { label: "Desfazer", onClick: () => void updateTask(task.id, { status: task.status }, { expectedStatus: "done" }) },
-        });
-      }
-    } catch {
-      // Rollback and error feedback are centralized in DataContext.
-    }
+    try { await updateTask(task.id, getCompletionPatch(task, user?.id)); toast.success(task.status === "done" ? "Tarefa reaberta." : "Tarefa concluída.", { description: task.title }); }
+    catch { /* rollback and feedback are centralized in DataContext */ }
   };
 
   const handleDelete = async (task: Task) => {
-    if (savingIds.has(task.id)) return;
-    try { await deleteTask(task.id); toast.success("Tarefa excluída."); } catch { /* DataContext reports the error. */ }
+    try { await deleteTask(task.id); toast.success("Tarefa excluída."); } catch { /* DataContext reports the error */ }
   };
 
-  const handleWorkspaceChange = (value: "mine" | "project" | "consulting") => {
-    setWorkspace(value);
-    if (value === "mine" && filters.projectId !== "all") setFilters((current) => ({ ...current, projectId: "all" }));
+  const handleViewChange = (nextView: TaskView) => {
+    setView(nextView);
     const next = new URLSearchParams(searchParams);
-    if (value === "consulting") next.set("view", "consulting"); else next.delete("view");
+    if (nextView === "kanban") next.delete("view"); else next.set("view", nextView);
     setSearchParams(next);
   };
 
-  const handleProjectPhaseChange = async (phase: string) => {
-    if (!selectedProject || selectedProject.phase === phase) return;
-    try {
-      await updateProject(selectedProject.id, { phase });
-      toast.success(`Fase atualizada para ${phase}.`);
-    } catch {
-      toast.error("Não foi possível atualizar a fase do projeto.");
-    }
+  const handleFiltersChange = (nextFilters: TaskFilterValues) => {
+    setFilters(nextFilters);
+    const next = new URLSearchParams(searchParams);
+    if (nextFilters.clientId === "all") next.delete("clientId"); else next.set("clientId", nextFilters.clientId);
+    if (nextFilters.projectId === "all") next.delete("projectId"); else next.set("projectId", nextFilters.projectId);
+    setSearchParams(next);
   };
 
-  if (tasksLoading || projectsLoading) {
-    return <div className="space-y-4"><Skeleton className="h-9 w-56" /><Skeleton className="h-12 w-full" /><div className="flex gap-4 overflow-hidden">{[1, 2, 3].map((item) => <Skeleton key={item} className="h-80 w-80 shrink-0" />)}</div></div>;
-  }
+  if (tasksLoading || projectsLoading) return <div className="space-y-4"><Skeleton className="h-9 w-56" /><Skeleton className="h-12 w-full" /><div className="flex gap-4 overflow-hidden">{[1, 2, 3].map((item) => <Skeleton key={item} className="h-80 w-80 shrink-0" />)}</div></div>;
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div><h1 className="text-2xl font-semibold">Controle de Tarefas</h1><p className="text-muted-foreground">Central única das tarefas pessoais e dos projetos.</p></div>
+        <div><h1 className="text-2xl font-semibold">Plano de Ação</h1><p className="text-muted-foreground">Uma única visão para tarefas pessoais, de clientes e de projetos.</p></div>
         <Button onClick={() => { setEditingTask(null); setDialogOpen(true); }}><Plus className="mr-2 h-4 w-4" />Nova tarefa</Button>
       </div>
-
       {(tasksError || projectsError) && <Alert variant="destructive"><AlertDescription>{tasksError || projectsError}</AlertDescription></Alert>}
-
-      <Tabs value={workspace} onValueChange={(value) => handleWorkspaceChange(value as "mine" | "project" | "consulting")}>
-        <TabsList className="h-auto w-full justify-start overflow-x-auto"><TabsTrigger value="mine" className="shrink-0"><User className="mr-2 h-4 w-4" />Minhas tarefas</TabsTrigger><TabsTrigger value="project" className="shrink-0"><FolderKanban className="mr-2 h-4 w-4" />Por Projeto</TabsTrigger><TabsTrigger value="consulting" className="shrink-0"><CalendarRange className="mr-2 h-4 w-4" />Por Dia da Consultoria</TabsTrigger></TabsList>
+      <Tabs value={view} onValueChange={(value) => handleViewChange(value as TaskView)}>
+        <TabsList className="h-auto w-full justify-start overflow-x-auto">
+          <TabsTrigger value="kanban" className="shrink-0"><KanbanSquare className="mr-2 h-4 w-4" />Kanban</TabsTrigger>
+          <TabsTrigger value="list" className="shrink-0"><List className="mr-2 h-4 w-4" />Lista</TabsTrigger>
+          <TabsTrigger value="today" className="shrink-0"><CalendarRange className="mr-2 h-4 w-4" />Hoje</TabsTrigger>
+          <TabsTrigger value="overdue" className="shrink-0"><CalendarX2 className="mr-2 h-4 w-4" />Atrasadas</TabsTrigger>
+          <TabsTrigger value="mine" className="shrink-0"><User className="mr-2 h-4 w-4" />Minhas tarefas</TabsTrigger>
+          <TabsTrigger value="consulting" className="shrink-0">Consultoria</TabsTrigger>
+        </TabsList>
       </Tabs>
-
-      {workspace === "consulting" ? (
-        <ConsultingDayWorkspace
-          clients={clients}
-          projects={projects}
-          tasks={tasks}
-          savingTaskIds={savingTaskIds}
-          currentUserId={user?.id}
-          initialProjectId={initialProjectId === "all" ? undefined : initialProjectId}
-          onUpdateTask={updateTask}
-          onToggleComplete={handleToggleComplete}
-          onRequestDelete={setDeletingTask}
-        />
-      ) : <>
-      {workspace === "project" && (
-        <Card className="border-primary/20 bg-primary/5">
-          <CardContent className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="font-medium">Controle por projeto</p>
-              <p className="text-sm text-muted-foreground">Escolha um projeto para ver suas ações e conduzir a fase por aqui.</p>
-            </div>
-            <div className="flex w-full flex-col gap-2 sm:flex-row md:w-auto">
-              <Select value={filters.projectId} onValueChange={(projectId) => setFilters((current) => ({ ...current, projectId }))}>
-                <SelectTrigger className="w-full md:w-64"><SelectValue placeholder="Selecione um projeto" /></SelectTrigger>
-                <SelectContent><SelectItem value="all">Todos os projetos</SelectItem>{projects.map((project) => <SelectItem key={project.id} value={project.id}>{project.name}</SelectItem>)}</SelectContent>
-              </Select>
-              {selectedProject && <Select value={selectedProject.phase} onValueChange={handleProjectPhaseChange} disabled={!isAdmin}>
-                <SelectTrigger className="w-full md:w-56"><SelectValue /></SelectTrigger>
-                <SelectContent>{getDeliveryStepsForProject(selectedProject).map((step) => <SelectItem key={step.title} value={step.title}>{step.title}</SelectItem>)}</SelectContent>
-              </Select>}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-      <TaskFilters projects={projects.map(({ id, name }) => ({ id, name }))} assignees={assignees} values={filters} onChange={(nextFilters) => { setFilters(nextFilters); const next = new URLSearchParams(searchParams); if (nextFilters.projectId === "all") next.delete("projectId"); else next.set("projectId", nextFilters.projectId); setSearchParams(next); }} onClear={() => { setFilters(emptyFilters()); setSearchParams({}); }} />
-
-      <div className="flex flex-wrap gap-2" aria-label="Atalhos operacionais">
-        <Button variant={filters.overdue ? "destructive" : "outline"} size="sm" onClick={() => setFilters((current) => ({ ...current, overdue: !current.overdue, status: "all" }))}><AlertTriangle className="mr-1.5 h-4 w-4" />{operationalCounts.overdue} atrasadas</Button>
-      </div>
-
-      {filteredTasks.length === 0 ? (
-        <Card><CardContent className="py-12 text-center"><p className="font-medium">{tasks.length === 0 ? "Nenhuma tarefa cadastrada." : "Nenhuma tarefa encontrada com estes filtros."}</p><p className="mt-1 text-sm text-muted-foreground">{tasks.length === 0 ? "Crie a primeira tarefa para começar." : "Limpe ou altere os filtros para ver outros resultados."}</p></CardContent></Card>
+      {view === "consulting" ? (
+        <ConsultingDayWorkspace clients={clients} projects={projects} tasks={tasks} savingTaskIds={savingTaskIds} currentUserId={user?.id} initialProjectId={initialProjectId === "all" ? undefined : initialProjectId} onUpdateTask={updateTask} onToggleComplete={handleToggleComplete} onRequestDelete={setDeletingTask} />
       ) : (
-        <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
-          <div className="mb-3"><h2 className="font-semibold">Fluxo de trabalho</h2><p className="text-sm text-muted-foreground">Cada tarefa tem um estado simples: não iniciada, em andamento ou concluída.</p></div>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3" aria-label="Kanban de tarefas">
-            {columns.map((column) => (
-              <KanbanColumn key={column.id} status={column.id} title={column.title} count={tasksByColumn[column.id].length}>
-                {tasksByColumn[column.id].map((task) => <TaskCard key={task.id} task={task} saving={savingIds.has(task.id)} onClick={() => { setEditingTask(task); setDialogOpen(true); }} onDelete={() => setDeletingTask(task)} onToggleComplete={() => void handleToggleComplete(task)} />)}
-              </KanbanColumn>
-            ))}
-          </div>
-        </DndContext>
+        <>
+          {view === "mine" && <div className="grid grid-cols-2 gap-3 md:grid-cols-5">{Object.entries({ Hoje: myTaskSummary.today, Atrasadas: myTaskSummary.overdue, Próximas: myTaskSummary.upcoming, "Em andamento": myTaskSummary.progress, Aguardando: myTaskSummary.waiting }).map(([label, value]) => <Card key={label}><CardContent className="p-4"><p className="text-sm text-muted-foreground">{label}</p><p className="mt-1 text-2xl font-semibold">{value}</p></CardContent></Card>)}</div>}
+          <TaskFilters clients={clients.map((client) => ({ id: client.id, name: client.nomeFantasia || client.razaoSocial || client.name || "Cliente" }))} projects={projects.map(({ id, name, clientId }) => ({ id, name, clientId }))} assignees={assignees} values={filters} onChange={handleFiltersChange} onClear={() => { setFilters(emptyFilters()); setSearchParams(view === "kanban" ? {} : { view }); }} />
+          {filteredTasks.length === 0 ? (
+            <Card><CardContent className="py-12 text-center"><p className="font-medium">{tasks.length === 0 ? "Nenhuma tarefa cadastrada." : "Nenhuma tarefa encontrada nesta visão."}</p><p className="mt-1 text-sm text-muted-foreground">Crie uma tarefa ou ajuste os filtros para continuar.</p></CardContent></Card>
+          ) : view === "kanban" ? (
+            <TaskKanban tasks={filteredTasks} savingTaskIds={savingTaskIds} onEdit={(task) => { setEditingTask(task); setDialogOpen(true); }} onDelete={setDeletingTask} onToggleComplete={(task) => void handleToggleComplete(task)} onStatusChange={(task, status) => void handleStatusChange(task, status)} />
+          ) : (
+            <TaskList tasks={filteredTasks} savingTaskIds={savingTaskIds} onEdit={(task) => { setEditingTask(task); setDialogOpen(true); }} onDelete={setDeletingTask} onToggleComplete={(task) => void handleToggleComplete(task)} />
+          )}
+        </>
       )}
-      </>}
-
       <TaskDialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) { setEditingTask(null); const next = new URLSearchParams(searchParams); next.delete("taskId"); setSearchParams(next); } }} task={editingTask} />
-      <AlertDialog open={Boolean(deletingTask)} onOpenChange={(open) => !open && setDeletingTask(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle>Excluir tarefa?</AlertDialogTitle><AlertDialogDescription>Esta ação remove a tarefa e seu histórico. Não pode ser desfeita.</AlertDialogDescription></AlertDialogHeader>
-          <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { if (deletingTask) void handleDelete(deletingTask); setDeletingTask(null); }}>Excluir</AlertDialogAction></AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <AlertDialog open={Boolean(deletingTask)} onOpenChange={(open) => !open && setDeletingTask(null)}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Excluir tarefa?</AlertDialogTitle><AlertDialogDescription>Esta ação remove a tarefa e seu histórico. Não pode ser desfeita.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { if (deletingTask) void handleDelete(deletingTask); setDeletingTask(null); }}>Excluir</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
     </div>
   );
 }

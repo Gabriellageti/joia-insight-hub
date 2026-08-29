@@ -8,8 +8,6 @@ interface NotificationPreferences {
   push_notifications: boolean;
 }
 
-const VAPID_PUBLIC_KEY = "BLBz0LGpk6QWGEhP8G6k0yVB_Fm7XmXgM8r_9W7hV5kYs6iVJ4Fv3lN8zS2qR9mH5pK1wO3xD4uE6rF8gB0jI2M";
-
 export function useNotificationPreferences() {
   const { user } = useAuth();
   const [preferences, setPreferences] = useState<NotificationPreferences>({
@@ -19,6 +17,7 @@ export function useNotificationPreferences() {
   const [loading, setLoading] = useState(true);
   const [pushSupported, setPushSupported] = useState(false);
   const [pushPermission, setPushPermission] = useState<NotificationPermission>("default");
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     // Check if push notifications are supported
@@ -34,6 +33,7 @@ export function useNotificationPreferences() {
     if (!user) return;
 
     try {
+      setError(null);
       const { data, error } = await supabase
         .from("notification_preferences")
         .select("*")
@@ -49,7 +49,7 @@ export function useNotificationPreferences() {
         });
       }
     } catch (error) {
-      console.error("Error fetching preferences:", error);
+      setError("Não foi possível carregar suas preferências.");
     } finally {
       setLoading(false);
     }
@@ -85,7 +85,6 @@ export function useNotificationPreferences() {
       setPreferences((prev) => ({ ...prev, [key]: value }));
       toast.success("Preferência atualizada");
     } catch (error) {
-      console.error("Error updating preference:", error);
       toast.error("Erro ao atualizar preferência");
     }
   };
@@ -111,8 +110,11 @@ export function useNotificationPreferences() {
       await navigator.serviceWorker.ready;
 
       // Get VAPID public key from edge function
-      const { data: configData } = await supabase.functions.invoke("get-vapid-public-key");
-      const vapidPublicKey = configData?.publicKey || VAPID_PUBLIC_KEY;
+      const { data: configData, error: configError } = await supabase.functions.invoke("get-vapid-public-key");
+      if (configError || typeof configData?.publicKey !== "string" || !configData.publicKey) {
+        throw new Error("Configuração de notificações indisponível");
+      }
+      const vapidPublicKey = configData.publicKey;
 
       // Subscribe to push
       const subscription = await registration.pushManager.subscribe({
@@ -137,7 +139,6 @@ export function useNotificationPreferences() {
       toast.success("Notificações push ativadas");
       return true;
     } catch (error) {
-      console.error("Error subscribing to push:", error);
       toast.error("Erro ao ativar notificações push");
       return false;
     }
@@ -166,7 +167,6 @@ export function useNotificationPreferences() {
       toast.success("Notificações push desativadas");
       return true;
     } catch (error) {
-      console.error("Error unsubscribing from push:", error);
       toast.error("Erro ao desativar notificações push");
       return false;
     }
@@ -191,6 +191,8 @@ export function useNotificationPreferences() {
     loading,
     pushSupported,
     pushPermission,
+    error,
+    retry: fetchPreferences,
     updateEmailPreference: (value: boolean) => updatePreference("email_notifications", value),
     togglePushNotifications,
   };

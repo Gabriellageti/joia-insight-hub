@@ -296,16 +296,16 @@ export default function Playbooks() {
       </div>
 
       <Tabs defaultValue="playbooks">
-        <TabsList>
-          <TabsTrigger value="playbooks">
+        <TabsList className="h-auto w-full justify-start overflow-x-auto">
+          <TabsTrigger value="playbooks" className="shrink-0">
             <BookOpen className="h-4 w-4 mr-2" />
             Playbooks
           </TabsTrigger>
-          <TabsTrigger value="templates">
+          <TabsTrigger value="templates" className="shrink-0">
             <FileText className="h-4 w-4 mr-2" />
             Templates
           </TabsTrigger>
-          <TabsTrigger value="checklists">
+          <TabsTrigger value="checklists" className="shrink-0">
             <CheckSquare className="h-4 w-4 mr-2" />
             Checklists
           </TabsTrigger>

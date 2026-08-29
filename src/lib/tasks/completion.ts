@@ -2,7 +2,7 @@ import type { Task } from "@/types";
 
 export function getCompletionPatch(task: Task, userId?: string, now = new Date()): Partial<Task> {
   if (task.status === "done") {
-    const reopenStatus = task.previousStatus && ["backlog", "next", "in_progress", "waiting", "review"].includes(task.previousStatus)
+    const reopenStatus = task.previousStatus && ["not_started", "in_progress", "waiting", "blocked"].includes(task.previousStatus)
       ? task.previousStatus
       : "in_progress";
     return {

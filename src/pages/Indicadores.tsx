@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { ChangeEvent, useState, useEffect, useMemo, useRef } from "react";
 import { Plus, Upload, TrendingUp, Filter, LayoutDashboard, List, PlusCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,17 +28,18 @@ import {
 } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 
 interface HistoryPoint {
   id: string;
   indicator_id: string;
   value: number;
   recorded_at: string;
-  notes?: string;
+  notes?: string | null;
 }
 
 export default function Indicadores() {
-  const { indicators, clients, projects } = useData();
+  const { indicators, clients, projects, addIndicator } = useData();
 
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState<string>("all");
@@ -50,6 +51,8 @@ export default function Indicadores() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
   const [history, setHistory] = useState<HistoryPoint[]>([]);
+  const [importing, setImporting] = useState(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch history for selected indicator
   useEffect(() => {
@@ -59,7 +62,7 @@ export default function Indicadores() {
     }
 
     const fetchHistory = async () => {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from("indicator_history")
         .select("*")
         .eq("indicator_id", selectedIndicator.id)
@@ -118,12 +121,56 @@ export default function Indicadores() {
 
   const handleHistorySuccess = async () => {
     if (!selectedIndicator) return;
-    const { data } = await (supabase as any)
+    const { data } = await supabase
       .from("indicator_history")
       .select("*")
       .eq("indicator_id", selectedIndicator.id)
       .order("recorded_at", { ascending: true });
     setHistory(data || []);
+  };
+
+  const handleImport = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || importing) return;
+    setImporting(true);
+    try {
+      const lines = (await file.text()).split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+      if (lines.length < 2) throw new Error("A planilha precisa conter cabeçalho e ao menos um indicador.");
+      const delimiter = lines[0].includes(";") ? ";" : ",";
+      const parseLine = (line: string) => line.split(delimiter).map((cell) => cell.trim().replace(/^"|"$/g, ""));
+      const headers = parseLine(lines[0]).map((header) => header.toLocaleLowerCase("pt-BR"));
+      const nameIndex = headers.findIndex((header) => ["nome", "name"].includes(header));
+      if (nameIndex < 0) throw new Error("Inclua uma coluna chamada “nome”.");
+      let imported = 0;
+      for (const line of lines.slice(1)) {
+        const cells = parseLine(line);
+        const value = (header: string) => cells[headers.indexOf(header)] || "";
+        const name = cells[nameIndex]?.trim();
+        if (!name) continue;
+        const target = Number(value("meta").replace(",", "."));
+        const projectId = value("projeto_id");
+        await addIndicator({
+          name,
+          category: value("categoria") || "Operacional",
+          unit: value("unidade") || "un",
+          frequency: value("frequencia") || "Mensal",
+          source: "planilha",
+          targetValue: Number.isFinite(target) ? target : undefined,
+          projectId: projects.some((project) => project.id === projectId) ? projectId : "",
+          projectName: projects.find((project) => project.id === projectId)?.name || "",
+          responsible: value("responsavel"),
+          values: [],
+        });
+        imported += 1;
+      }
+      if (imported === 0) throw new Error("Nenhum indicador válido foi encontrado.");
+      toast.success(`${imported} indicador${imported === 1 ? "" : "es"} importado${imported === 1 ? "" : "s"}.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível importar os indicadores.");
+    } finally {
+      setImporting(false);
+    }
   };
 
   return (
@@ -136,10 +183,11 @@ export default function Indicadores() {
             Acompanhe KPIs, metas e prove valor com números
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline">
+        <div className="flex flex-wrap items-center gap-2">
+          <input ref={importInputRef} type="file" accept=".csv,text/csv" className="sr-only" onChange={(event) => void handleImport(event)} aria-label="Selecionar CSV de indicadores" />
+          <Button variant="outline" onClick={() => importInputRef.current?.click()} disabled={importing}>
             <Upload className="h-4 w-4 mr-2" />
-            Importar
+            {importing ? "Importando..." : "Importar CSV"}
           </Button>
           <Button onClick={handleNewIndicator}>
             <Plus className="h-4 w-4 mr-2" />
@@ -154,7 +202,7 @@ export default function Indicadores() {
           placeholder="Buscar indicador..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-64"
+          className="w-full sm:w-64"
         />
         <Select value={filterCategory} onValueChange={setFilterCategory}>
           <SelectTrigger className="w-40">

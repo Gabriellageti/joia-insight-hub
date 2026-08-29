@@ -14,7 +14,7 @@ export function KanbanColumn({ status, title, count, children }: KanbanColumnPro
   const { isOver, setNodeRef } = useDroppable({ id: status });
 
   return (
-    <section className="min-w-0" aria-labelledby={`column-${status}`}>
+    <section className="w-72 shrink-0 snap-start" aria-labelledby={`column-${status}`}>
       <Card ref={setNodeRef} className={`bg-muted/30 transition-colors ${isOver ? "ring-2 ring-primary/50" : ""}`}>
         <CardHeader className="p-4 pb-2">
           <CardTitle id={`column-${status}`} className="flex items-center justify-between text-sm">

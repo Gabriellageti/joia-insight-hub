@@ -24,10 +24,10 @@ serve(async (req: Request): Promise<Response> => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );
-  } catch (error: any) {
-    console.error("Error getting VAPID public key:", error);
+  } catch {
+    console.error("get-vapid-public-key: configuração ausente");
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: "Serviço de push indisponível." }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

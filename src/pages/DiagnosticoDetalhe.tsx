@@ -301,7 +301,7 @@ export default function DiagnosticoDetalhe() {
               assignedTo: user?.id || "",
               createdBy: user?.id || "",
               dueDate: "",
-              status: "backlog",
+              status: "not_started",
               evidenceRequired: false,
               sourceDiagnosticId: diagnostic.id,
               sourceActionId: suggestion.id,

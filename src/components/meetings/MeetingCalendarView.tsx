@@ -30,6 +30,7 @@ interface MeetingCalendarViewProps {
 
 const statusColors = {
   scheduled: "bg-blue-500",
+  in_progress: "bg-amber-500",
   completed: "bg-green-500",
   cancelled: "bg-red-500",
 };

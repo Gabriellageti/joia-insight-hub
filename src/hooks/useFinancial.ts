@@ -76,6 +76,7 @@ export function useFinancial() {
     margin: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     if (!user) {
@@ -85,6 +86,7 @@ export function useFinancial() {
     }
 
     setLoading(true);
+    setError(null);
     try {
       const recordsData = await listFinancialRecords();
       const mappedRecords = recordsData.map(mapRecordToLegacy);
@@ -93,7 +95,7 @@ export function useFinancial() {
       // This also keeps old and overdue receivables in "A receber".
       setSummary(calculateFinancialSummary(mappedRecords));
     } catch (error) {
-      console.error("Error fetching financial data:", error);
+      setError("Não foi possível carregar os dados financeiros.");
       toast({
         title: "Erro ao carregar dados financeiros",
         description: (error as Error).message,
@@ -192,6 +194,7 @@ export function useFinancial() {
     expenses,
     summary,
     loading,
+    error,
     addRecord,
     updateRecord,
     deleteRecord,

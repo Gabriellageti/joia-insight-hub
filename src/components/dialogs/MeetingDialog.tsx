@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useData } from "@/contexts/DataContext";
 import { useMeetings, type MeetingData } from "@/hooks/useMeetings";
 import { toast } from "sonner";
+import { listTaskAssignees, type TaskAssignee } from "@/integrations/supabase/tasks";
 
 interface MeetingDialogProps {
   open: boolean;
@@ -34,13 +35,21 @@ export function MeetingDialog({ open, onOpenChange, meeting, onSuccess }: Meetin
     type: "online" as "online" | "presencial",
     location: "",
     link: "",
-    status: "scheduled" as "scheduled" | "completed" | "cancelled",
+    status: "scheduled" as MeetingData["status"],
     agenda: "",
     participants: [] as string[],
     hasMinutes: false,
     duration: "60",
+    endTime: "",
+    responsibleUserId: "",
   });
   const [participantsInput, setParticipantsInput] = useState("");
+  const [assignees, setAssignees] = useState<TaskAssignee[]>([]);
+
+  useEffect(() => {
+    if (!open) return;
+    void listTaskAssignees().then(setAssignees).catch(() => setAssignees([]));
+  }, [open]);
 
   useEffect(() => {
     if (meeting) {
@@ -60,6 +69,8 @@ export function MeetingDialog({ open, onOpenChange, meeting, onSuccess }: Meetin
         participants: meeting.participants,
         hasMinutes: meeting.hasMinutes,
         duration: meeting.duration || "60",
+        endTime: meeting.endTime || "",
+        responsibleUserId: meeting.responsibleUserId || "",
       });
       setParticipantsInput(meeting.participants.join(", "));
     } else {
@@ -79,6 +90,8 @@ export function MeetingDialog({ open, onOpenChange, meeting, onSuccess }: Meetin
         participants: [],
         hasMinutes: false,
         duration: "60",
+        endTime: "",
+        responsibleUserId: "",
       });
       setParticipantsInput("");
     }
@@ -122,8 +135,9 @@ export function MeetingDialog({ open, onOpenChange, meeting, onSuccess }: Meetin
     setLoading(true);
     try {
       if (isEditing && meeting?.id) {
-        await updateMeeting(meeting.id, meetingData);
+        const updated = await updateMeeting(meeting.id, meetingData);
         toast.success("Reunião atualizada com sucesso");
+        onSuccess?.({ id: updated.id, title: updated.title });
       } else {
         const created = await addMeeting(meetingData);
         toast.success("Reunião criada com sucesso");
@@ -187,6 +201,17 @@ export function MeetingDialog({ open, onOpenChange, meeting, onSuccess }: Meetin
               </Select>
             </div>
             <div className="space-y-2">
+              <Label htmlFor="client">Cliente</Label>
+              <Select value={formData.clientId || "none"} onValueChange={(value) => {
+                const clientId = value === "none" ? "" : value;
+                const client = clients.find((item) => item.id === clientId);
+                setFormData({ ...formData, clientId, clientName: client?.nomeFantasia || client?.razaoSocial || client?.name || "", projectId: "", projectName: "" });
+              }}>
+                <SelectTrigger id="client"><SelectValue placeholder="Cliente (opcional)" /></SelectTrigger>
+                <SelectContent><SelectItem value="none">Nenhum</SelectItem>{clients.map((client) => <SelectItem key={client.id} value={client.id}>{client.nomeFantasia || client.razaoSocial || client.name || "Cliente"}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="type">Tipo</Label>
               <Select
                 value={formData.type}
@@ -234,10 +259,21 @@ export function MeetingDialog({ open, onOpenChange, meeting, onSuccess }: Meetin
               </Select>
             </div>
             <div className="space-y-2">
+              <Label htmlFor="end-time">Hora de término</Label>
+              <Input id="end-time" type="time" value={formData.endTime} onChange={(e) => setFormData({ ...formData, endTime: e.target.value })} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="responsible">Responsável</Label>
+              <Select value={formData.responsibleUserId || "none"} onValueChange={(value) => setFormData({ ...formData, responsibleUserId: value === "none" ? "" : value })}>
+                <SelectTrigger id="responsible"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectContent><SelectItem value="none">Não definido</SelectItem>{assignees.map((item) => <SelectItem key={item.id} value={item.id}>{item.full_name || "Usuário"}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="status">Status</Label>
               <Select
                 value={formData.status}
-                onValueChange={(value: "scheduled" | "completed" | "cancelled") =>
+                onValueChange={(value: MeetingData["status"]) =>
                   setFormData({ ...formData, status: value })
                 }
               >
@@ -246,6 +282,7 @@ export function MeetingDialog({ open, onOpenChange, meeting, onSuccess }: Meetin
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="scheduled">Agendada</SelectItem>
+                  <SelectItem value="in_progress">Em andamento</SelectItem>
                   <SelectItem value="completed">Realizada</SelectItem>
                   <SelectItem value="cancelled">Cancelada</SelectItem>
                 </SelectContent>
@@ -272,15 +309,11 @@ export function MeetingDialog({ open, onOpenChange, meeting, onSuccess }: Meetin
                 />
               </div>
             )}
-            <div className="col-span-2 space-y-2">
-              <Label htmlFor="participants">Participantes</Label>
-              <Input
-                id="participants"
-                value={participantsInput}
-                onChange={(e) => setParticipantsInput(e.target.value)}
-                placeholder="Nome 1, Nome 2, Nome 3"
-              />
-            </div>
+            {!isEditing ? <div className="col-span-2 space-y-2">
+              <Label htmlFor="participants">Participantes externos iniciais</Label>
+              <Input id="participants" value={participantsInput} onChange={(e) => setParticipantsInput(e.target.value)} placeholder="Nome 1, Nome 2, Nome 3" />
+              <p className="text-xs text-muted-foreground">Depois de criar, complemente dados e participantes internos na página da reunião.</p>
+            </div> : null}
             <div className="col-span-2 space-y-2">
               <Label htmlFor="agenda">Pauta</Label>
               <Textarea

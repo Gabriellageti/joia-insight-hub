@@ -241,7 +241,7 @@ export function DiagnosticDialog({ open, onOpenChange, diagnostic, defaultTempla
         assignedTo: formData.responsibleId,
         dueDate: formData.dueDate || new Date().toISOString().slice(0, 10),
         impact: "Aplicação de diagnóstico",
-        status: "next",
+        status: "not_started",
         evidenceRequired: false,
         sourceDiagnosticId: created.id,
         what: `Aplicar ${formData.templateName}`,

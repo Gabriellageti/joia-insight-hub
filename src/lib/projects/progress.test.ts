@@ -1,4 +1,3 @@
-// @ts-nocheck - Test file using vitest/bun
 import { describe, expect, test } from "vitest";
 import { buildProgressAuditMessage, calculateWeightedProgress, resolveProgressValue } from "./progress";
 import { ProjectDeliverable, Task } from "../../types";
@@ -44,7 +43,7 @@ describe("calculateWeightedProgress", () => {
     const tasks = [
       createTask({ status: "done" }),
       createTask({ status: "done" }),
-      createTask({ status: "backlog" }),
+      createTask({ status: "not_started" }),
       createTask({ status: "in_progress" }),
     ];
     const deliverables = [
@@ -62,7 +61,7 @@ describe("calculateWeightedProgress", () => {
   });
 
   test("renormaliza pesos quando não existem entregáveis", () => {
-    const tasks = [createTask({ status: "done" }), createTask({ status: "backlog" })];
+    const tasks = [createTask({ status: "done" }), createTask({ status: "not_started" })];
 
     const progress = calculateWeightedProgress({
       tasks,

@@ -1,6 +1,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { ExternalLink, Loader2 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +16,7 @@ import { useData } from "@/contexts/DataContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { ensureProjectTaskAssignee, listTaskAssignees, type TaskAssignee } from "@/integrations/supabase/tasks";
 import { hasTaskValidationErrors, validateTask, type TaskValidationErrors } from "@/lib/tasks/validation";
+import { TASK_STATUSES } from "@/lib/tasks/constants";
 import type { Task } from "@/types";
 import { toast } from "sonner";
 
@@ -22,6 +24,9 @@ interface TaskDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   task?: Task | null;
+  defaultClientId?: string;
+  defaultProjectId?: string;
+  onSuccess?: () => void;
 }
 
 const emptyTask = (userId?: string): Omit<Task, "id" | "createdAt"> => ({
@@ -39,12 +44,12 @@ const emptyTask = (userId?: string): Omit<Task, "id" | "createdAt"> => ({
   priority: "medium",
   startDate: "",
   dueDate: "",
-  status: "backlog",
+  status: "not_started",
   evidenceRequired: false,
 });
 
-export function TaskDialog({ open, onOpenChange, task }: TaskDialogProps) {
-  const { addTask, updateTask, projects, projectsLoading, projectsError } = useData();
+export function TaskDialog({ open, onOpenChange, task, defaultClientId, defaultProjectId, onSuccess }: TaskDialogProps) {
+  const { addTask, updateTask, clients, projects, projectsLoading, projectsError } = useData();
   const { user, isAdmin } = useAuth();
   const [formData, setFormData] = useState<Omit<Task, "id" | "createdAt">>(() => emptyTask(user?.id));
   const [errors, setErrors] = useState<TaskValidationErrors>({});
@@ -54,6 +59,9 @@ export function TaskDialog({ open, onOpenChange, task }: TaskDialogProps) {
   const [assigneesError, setAssigneesError] = useState<string | null>(null);
   const assigneeRequestRef = useRef(0);
   const isEditing = Boolean(task?.id);
+  const availableProjects = formData.clientId
+    ? projects.filter((project) => project.clientId === formData.clientId)
+    : projects;
 
   const loadAssignees = useCallback(async (projectId?: string) => {
     const requestId = ++assigneeRequestRef.current;
@@ -82,13 +90,21 @@ export function TaskDialog({ open, onOpenChange, task }: TaskDialogProps) {
   useEffect(() => {
     if (!open) return;
     setErrors({});
+    const defaultProject = projects.find((project) => project.id === defaultProjectId);
     setFormData(task ? {
       ...emptyTask(user?.id),
       ...task,
-      taskType: task.taskType || (task.projectId ? "project" : "personal"),
+      taskType: task.taskType || (task.projectId ? "project" : task.clientId ? "client" : "personal"),
       assignedTo: task.assignedTo || user?.id || "",
-    } : emptyTask(user?.id));
-  }, [loadAssignees, open, task, user?.id]);
+    } : {
+      ...emptyTask(user?.id),
+      taskType: defaultProject ? "project" : defaultClientId ? "client" : "personal",
+      projectId: defaultProject?.id || "",
+      projectName: defaultProject?.name || "",
+      clientId: defaultProject?.clientId || defaultClientId || "",
+      clientName: defaultProject?.clientName || clients.find((client) => client.id === defaultClientId)?.nomeFantasia || clients.find((client) => client.id === defaultClientId)?.razaoSocial || "",
+    });
+  }, [clients, defaultClientId, defaultProjectId, open, projects, task, user?.id]);
 
   useEffect(() => {
     if (!open) return;
@@ -105,12 +121,28 @@ export function TaskDialog({ open, onOpenChange, task }: TaskDialogProps) {
     setFormData((current) => ({
       ...current,
       taskType,
-      projectId: taskType === "personal" ? "" : current.projectId,
-      projectName: taskType === "personal" ? "" : current.projectName,
+      projectId: taskType === "project" ? current.projectId : "",
+      projectName: taskType === "project" ? current.projectName : "",
       clientId: taskType === "personal" ? "" : current.clientId,
       clientName: taskType === "personal" ? "" : current.clientName,
     }));
     setErrors((current) => ({ ...current, taskType: undefined, projectId: undefined }));
+  };
+
+  const handleClientChange = (clientId: string) => {
+    const client = clients.find((item) => item.id === clientId);
+    setFormData((current) => {
+      const selectedProject = projects.find((project) => project.id === current.projectId);
+      const keepProject = selectedProject?.clientId === clientId;
+      return {
+        ...current,
+        clientId,
+        clientName: client?.nomeFantasia || client?.razaoSocial || client?.name || "",
+        projectId: keepProject ? current.projectId : "",
+        projectName: keepProject ? current.projectName : "",
+      };
+    });
+    setErrors((current) => ({ ...current, clientId: undefined, projectId: undefined }));
   };
 
   const handleProjectChange = (projectId: string) => {
@@ -149,6 +181,7 @@ export function TaskDialog({ open, onOpenChange, task }: TaskDialogProps) {
         await addTask(formData);
         toast.success("Tarefa criada com sucesso.");
       }
+      onSuccess?.();
       onOpenChange(false);
     } catch {
       // DataContext keeps the persisted and local states synchronized and shows the database error.
@@ -162,10 +195,15 @@ export function TaskDialog({ open, onOpenChange, task }: TaskDialogProps) {
       <DialogContent className="max-h-[90vh] w-[calc(100vw-2rem)] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEditing ? "Editar tarefa" : "Nova tarefa"}</DialogTitle>
-          <DialogDescription>Cadastre uma tarefa pessoal ou vinculada a um projeto.</DialogDescription>
+          <DialogDescription>Cadastre uma tarefa pessoal ou relacione-a a um cliente e projeto.</DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} noValidate>
+          {formData.sourceMeetingId ? (
+            <Button asChild type="button" variant="outline" size="sm" className="mt-4">
+              <Link to={`/reunioes/${formData.sourceMeetingId}`} onClick={() => onOpenChange(false)}><ExternalLink className="mr-2 h-4 w-4" />Ver reunião de origem</Link>
+            </Button>
+          ) : null}
           <div className="grid gap-4 py-4 sm:grid-cols-2">
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="task-title">Título *</Label>
@@ -182,20 +220,29 @@ export function TaskDialog({ open, onOpenChange, task }: TaskDialogProps) {
               <Label htmlFor="task-type">Tipo da tarefa *</Label>
               <Select value={formData.taskType} onValueChange={handleTaskTypeChange}>
                 <SelectTrigger id="task-type" aria-invalid={Boolean(errors.taskType)} aria-describedby={errors.taskType ? "task-type-error" : undefined}><SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="personal">Pessoal</SelectItem><SelectItem value="project">Projeto</SelectItem></SelectContent>
+                <SelectContent><SelectItem value="personal">Pessoal</SelectItem><SelectItem value="client">Cliente</SelectItem><SelectItem value="project">Projeto</SelectItem></SelectContent>
               </Select>
               {errors.taskType && <p id="task-type-error" className="text-sm text-destructive">{errors.taskType}</p>}
             </div>
 
             <div className="space-y-2">
+              <Label htmlFor="task-client">Cliente {formData.taskType !== "personal" && "*"}</Label>
+              <Select disabled={formData.taskType === "personal"} value={formData.clientId || "none"} onValueChange={(value) => handleClientChange(value === "none" ? "" : value)}>
+                <SelectTrigger id="task-client" aria-invalid={Boolean(errors.clientId)} aria-describedby={errors.clientId ? "task-client-error" : undefined}><SelectValue placeholder="Selecione o cliente" /></SelectTrigger>
+                <SelectContent><SelectItem value="none">Selecione o cliente</SelectItem>{clients.map((client) => <SelectItem key={client.id} value={client.id}>{client.nomeFantasia || client.razaoSocial || client.name || "Cliente"}</SelectItem>)}</SelectContent>
+              </Select>
+              {errors.clientId && <p id="task-client-error" className="text-sm text-destructive">{errors.clientId}</p>}
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="task-project">Projeto {formData.taskType === "project" && "*"}</Label>
-              <Select disabled={formData.taskType === "personal" || projectsLoading || Boolean(projectsError)} value={formData.projectId || "none"} onValueChange={(value) => handleProjectChange(value === "none" ? "" : value)}>
+              <Select disabled={formData.taskType !== "project" || !formData.clientId || projectsLoading || Boolean(projectsError)} value={formData.projectId || "none"} onValueChange={(value) => handleProjectChange(value === "none" ? "" : value)}>
                 <SelectTrigger id="task-project" aria-invalid={Boolean(errors.projectId)} aria-describedby={errors.projectId ? "task-project-error" : undefined}><SelectValue placeholder={projectsLoading ? "Carregando projetos..." : "Selecione o projeto"} /></SelectTrigger>
-                <SelectContent><SelectItem value="none">Selecione o projeto</SelectItem>{projects.map((project) => <SelectItem key={project.id} value={project.id}>{project.name}</SelectItem>)}</SelectContent>
+                <SelectContent><SelectItem value="none">Selecione o projeto</SelectItem>{availableProjects.map((project) => <SelectItem key={project.id} value={project.id}>{project.name}</SelectItem>)}</SelectContent>
               </Select>
               {errors.projectId && <p id="task-project-error" className="text-sm text-destructive">{errors.projectId}</p>}
               {projectsError && <p className="text-sm text-destructive">{projectsError}</p>}
-              {!projectsLoading && !projectsError && formData.taskType === "project" && projects.length === 0 && <p className="text-sm text-muted-foreground">Nenhum projeto disponível.</p>}
+              {!projectsLoading && !projectsError && formData.taskType === "project" && formData.clientId && availableProjects.length === 0 && <p className="text-sm text-muted-foreground">Nenhum projeto deste cliente está disponível.</p>}
             </div>
 
             <div className="space-y-2 sm:col-span-2">
@@ -214,15 +261,32 @@ export function TaskDialog({ open, onOpenChange, task }: TaskDialogProps) {
               <Label htmlFor="task-status">Status</Label>
               <Select value={formData.status} onValueChange={(value: Task["status"]) => setField("status", value)}>
                 <SelectTrigger id="task-status"><SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="backlog">Backlog</SelectItem><SelectItem value="next">Próximas</SelectItem><SelectItem value="in_progress">Em andamento</SelectItem><SelectItem value="waiting">Aguardando</SelectItem><SelectItem value="review">Em revisão</SelectItem><SelectItem value="done">Concluída</SelectItem></SelectContent>
+                <SelectContent>{TASK_STATUSES.map((status) => <SelectItem key={status.id} value={status.id}>{status.label}</SelectItem>)}</SelectContent>
               </Select>
             </div>
+
+            {formData.status === "blocked" ? (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="task-block-category">Categoria do bloqueio</Label>
+                  <Select value={formData.blockReasonCategory || "other"} onValueChange={(value: NonNullable<Task["blockReasonCategory"]>) => setField("blockReasonCategory", value)}>
+                    <SelectTrigger id="task-block-category"><SelectValue /></SelectTrigger>
+                    <SelectContent><SelectItem value="client">Cliente</SelectItem><SelectItem value="dependency">Dependência</SelectItem><SelectItem value="decision">Decisão</SelectItem><SelectItem value="resource">Recurso</SelectItem><SelectItem value="technical">Técnico</SelectItem><SelectItem value="other">Outro</SelectItem></SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="task-block-reason">Motivo do bloqueio *</Label>
+                  <Textarea id="task-block-reason" rows={2} value={formData.blockReason || ""} onChange={(event) => setField("blockReason", event.target.value)} aria-invalid={Boolean(errors.blockReason)} aria-describedby={errors.blockReason ? "task-block-reason-error" : undefined} placeholder="Explique o impedimento e o que é necessário para liberar a tarefa." />
+                  {errors.blockReason ? <p id="task-block-reason-error" className="text-sm text-destructive">{errors.blockReason}</p> : null}
+                </div>
+              </>
+            ) : null}
 
             <div className="space-y-2">
               <Label htmlFor="task-priority">Prioridade</Label>
               <Select value={formData.priority} onValueChange={(value: Task["priority"]) => setField("priority", value)}>
                 <SelectTrigger id="task-priority"><SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="low">Baixa</SelectItem><SelectItem value="medium">Normal</SelectItem><SelectItem value="high">Alta</SelectItem><SelectItem value="urgent">Urgente</SelectItem></SelectContent>
+                <SelectContent><SelectItem value="low">Baixa</SelectItem><SelectItem value="medium">Média</SelectItem><SelectItem value="high">Alta</SelectItem><SelectItem value="urgent">Urgente</SelectItem></SelectContent>
               </Select>
             </div>
 
@@ -232,6 +296,11 @@ export function TaskDialog({ open, onOpenChange, task }: TaskDialogProps) {
                 <SelectTrigger id="task-category"><SelectValue /></SelectTrigger>
                 <SelectContent><SelectItem value="processo">Processo</SelectItem><SelectItem value="financeiro">Financeiro</SelectItem><SelectItem value="tecnologia">Tecnologia</SelectItem><SelectItem value="treinamento">Treinamento</SelectItem><SelectItem value="compras">Compras</SelectItem><SelectItem value="vendas">Vendas</SelectItem></SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="task-observations">Observações</Label>
+              <Textarea id="task-observations" rows={3} value={formData.observations || ""} onChange={(event) => setField("observations", event.target.value)} placeholder="Contexto, impedimentos ou instruções adicionais" />
             </div>
 
             <div className="flex items-center justify-between gap-3 rounded-md border p-3">

@@ -15,7 +15,7 @@ import { toast } from "sonner";
 export default function ClienteJornada() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { clients, projects, diagnostics, templates } = useData();
+  const { clients, clientsLoading, projects, diagnostics, templates } = useData();
   
   const client = clients.find(c => c.id === id);
   const clientProjects = projects.filter(p => p.clientId === id);
@@ -33,8 +33,7 @@ export default function ClienteJornada() {
     refresh,
   } = useClientJourney(id);
   
-  // Only initialize handler if client exists
-  const actionHandler = client ? useJourneyActionHandler({
+  const actionHandler = useJourneyActionHandler({
     client,
     projects: clientProjects,
     diagnostics: clientDiagnostics,
@@ -44,7 +43,18 @@ export default function ClienteJornada() {
       await registerEvent(input);
     },
     onDataRefresh: refresh,
-  }) : null;
+  });
+
+  if (clientsLoading) {
+    return (
+      <div className="space-y-4" aria-live="polite" aria-busy="true">
+        <Skeleton className="h-10 w-72 max-w-full" />
+        <Skeleton className="h-40 w-full" />
+        <Skeleton className="h-72 w-full" />
+        <span className="sr-only">Carregando jornada do cliente</span>
+      </div>
+    );
+  }
 
   if (!client) {
     return (
@@ -68,8 +78,8 @@ export default function ClienteJornada() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-3 sm:gap-4">
           <Button 
             variant="ghost" 
             size="icon" 
@@ -77,8 +87,8 @@ export default function ClienteJornada() {
           >
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          <div>
-            <h1 className="text-2xl font-semibold text-foreground">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-semibold text-foreground break-words">
               Jornada: {clientName}
             </h1>
             <p className="text-muted-foreground">

@@ -115,12 +115,13 @@ export default function Financeiro() {
     records,
     summary,
     loading,
+    error,
+    refresh,
     addRecord,
     updateRecord,
     deleteRecord,
     markAsPaid,
     undoPayment,
-    refresh,
   } = useFinancial();
 
   const [editingExpense, setEditingExpense] = useState<FinancialRecord | null>(null);
@@ -444,6 +445,18 @@ export default function Financeiro() {
     );
   }
 
+  if (error) {
+    return (
+      <Card>
+        <CardHeader><CardTitle>Não foi possível carregar o Financeiro</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">{error}</p>
+          <Button onClick={() => void refresh()}>Tentar novamente</Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <div className="min-w-0 space-y-5">
       <div>
@@ -569,7 +582,7 @@ export default function Financeiro() {
         <TabsContent value="receivables" className="mt-4">
           <Card className="min-w-0 overflow-hidden">
             <CardHeader>
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <CardTitle>Contas a Receber</CardTitle>
                 <Button onClick={() => setShowReceivableDialog(true)}>
                   <Plus className="h-4 w-4 mr-2" />
@@ -913,7 +926,7 @@ export default function Financeiro() {
         <TabsContent value="contracts" className="mt-4">
           <Card className="min-w-0 overflow-hidden">
             <CardHeader>
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <CardTitle>Contratos Ativos</CardTitle>
                 <Button
                   onClick={() => {
@@ -998,7 +1011,7 @@ export default function Financeiro() {
                                   </AlertDialogHeader>
                                   <AlertDialogFooter>
                                     <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                    <AlertDialogAction onClick={() => deleteContract(contract.id)}>
+                                    <AlertDialogAction onClick={() => void deleteContract(contract.id).catch(() => undefined)}>
                                       Excluir
                                     </AlertDialogAction>
                                   </AlertDialogFooter>

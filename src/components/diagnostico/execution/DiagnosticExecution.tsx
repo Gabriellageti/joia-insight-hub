@@ -95,7 +95,7 @@ export function DiagnosticExecution({
     }
   };
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     setIsSaving(true);
     try {
       await onSave(answers, progressPercent);
@@ -107,7 +107,7 @@ export function DiagnosticExecution({
     } finally {
       setIsSaving(false);
     }
-  };
+  }, [answers, onSave, progressPercent]);
 
   useEffect(() => {
     if (!hasPendingChanges.current) return;
@@ -117,7 +117,7 @@ export function DiagnosticExecution({
     }, 1200);
 
     return () => window.clearTimeout(timer);
-  }, [answers]);
+  }, [handleSave]);
 
   const handleComplete = () => {
     // Check required questions

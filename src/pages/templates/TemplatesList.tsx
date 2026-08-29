@@ -16,13 +16,14 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export default function TemplatesList() {
   const navigate = useNavigate();
-  const { templates, addTemplate, updateTemplate, templatesLoading, templatesError } = useData();
-  const { user } = useAuth();
+  const { templates, addTemplate, deleteTemplate, updateTemplate, templatesLoading, templatesError } = useData();
+  const { can } = useAuth();
   const [search, setSearch] = useState("");
 
-  const userRole = (user?.user_metadata as Record<string, string | undefined> | undefined)?.role;
-  const isAnalyst = (userRole || "").toLowerCase().includes("analista");
-  const canArchive = !isAnalyst;
+  const canCreate = can("templates.create");
+  const canUpdate = can("templates.update");
+  const canArchive = can("templates.archive");
+  const canDelete = can("templates.delete");
 
   const filteredTemplates = useMemo(() => {
     const query = search.toLowerCase();
@@ -34,8 +35,8 @@ export default function TemplatesList() {
   }, [search, templates]);
 
   const handleDuplicate = async (template: DiagnosticTemplate) => {
-    if (isAnalyst) {
-      toast.error("Analistas não podem criar ou duplicar templates.");
+    if (!canCreate) {
+      toast.error("Você não tem permissão para criar ou duplicar templates.");
       return;
     }
     try {
@@ -43,6 +44,21 @@ export default function TemplatesList() {
       toast.success(`Template "${duplicated.name}" duplicado`);
     } catch (error) {
       toast.error((error as Error).message || "Não foi possível duplicar o template");
+    }
+  };
+
+  const handleDelete = async (template: DiagnosticTemplate) => {
+    if (!canDelete) {
+      toast.error("Somente administradores podem excluir templates.");
+      return;
+    }
+    if (window.confirm("Deseja remover este template?")) {
+      try {
+        await deleteTemplate(template.id);
+        toast.success(`Template "${template.name}" removido`);
+      } catch (error) {
+        toast.error((error as Error).message || "Não foi possível remover o template");
+      }
     }
   };
 
@@ -54,23 +70,23 @@ export default function TemplatesList() {
     navigate(`/templates-diagnostico/${template.id}/preview`);
   };
   const handleEdit = (template: DiagnosticTemplate) => {
-    if (isAnalyst) {
-      toast.error("Analistas não podem editar templates.");
+    if (!canUpdate) {
+      toast.error("Você não tem permissão para editar templates.");
       return;
     }
     navigate(`/templates/${template.id}/editar`);
   };
   const goToCreate = () => {
-    if (isAnalyst) {
-      toast.error("Analistas não podem criar templates.");
+    if (!canCreate) {
+      toast.error("Você não tem permissão para criar templates.");
       return;
     }
     navigate("/templates/novo");
   };
 
   const handleArchive = async (template: DiagnosticTemplate) => {
-    if (isAnalyst) {
-      toast.error("Analistas não podem arquivar templates.");
+    if (!canArchive) {
+      toast.error("Somente gestores e administradores podem arquivar templates.");
       return;
     }
     try {
@@ -156,6 +172,7 @@ export default function TemplatesList() {
               onApply={handlePreview}
               onEdit={handleEdit}
               onDuplicate={handleDuplicate}
+              onDelete={handleDelete}
               onArchive={handleArchive}
               canArchive={canArchive}
               disableApply={template.status === "archived"}

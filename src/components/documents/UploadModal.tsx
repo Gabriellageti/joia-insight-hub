@@ -42,11 +42,12 @@ import {
 } from "@/types/documents";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface UploadModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onUpload: (file: Omit<FileItem, "id" | "uploadedAt">) => void;
+  onUpload: (file: Omit<FileItem, "id" | "uploadedAt">) => Promise<unknown>;
   clients: { id: string; name: string }[];
   projects: { id: string; name: string; clientId: string }[];
   tasks: { id: string; title: string; projectId: string }[];
@@ -54,6 +55,7 @@ interface UploadModalProps {
   meetings: { id: string; title: string; projectId: string }[];
   defaultClientId?: string | null;
   defaultProjectId?: string | null;
+  defaultMeetingId?: string | null;
 }
 
 export function UploadModal({
@@ -67,7 +69,9 @@ export function UploadModal({
   meetings,
   defaultClientId,
   defaultProjectId,
+  defaultMeetingId,
 }: UploadModalProps) {
+  const { user, activeMembership } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [clientId, setClientId] = useState<string | null>(defaultClientId ?? null);
   const [projectId, setProjectId] = useState<string | null>(defaultProjectId ?? null);
@@ -79,7 +83,7 @@ export function UploadModal({
   const [descricaoCurta, setDescricaoCurta] = useState("");
   const [taskId, setTaskId] = useState<string | null>(null);
   const [diagnosticId, setDiagnosticId] = useState<string | null>(null);
-  const [meetingId, setMeetingId] = useState<string | null>(null);
+  const [meetingId, setMeetingId] = useState<string | null>(defaultMeetingId ?? null);
   const [tagsPopoverOpen, setTagsPopoverOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
@@ -185,7 +189,9 @@ export function UploadModal({
       const fileExt = file.name.split(".").pop();
       const timestamp = Date.now();
       const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
-      const filePath = `${timestamp}_${sanitizedName}`;
+      if (!activeMembership) throw new Error("Sua conta não possui um workspace ativo.");
+      const scope = clientId ? `clients/${clientId}` : "shared";
+      const filePath = `${activeMembership.workspaceId}/${scope}/${timestamp}_${sanitizedName}`;
 
       // Upload file to Supabase Storage
       const { data: uploadData, error: uploadError } = await supabase.storage
@@ -198,13 +204,6 @@ export function UploadModal({
       if (uploadError) {
         throw new Error(`Erro no upload: ${uploadError.message}`);
       }
-
-      // Get public URL
-      const { data: urlData } = supabase.storage
-        .from("documents")
-        .getPublicUrl(filePath);
-
-      const publicUrl = urlData.publicUrl;
 
       const fileItem: Omit<FileItem, "id" | "uploadedAt"> = {
         nomeArquivo: file.name,
@@ -225,11 +224,16 @@ export function UploadModal({
         },
         tamanhoBytes: file.size,
         mimeType: file.type || "application/octet-stream",
-        uploadedBy: "current-user",
-        url: publicUrl,
+        uploadedBy: user?.id,
+        url: filePath,
       };
 
-      onUpload(fileItem);
+      try {
+        await onUpload(fileItem);
+      } catch (error) {
+        await supabase.storage.from("documents").remove([uploadData.path]);
+        throw error;
+      }
 
       toast({
         title: "Arquivo enviado",
@@ -247,14 +251,13 @@ export function UploadModal({
       setDescricaoCurta("");
       setTaskId(null);
       setDiagnosticId(null);
-      setMeetingId(null);
+      setMeetingId(defaultMeetingId ?? null);
 
       onOpenChange(false);
-    } catch (error: any) {
-      console.error("Upload error:", error);
+    } catch (error: unknown) {
       toast({
         title: "Erro no upload",
-        description: error.message || "Ocorreu um erro ao enviar o arquivo.",
+        description: error instanceof Error ? error.message : "Ocorreu um erro ao enviar o arquivo.",
         variant: "destructive",
       });
     } finally {

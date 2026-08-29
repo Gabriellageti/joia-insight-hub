@@ -178,40 +178,45 @@ export function ClientDialog({
   useEffect(() => {
     if (client) {
       const segmentoTagsText =
-        (client as any).segmentoTags?.length ? (client as any).segmentoTags.join(", ") : "";
+        client.segmentoTags?.length ? client.segmentoTags.join(", ") : "";
 
-      const enderecoFromClient = (client as any).endereco || {};
-      const contatoFromClient = (client as any).contatoPrincipal || {};
+      const enderecoFromClient = client.endereco || {};
+      const contatoFromClient = client.contatoPrincipal || { nome: "" };
 
       setFormData({
-        razaoSocial: (client as any).razaoSocial || (client as any).name || "",
-        nomeFantasia: (client as any).nomeFantasia || (client as any).tradeName || "",
-        cnpj: (client as any).cnpj ? formatCnpj((client as any).cnpj) : "",
+        razaoSocial: client.razaoSocial || client.name || "",
+        nomeFantasia: client.nomeFantasia || client.tradeName || "",
+        cnpj: client.cnpj ? formatCnpj(client.cnpj) : "",
         segmentoTagsText,
-        status: (client as any).status || "ativo",
-        risk: (client as any).risk || "low",
+        status: client.status || "ativo",
+        risk: client.risk || "low",
         contatoPrincipal: {
-          nome: contatoFromClient.nome || (client as any).primaryContactName || "",
+          nome: contatoFromClient.nome || client.primaryContactName || "",
           whatsapp: contatoFromClient.whatsapp
             ? formatWhatsapp(contatoFromClient.whatsapp)
-            : (client as any).primaryContactPhone
-              ? formatWhatsapp((client as any).primaryContactPhone)
+            : client.primaryContactPhone
+              ? formatWhatsapp(client.primaryContactPhone)
               : "",
-          email: contatoFromClient.email || (client as any).primaryContactEmail || "",
+          email: contatoFromClient.email || client.primaryContactEmail || "",
         },
         endereco: {
-          ...emptyAddress,
-          ...enderecoFromClient,
+          cep: enderecoFromClient.cep || "",
+          logradouro: enderecoFromClient.logradouro || "",
+          numero: enderecoFromClient.numero || "",
+          complemento: enderecoFromClient.complemento || "",
+          bairro: enderecoFromClient.bairro || "",
+          cidade: enderecoFromClient.cidade || "",
+          uf: enderecoFromClient.uf || "",
         },
-        observacoesInternas: (client as any).observacoesInternas || "",
+        observacoesInternas: client.observacoesInternas || "",
         preferenciasRelacionamento: {
           diaReuniao:
-            (client as any).preferenciasRelacionamento?.diaReuniao ||
-            (client as any).preferredMeetingDay ||
+            client.preferenciasRelacionamento?.diaReuniao ||
+            client.preferredMeetingDay ||
             "",
           frequencia:
-            (client as any).preferenciasRelacionamento?.frequencia ||
-            (client as any).followUpFrequency ||
+            client.preferenciasRelacionamento?.frequencia ||
+            client.followUpFrequency ||
             "semanal",
         },
       });
@@ -345,7 +350,7 @@ export function ClientDialog({
     const duplicatedClient =
       normalizedCnpj && Array.isArray(clients)
         ? clients.find(
-            (existing: any) => existing.id !== (client as any)?.id && sanitizeNumbers(existing.cnpj || "") === normalizedCnpj
+            (existing) => existing.id !== client?.id && sanitizeNumbers(existing.cnpj || "") === normalizedCnpj
           )
         : undefined;
 
@@ -360,7 +365,7 @@ export function ClientDialog({
       return;
     }
 
-    const clientData: any = {
+    const clientData: Omit<Client, "id" | "createdAt"> = {
       razaoSocial: formData.razaoSocial.trim(),
       nomeFantasia: formData.nomeFantasia.trim(),
       cnpj: formData.cnpj ? formatCnpj(formData.cnpj) : "",
@@ -388,14 +393,14 @@ export function ClientDialog({
         diaReuniao: formData.preferenciasRelacionamento.diaReuniao,
         frequencia: formData.preferenciasRelacionamento.frequencia,
       },
-      projects: (client as any)?.projects || 0,
-      nps: (client as any)?.nps || 0,
-      lastContact: (client as any)?.lastContact || new Date().toLocaleDateString("pt-BR"),
+      projects: client?.projects || 0,
+      nps: client?.nps || 0,
+      lastContact: client?.lastContact || new Date().toLocaleDateString("pt-BR"),
     };
 
     try {
       if (client) {
-        await updateClient((client as any).id, clientData);
+        await updateClient(client.id, clientData);
         toast.success("Cliente atualizado com sucesso");
         onOpenChange(false);
       } else {
@@ -405,11 +410,10 @@ export function ClientDialog({
         if (onCreatedClient) {
           onCreatedClient(createdClient as Client);
         } else {
-          navigate(`/clientes/${(createdClient as any).id}`);
+          navigate(`/clientes/${createdClient.id}`);
         }
       }
-    } catch (error) {
-      console.error(error);
+    } catch {
       toast.error("Não foi possível salvar o cliente. Verifique a conexão e tente novamente.");
     } finally {
       setIsSubmitting(false);

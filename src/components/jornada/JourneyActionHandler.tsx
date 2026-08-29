@@ -17,9 +17,10 @@ import { ProjectDialog } from '@/components/dialogs/ProjectDialog';
 import { DiagnosticDialog } from '@/components/dialogs/DiagnosticDialog';
 import { MeetingDialog } from '@/components/dialogs/MeetingDialog';
 import { ClientDialog } from '@/components/dialogs/ClientDialog';
+import { toast } from 'sonner';
 
 interface JourneyActionHandlerProps {
-  client: Client;
+  client?: Client;
   projects: Project[];
   diagnostics: Diagnostic[];
   templates: DiagnosticTemplate[];
@@ -58,7 +59,8 @@ export function useJourneyActionHandler({
   // Track action context for event registration
   const [currentActionId, setCurrentActionId] = useState<string | null>(null);
   
-  const getContext = useCallback((): AutomationContext => {
+  const getContext = useCallback((): AutomationContext | null => {
+    if (!client) return null;
     const clientName = client.nomeFantasia || client.razaoSocial || client.name || 'Cliente';
     const lastProject = projects[projects.length - 1];
     const lastDiagnostic = diagnostics[diagnostics.length - 1];
@@ -95,7 +97,7 @@ export function useJourneyActionHandler({
     if (!eventType) return;
 
     const eventTitles: Record<JourneyEventType, string> = {
-      client_created: `Cliente atualizado: ${client.name || 'Cliente'}`,
+      client_created: `Cliente atualizado: ${client?.name || 'Cliente'}`,
       project_created: `Projeto criado: ${entityData.name || 'Novo projeto'}`,
       diagnostic_started: `Diagnóstico iniciado: ${entityData.templateName || entityData.name || 'Novo diagnóstico'}`,
       diagnostic_completed: 'Diagnóstico concluído',
@@ -121,11 +123,15 @@ export function useJourneyActionHandler({
     } catch (error) {
       console.error('Failed to register journey event:', error);
     }
-  }, [client.name, currentPhase, onEventRegistered]);
+  }, [client?.name, currentPhase, onEventRegistered]);
 
   const handleAction = useCallback((actionId: string) => {
     const dialogType = getDialogTypeForAction(actionId);
     const context = getContext();
+    if (!client || !context) {
+      toast.error('Aguarde o carregamento do cliente para executar esta ação.');
+      return;
+    }
     
     // Store action ID for event registration on success
     setCurrentActionId(actionId);
@@ -173,10 +179,13 @@ export function useJourneyActionHandler({
       default:
         console.warn('Unknown action type:', actionId);
     }
-  }, [getContext, templates, projects, client.id, navigate]);
+  }, [getContext, templates, projects, client, navigate]);
 
   const buildProjectDefaultsForArea = useCallback((area: string): ProjectDefaults => {
     const context = getContext();
+    if (!context) {
+      throw new Error('Cliente indisponível para criar o projeto.');
+    }
     return {
       clientId: context.clientId,
       clientName: context.clientName,
@@ -369,17 +378,19 @@ export function useJourneyActionHandler({
         onSuccess={handleMeetingSuccess}
       />
       
-      <ClientDialog
-        open={clientDialogOpen}
-        onOpenChange={(open) => {
-          setClientDialogOpen(open);
-          if (!open) {
-            handleClientSuccess();
-            handleDialogClose();
-          }
-        }}
-        client={client}
-      />
+      {client && (
+        <ClientDialog
+          open={clientDialogOpen}
+          onOpenChange={(open) => {
+            setClientDialogOpen(open);
+            if (!open) {
+              handleClientSuccess();
+              handleDialogClose();
+            }
+          }}
+          client={client}
+        />
+      )}
     </>
   );
 

@@ -146,7 +146,7 @@ export function ContractDialog({ open, onOpenChange, contract }: ContractDialogP
 
     try {
       if (isEditing && contract) {
-        updateContract(contract.id, payload);
+        await updateContract(contract.id, payload);
       } else {
         // Wait for the persisted id before linking the generated charges.
         const savedContract = await addContract(payload);

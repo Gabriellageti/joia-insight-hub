@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { MoreHorizontal, Play, FileBarChart2, Clock, ArrowRight } from "lucide-react";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +16,7 @@ import {
 import { Diagnostic } from "@/types";
 import { calculatePendingQuestions, formatRelativeUpdate, isDiagnosticStalled, resolveStatusLabel } from "@/lib/diagnostics";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 interface CardDiagnosticoProps {
   diagnostic: Diagnostic;
@@ -35,6 +36,7 @@ export function CardDiagnostico({ diagnostic, onEdit, onDelete, onDuplicate }: C
   const pendingQuestions = calculatePendingQuestions(diagnostic);
   const stalled = isDiagnosticStalled(diagnostic);
   const statusLabel = resolveStatusLabel(diagnostic.status);
+  const [exporting, setExporting] = useState(false);
 
   const ctaLabel = useMemo(() => {
     if (diagnostic.status === "draft") return "Iniciar";
@@ -65,6 +67,44 @@ export function CardDiagnostico({ diagnostic, onEdit, onDelete, onDuplicate }: C
     }
   };
 
+  const exportPdf = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const { jsPDF } = await import("jspdf");
+      const pdf = new jsPDF();
+      const rows = [
+        ["Cliente", diagnostic.clientName || "Não informado"],
+        ["Projeto", diagnostic.projectName || "Não informado"],
+        ["Template", diagnostic.templateName || "Não informado"],
+        ["Status", statusLabel],
+        ["Progresso", `${diagnostic.progress}%`],
+        ["Perguntas respondidas", `${diagnostic.answeredQuestions}/${diagnostic.totalQuestions}`],
+        ["Oportunidades", String(diagnostic.opportunities)],
+        ["Responsável", diagnostic.responsibleName || "Não definido"],
+        ["Atualizado em", diagnostic.updatedAt || "Não informado"],
+      ];
+      pdf.setFontSize(18);
+      pdf.text("Relatório de Diagnóstico", 16, 20);
+      pdf.setFontSize(11);
+      rows.forEach(([label, value], index) => {
+        const y = 34 + index * 10;
+        pdf.setFont("helvetica", "bold");
+        pdf.text(`${label}:`, 16, y);
+        pdf.setFont("helvetica", "normal");
+        pdf.text(pdf.splitTextToSize(value, 135), 58, y);
+      });
+      const safeName = (diagnostic.name || diagnostic.projectName || "diagnostico")
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9-_]+/gi, "-").replace(/^-|-$/g, "").toLowerCase();
+      pdf.save(`diagnostico-${safeName || diagnostic.id}.pdf`);
+      toast.success("PDF gerado com sucesso.");
+    } catch {
+      toast.error("Não foi possível gerar o PDF.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <Card className="hover:shadow-md transition-shadow h-full">
       <CardHeader className="pb-4">
@@ -89,7 +129,10 @@ export function CardDiagnostico({ diagnostic, onEdit, onDelete, onDuplicate }: C
                 <DropdownMenuItem onClick={() => handleMenuAction("details")}>Ver detalhes</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => handleMenuAction("edit")}>Editar</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => handleMenuAction("duplicate")}>Duplicar</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => alert("PDF exportado (mock)")}>Exportar PDF</DropdownMenuItem>
+                <DropdownMenuItem disabled={exporting} onClick={() => void exportPdf()}>{exporting ? "Gerando PDF..." : "Exportar PDF"}</DropdownMenuItem>
+                {diagnostic.status === "completed" && (
+                  <DropdownMenuItem disabled title="A geração automática exige regras de oportunidade configuradas no template.">Gerar oportunidades · Em breve</DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="text-destructive" onClick={() => handleMenuAction("delete")}>
                   Excluir

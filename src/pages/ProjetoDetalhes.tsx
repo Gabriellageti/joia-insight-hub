@@ -1,16 +1,19 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useData } from "@/contexts/DataContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { ArrowLeft, CalendarDays, CheckCircle2, ClipboardCheck, Edit, ListTodo, Route, Plus } from "lucide-react";
+import { ArrowLeft, Edit, Route, Plus } from "lucide-react";
 import { getProjectTypeLabel } from "@/lib/project-delivery";
 import { ProjectDialog } from "@/components/dialogs/ProjectDialog";
 import { TaskDialog } from "@/components/dialogs/TaskDialog";
-import { useAuth } from "@/contexts/AuthContext";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScopedTasksPanel } from "@/components/plano-acao";
 import type { Task } from "@/types";
+import type { DeliveryStep } from "@/lib/project-delivery";
 import {
   ProjectProgressCard,
   ProjectStatusCard,
@@ -20,6 +23,8 @@ import {
   ProjectDeliverablesList,
   ProjectDeliveryWorkflow,
 } from "@/components/projetos";
+import { ActivityFeed } from "@/components/meetings";
+import { FavoriteButton } from "@/components/operations/FavoriteButton";
 import { ProjectAccessManager } from "@/components/projetos/ProjectAccessManager";
 
 const phaseColors: Record<string, string> = {
@@ -67,26 +72,6 @@ export default function ProjetoDetalhes() {
     [deliverables, id]
   );
 
-  const nextTask = useMemo(
-    () => projectTasks
-      .filter((task) => task.status !== "done")
-      .sort((first, second) => {
-        if (!first.dueDate) return 1;
-        if (!second.dueDate) return -1;
-        return first.dueDate.localeCompare(second.dueDate);
-      })[0],
-    [projectTasks]
-  );
-
-  const nextMeeting = useMemo(
-    () => projectMeetings
-      .filter((meeting) => meeting.status === "scheduled")
-      .sort((first, second) => first.date.localeCompare(second.date))[0],
-    [projectMeetings]
-  );
-
-  const pendingDeliverables = projectDeliverables.filter((deliverable) => deliverable.status !== "done").length;
-
   if (!project) {
     return (
       <div className="space-y-4">
@@ -109,12 +94,42 @@ export default function ProjetoDetalhes() {
 
 
 
+  const buildTaskDraftFromStep = (step: DeliveryStep): Task => ({
+    id: "",
+    title: step.title,
+    description: `Etapa: ${step.title}\n\n${step.description}`,
+    projectId: project.id,
+    projectName: project.name,
+    clientId: project.clientId,
+    clientName: project.clientName,
+    type:
+      project.projectType === "automation" || project.projectType === "ai_implementation"
+        ? "tecnologia"
+        : "processo",
+    responsible: project.responsible || project.responsibleNameLegacy || "",
+    priority: step.approvalRequired ? "high" : "medium",
+    dueDate: "",
+    status: "not_started",
+    evidenceRequired: true,
+    what: step.title,
+    why: step.description,
+    where: project.clientName,
+    when: "",
+    who: project.responsible || project.responsibleNameLegacy || "",
+    how: [...step.checklist, ...step.deliverables.map((item) => `Entregável: ${item}`)].join("\n"),
+    howMuch: "",
+    createdAt: "",
+  });
+
+  const handleCreateTaskFromStep = (step: DeliveryStep) => {
+    setSelectedTask(buildTaskDraftFromStep(step));
+    setTaskDialogOpen(true);
+  };
+
   const handleOpenTask = (task: Task) => {
     setSelectedTask(task);
     setTaskDialogOpen(true);
   };
-
-  const isCompleted = project.phase === "Encerramento" || project.progress >= 100;
 
 
   return (
@@ -135,11 +150,6 @@ export default function ProjetoDetalhes() {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-semibold text-foreground">{project.name}</h1>
-              {isCompleted && (
-                <Badge className="gap-1 bg-emerald-600 text-white hover:bg-emerald-600">
-                  <CheckCircle2 className="h-3.5 w-3.5" /> Concluído
-                </Badge>
-              )}
               <Badge variant="secondary">{getProjectTypeLabel(project.projectType)}</Badge>
               <Badge className={phaseColors[project.phase] || "bg-muted"} variant="outline">
                 {project.phase}
@@ -158,9 +168,17 @@ export default function ProjetoDetalhes() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => navigate(`/plano-acao?projectId=${project.id}`)}>
+          <FavoriteButton entityType="project" entityId={project.id} />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setSelectedTask(null);
+              setTaskDialogOpen(true);
+            }}
+          >
             <Plus className="h-4 w-4 mr-1" />
-            Controle de tarefas
+            Nova Tarefa
           </Button>
           <Button variant="outline" size="sm" onClick={() => setProjectDialogOpen(true)}>
             <Edit className="h-4 w-4 mr-1" />
@@ -179,53 +197,9 @@ export default function ProjetoDetalhes() {
         </div>
       </div>
 
-      <Card className="border-primary/20 bg-primary/5">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Visão rápida do projeto</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            O que precisa de atenção agora, sem percorrer toda a operação.
-          </p>
-        </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-3">
-          <div className="rounded-lg border bg-background p-4">
-            <div className="flex items-center gap-2 text-sm font-medium">
-              <ListTodo className="h-4 w-4 text-primary" /> Próxima ação
-            </div>
-            {nextTask ? (
-              <button type="button" onClick={() => handleOpenTask(nextTask)} className="mt-2 text-left hover:underline">
-                <p className="font-medium">{nextTask.title}</p>
-                <p className="text-xs text-muted-foreground">
-                  {nextTask.responsible || "Responsável pendente"}{nextTask.dueDate ? ` · ${nextTask.dueDate}` : " · Sem prazo"}
-                </p>
-              </button>
-            ) : (
-              <Button variant="link" className="mt-1 h-auto px-0" onClick={() => setTaskDialogOpen(true)}>Criar a primeira tarefa</Button>
-            )}
-          </div>
-          <div className="rounded-lg border bg-background p-4">
-            <div className="flex items-center gap-2 text-sm font-medium">
-              <ClipboardCheck className="h-4 w-4 text-primary" /> Entregas e diagnóstico
-            </div>
-            <p className="mt-2 font-medium">{pendingDeliverables} entrega{pendingDeliverables === 1 ? " pendente" : "s pendentes"}</p>
-            <p className="text-xs text-muted-foreground">{projectDiagnostics.length} diagnóstico{projectDiagnostics.length === 1 ? " vinculado" : "s vinculados"}</p>
-          </div>
-          <div className="rounded-lg border bg-background p-4">
-            <div className="flex items-center gap-2 text-sm font-medium">
-              <CalendarDays className="h-4 w-4 text-primary" /> Próximo contato
-            </div>
-            {nextMeeting ? (
-              <>
-                <p className="mt-2 font-medium">{nextMeeting.title}</p>
-                <p className="text-xs text-muted-foreground">{nextMeeting.date}{nextMeeting.time ? ` · ${nextMeeting.time}` : ""}</p>
-              </>
-            ) : (
-              <p className="mt-2 text-sm text-muted-foreground">Nenhuma reunião agendada.</p>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Cards de Progresso e Status */}
+      <Tabs defaultValue="overview" className="space-y-5">
+        <TabsList className="h-auto w-full justify-start overflow-x-auto"><TabsTrigger value="overview">Visão Geral</TabsTrigger><TabsTrigger value="tasks">Tarefas</TabsTrigger><TabsTrigger value="kanban">Kanban</TabsTrigger><TabsTrigger value="meetings">Reuniões</TabsTrigger><TabsTrigger value="history">Histórico</TabsTrigger></TabsList>
+        <TabsContent value="overview" className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <ProjectProgressCard project={project} />
         <ProjectStatusCard project={project} />
@@ -242,6 +216,7 @@ export default function ProjetoDetalhes() {
       <ProjectDeliveryWorkflow
         project={project}
         tasks={projectTasks}
+        onCreateTask={handleCreateTaskFromStep}
         onOpenTask={handleOpenTask}
       />
 
@@ -255,7 +230,13 @@ export default function ProjetoDetalhes() {
       </div>
 
       {/* Entregáveis */}
-      <ProjectDeliverablesList deliverables={projectDeliverables} />
+      <ProjectDeliverablesList projectId={project.id} deliverables={projectDeliverables} />
+        </TabsContent>
+        <TabsContent value="tasks"><ScopedTasksPanel tasks={projectTasks} mode="list" defaultClientId={project.clientId} defaultProjectId={project.id} showCreate={false} /></TabsContent>
+        <TabsContent value="kanban"><ScopedTasksPanel tasks={projectTasks} mode="kanban" defaultClientId={project.clientId} defaultProjectId={project.id} showCreate={false} /></TabsContent>
+        <TabsContent value="meetings"><ProjectMeetingsList meetings={projectMeetings} project={project} /></TabsContent>
+        <TabsContent value="history"><ActivityFeed projectId={project.id} /></TabsContent>
+      </Tabs>
 
       {/* Dialogs */}
       <ProjectDialog
@@ -281,11 +262,13 @@ export default function ProjetoDetalhes() {
             responsible: project.responsible || project.responsibleNameLegacy || "",
             priority: "medium",
             dueDate: "",
-            status: "backlog",
+            status: "not_started",
             evidenceRequired: false,
             createdAt: "",
           }
         }
+        defaultClientId={project.clientId}
+        defaultProjectId={project.id}
       />
     </div>
   );

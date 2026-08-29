@@ -1,0 +1,26 @@
+import { describe, expect, test } from "bun:test";
+import { validateTask } from "./validation";
+import type { Project } from "@/types";
+
+const projects = [{ id: "project-1", clientId: "client-1" }] as Project[];
+
+describe("validateTask", () => {
+  test("permite tarefa pessoal sem projeto", () => {
+    expect(validateTask({ title: "Revisar agenda", taskType: "personal", assignedTo: "user-1" }, projects)).toEqual({});
+  });
+
+  test("exige projeto válido para tarefa de projeto", () => {
+    expect(validateTask({ title: "Entrega", taskType: "project", assignedTo: "user-1" }, projects).projectId).toBeTruthy();
+    expect(validateTask({ title: "Entrega", taskType: "project", projectId: "unknown", assignedTo: "user-1" }, projects).projectId).toBeTruthy();
+  });
+
+  test("aceita tarefa de cliente e impede projeto de outro cliente", () => {
+    expect(validateTask({ title: "Contato", taskType: "client", clientId: "client-1", assignedTo: "user-1" }, projects)).toEqual({});
+    expect(validateTask({ title: "Entrega", taskType: "project", clientId: "client-2", projectId: "project-1", assignedTo: "user-1" }, projects).projectId).toBeTruthy();
+  });
+
+  test("rejeita prazo anterior ao início", () => {
+    const errors = validateTask({ title: "Entrega", taskType: "personal", assignedTo: "user-1", startDate: "2026-07-15", dueDate: "2026-07-14" }, projects);
+    expect(errors.dueDate).toBeTruthy();
+  });
+});

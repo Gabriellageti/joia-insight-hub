@@ -1,4 +1,4 @@
-import { differenceInCalendarDays, format } from "date-fns";
+﻿import { differenceInCalendarDays, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   AuditMetadata,
@@ -15,10 +15,7 @@ import { formatDatePtBR, parseDatePtBR } from "@/lib/dates";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { PostgrestError } from "@supabase/supabase-js";
-
-// Cliente "untyped" para tabelas de templates que ainda não existem no schema
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const untypedSupabase = supabase as any;
+import { toJsonValue } from "@/lib/json";
 
 type Status = Diagnostic["status"];
 
@@ -68,15 +65,11 @@ export const calculatePendingQuestions = (diagnostic: Diagnostic): number => {
   return Math.max(0, (diagnostic.totalQuestions || 0) - (diagnostic.answeredQuestions || 0));
 };
 
-// Tipos temporários até que as tabelas de templates sejam criadas no banco
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type DbTemplateRow = any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type DbSectionRow = any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type DbQuestionRow = any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type DbRuleRow = any;
+type DbTemplateRow = Database["public"]["Tables"]["diagnostic_templates"]["Row"];
+type DbSectionRow = Database["public"]["Tables"]["template_sections"]["Row"];
+type DbQuestionRow = Database["public"]["Tables"]["template_questions"]["Row"];
+type DbRuleRow = Database["public"]["Tables"]["template_opportunity_rules"]["Row"];
+type DbRuleInsert = Database["public"]["Tables"]["template_opportunity_rules"]["Insert"];
 
 type TemplateDescriptionPayload = {
   description?: string;
@@ -131,11 +124,11 @@ const isMissingTemplatesTable = (error: PostgrestError | null): boolean => {
   return isMissingTemplatesTableMessage(error.message);
 };
 
-const deserializeTemplateDescription = (raw?: string | null) => {
+const deserializeTemplateDescription = (raw?: Database["public"]["Tables"]["diagnostic_templates"]["Row"]["description"]) => {
   if (!raw) return { description: "", metadata: {} as TemplateDescriptionPayload };
 
   try {
-    const parsed = JSON.parse(raw) as TemplateDescriptionPayload & { description?: string };
+    const parsed = (typeof raw === "string" ? JSON.parse(raw) : raw) as TemplateDescriptionPayload & { description?: string };
 
     if (parsed && typeof parsed === "object") {
       const { description = "", ...metadata } = parsed;
@@ -145,7 +138,7 @@ const deserializeTemplateDescription = (raw?: string | null) => {
     // ignore parsing errors and fall back to plain text
   }
 
-  return { description: raw, metadata: {} as TemplateDescriptionPayload };
+  return { description: typeof raw === "string" ? raw : "", metadata: {} as TemplateDescriptionPayload };
 };
 
 const serializeTemplateDescription = (template: Partial<DiagnosticTemplate> & { id?: string }) =>
@@ -200,7 +193,7 @@ const serializeQuestionMetadata = (question: TemplateQuestion): QuestionMetadata
   maxFileSizeMB: question.maxFileSizeMB ?? null,
 });
 
-const parseQuestionMetadata = (payload: DbQuestionRow["metadata"]): QuestionMetadataPayload => {
+const parseQuestionMetadata = (payload: DbQuestionRow["audit"]): QuestionMetadataPayload => {
   if (!payload || typeof payload !== "object") return {};
   return payload as QuestionMetadataPayload;
 };
@@ -244,51 +237,44 @@ const serializeQuestionOptions = (question: TemplateQuestion): QuestionOption[] 
 };
 
 const mapRuleFromDb = (rule: DbRuleRow): TemplateOpportunityRule => {
-  const actions = (rule.actions as Record<string, unknown>) || {};
-
   return {
     id: rule.id,
-    name: (actions.name as string) || rule.title || "Regra de oportunidade",
-    description: (actions.description as string) || rule.description || "",
-    type: ((actions.type as TemplateOpportunityRule["type"]) || "Outro") as TemplateOpportunityRule["type"],
-    estimatedValue: typeof actions.estimatedValue === "number" ? actions.estimatedValue : null,
-    confidence: (actions.confidence as TemplateOpportunityRule["confidence"]) || "media",
-    evidenceType: (actions.evidenceType as TemplateOpportunityRule["evidenceType"]) || "a_coletar",
-    enabled: (actions.enabled as boolean) ?? true,
-    autoGenerate: (actions.autoGenerate as boolean) ?? true,
-    condition: (rule.rule_conditions as OpportunityRuleCondition) || { type: "always" },
-    audit: actions.audit as AuditMetadata | undefined,
+    name: rule.name || "Regra de oportunidade",
+    description: rule.description || "",
+    type: (rule.type as TemplateOpportunityRule["type"]) || "Outro",
+    estimatedValue: rule.estimated_value,
+    confidence: (rule.confidence as TemplateOpportunityRule["confidence"]) || "media",
+    evidenceType: (rule.evidence_type as TemplateOpportunityRule["evidenceType"]) || "a_coletar",
+    enabled: rule.enabled,
+    autoGenerate: rule.auto_generate,
+    condition: (rule.condition as unknown as OpportunityRuleCondition) || { type: "always" },
+    audit: rule.audit as unknown as AuditMetadata | undefined,
   };
 };
 
 const mapRuleToDb = (
   rule: TemplateOpportunityRule,
   templateId: string,
-  sectionId?: string,
+  _sectionId?: string,
   questionId?: string
-): DbRuleRow["Insert"] => ({
+): DbRuleInsert => ({
   id: asUuid(rule.id),
   template_id: templateId,
-  section_id: sectionId || null,
   question_id: questionId || null,
-  title: rule.name,
+  name: rule.name,
   description: rule.description,
-  rule_conditions: rule.condition ?? { type: "always" },
-  actions: {
-    type: rule.type,
-    estimatedValue: rule.estimatedValue ?? null,
-    confidence: rule.confidence,
-    evidenceType: rule.evidenceType,
-    enabled: rule.enabled,
-    autoGenerate: rule.autoGenerate,
-    name: rule.name,
-    description: rule.description,
-    audit: rule.audit,
-  },
+  type: rule.type,
+  estimated_value: rule.estimatedValue ?? null,
+  confidence: rule.confidence,
+  evidence_type: rule.evidenceType,
+  enabled: rule.enabled,
+  auto_generate: rule.autoGenerate,
+  condition: toJsonValue(rule.condition) ?? { type: "always" },
+  audit: toJsonValue(rule.audit),
 });
 
 const mapQuestionFromDb = (question: DbQuestionRow, rules: DbRuleRow[]): TemplateQuestion => {
-  const metadata = parseQuestionMetadata(question.metadata);
+  const metadata = parseQuestionMetadata(question.audit);
   const rawOptions = question.options as QuestionOption[] | string[] | null;
   const optionsWithWeight = (metadata.optionsWithWeight || rawOptions || []) as QuestionOption[];
   const normalizedOptions = (optionsWithWeight || []).map((option) =>
@@ -299,10 +285,10 @@ const mapQuestionFromDb = (question: DbQuestionRow, rules: DbRuleRow[]): Templat
   return {
     id: question.id,
     // Support both legacy 'question' field and new 'title' field
-    title: question.title || question.question || "",
+    title: question.title,
     description: question.description || metadata.questionDescription || metadata.helperText || "",
     // Support both legacy 'question_type' field and new 'type' field
-    type: mapQuestionTypeFromDb(question.type || question.question_type, metadata.type),
+    type: mapQuestionTypeFromDb(question.type, metadata.type),
     weight: question.weight ?? metadata.weight ?? 1,
     includeInScore: metadata.includeInScore ?? true,
     criticality: (question.criticality as TemplateQuestion["criticality"]) || metadata.criticality || "media",
@@ -371,7 +357,7 @@ const mapTemplateFromDb = (
 
 const insertTemplateStructure = async (templateId: string, sections: TemplateSection[]) => {
   for (const section of sections) {
-    const { data: sectionRow, error: sectionError } = await untypedSupabase
+    const { data: sectionRow, error: sectionError } = await supabase
       .from("template_sections")
       .insert({
         id: asUuid(section.id),
@@ -388,7 +374,7 @@ const insertTemplateStructure = async (templateId: string, sections: TemplateSec
     }
 
     for (const question of section.questions || []) {
-      const { data: questionRow, error: questionError } = await untypedSupabase
+      const { data: questionRow, error: questionError } = await supabase
         .from("template_questions")
         .insert({
           id: asUuid(question.id),
@@ -404,7 +390,7 @@ const insertTemplateStructure = async (templateId: string, sections: TemplateSec
           helper_text: question.helperText || null,
           min_value: question.minValue ?? null,
           max_value: question.maxValue ?? null,
-          options: serializeQuestionOptions(question),
+          options: toJsonValue(serializeQuestionOptions(question)),
           audit: question.audit ? JSON.stringify(question.audit) : null,
         })
         .select()
@@ -415,7 +401,7 @@ const insertTemplateStructure = async (templateId: string, sections: TemplateSec
       }
 
       if (question.regraOportunidade) {
-        const { error: ruleError } = await untypedSupabase
+        const { error: ruleError } = await supabase
           .from("template_opportunity_rules")
           .insert(mapRuleToDb(question.regraOportunidade, templateId, sectionRow.id, questionRow.id));
 
@@ -428,14 +414,14 @@ const insertTemplateStructure = async (templateId: string, sections: TemplateSec
 };
 
 const rebuildTemplateStructure = async (templateId: string, sections: TemplateSection[]) => {
-  await untypedSupabase.from("template_opportunity_rules").delete().eq("template_id", templateId);
-  await untypedSupabase.from("template_questions").delete().eq("template_id", templateId);
-  await untypedSupabase.from("template_sections").delete().eq("template_id", templateId);
+  await supabase.from("template_opportunity_rules").delete().eq("template_id", templateId);
+  await supabase.from("template_questions").delete().eq("template_id", templateId);
+  await supabase.from("template_sections").delete().eq("template_id", templateId);
   await insertTemplateStructure(templateId, sections);
 };
 
 const fetchTemplateById = async (id: string): Promise<DiagnosticTemplate | null> => {
-  const { data: templateRow, error: templateError } = await untypedSupabase
+  const { data: templateRow, error: templateError } = await supabase
     .from("diagnostic_templates")
     .select("*")
     .eq("id", id)
@@ -444,9 +430,9 @@ const fetchTemplateById = async (id: string): Promise<DiagnosticTemplate | null>
   if (templateError || !templateRow) return null;
 
   const [{ data: sections }, { data: questions }, { data: rules }] = await Promise.all([
-    untypedSupabase.from("template_sections").select("*").eq("template_id", id),
-    untypedSupabase.from("template_questions").select("*").eq("template_id", id),
-    untypedSupabase.from("template_opportunity_rules").select("*").eq("template_id", id),
+    supabase.from("template_sections").select("*").eq("template_id", id),
+    supabase.from("template_questions").select("*").eq("template_id", id),
+    supabase.from("template_opportunity_rules").select("*").eq("template_id", id),
   ]);
 
   const sectionList = (sections || []).map((section: DbSectionRow) =>
@@ -459,7 +445,7 @@ const fetchTemplateById = async (id: string): Promise<DiagnosticTemplate | null>
 // Diagnostics are fetched directly in DataContext via dedicated integrations
 
 export const fetchTemplates = async (): Promise<DiagnosticTemplate[]> => {
-  const { data: templateRows, error } = await untypedSupabase
+  const { data: templateRows, error } = await supabase
     .from("diagnostic_templates")
     .select("*")
     .order("updated_at", { ascending: false });
@@ -480,17 +466,17 @@ export const fetchTemplates = async (): Promise<DiagnosticTemplate[]> => {
   const templateIds = templateRows.map((row: DbTemplateRow) => row.id);
 
   const [sectionsResponse, questionsResponse, rulesResponse] = await Promise.all([
-    untypedSupabase
+    supabase
       .from("template_sections")
       .select("*")
       .in("template_id", templateIds)
       .order("position", { ascending: true }),
-    untypedSupabase
+    supabase
       .from("template_questions")
       .select("*")
       .in("template_id", templateIds)
       .order("position", { ascending: true }),
-    untypedSupabase.from("template_opportunity_rules").select("*").in("template_id", templateIds),
+    supabase.from("template_opportunity_rules").select("*").in("template_id", templateIds),
   ]);
 
   if (sectionsResponse.error) throw new Error(sectionsResponse.error.message);
@@ -513,7 +499,7 @@ export const fetchTemplates = async (): Promise<DiagnosticTemplate[]> => {
 export const createTemplate = async (
   template: Omit<DiagnosticTemplate, "id"> & { id?: string }
 ): Promise<DiagnosticTemplate> => {
-  const { data: templateRow, error } = await untypedSupabase
+  const { data: templateRow, error } = await supabase
     .from("diagnostic_templates")
     .insert({
       id: asUuid(template.id),
@@ -536,7 +522,7 @@ export const updateTemplateRecord = async (
   id: string,
   template: Partial<DiagnosticTemplate>
 ): Promise<DiagnosticTemplate> => {
-  const { error } = await untypedSupabase
+  const { error } = await supabase
     .from("diagnostic_templates")
     .update({
       name: template.name,
@@ -569,7 +555,7 @@ export const updateTemplateRecord = async (
 };
 
 export const deleteTemplateRecord = async (id: string) => {
-  const { error } = await untypedSupabase.from("diagnostic_templates").delete().eq("id", id);
+  const { error } = await supabase.from("diagnostic_templates").delete().eq("id", id);
   if (error) {
     throw new Error(error.message || "Erro ao remover template");
   }

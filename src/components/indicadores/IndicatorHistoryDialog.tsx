@@ -43,7 +43,7 @@ export function IndicatorHistoryDialog({
 
     setLoading(true);
     try {
-      const { error } = await supabase.from("indicator_history" as any).insert({
+      const { error } = await supabase.from("indicator_history").insert({
         indicator_id: indicator.id,
         value: Number(value),
         recorded_at: date,
@@ -57,9 +57,8 @@ export function IndicatorHistoryDialog({
       setNotes("");
       onSuccess?.();
       onOpenChange(false);
-    } catch (err: any) {
-      console.error("Erro ao registrar valor:", err);
-      toast.error(err.message || "Erro ao registrar valor");
+    } catch {
+      toast.error("Não foi possível registrar o valor.");
     } finally {
       setLoading(false);
     }

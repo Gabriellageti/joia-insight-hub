@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -18,7 +18,7 @@ export function ProjectAccessManager({ projectId }: { projectId: string }) {
   const [accessByUser, setAccessByUser] = useState<Record<string, Access>>({});
   const [saving, setSaving] = useState<string | null>(null);
   const [membersLoaded, setMembersLoaded] = useState(false);
-  const loadMembers = async () => {
+  const loadMembers = useCallback(async () => {
     const { data, error } = await supabase.from("project_members").select("user_id, access_level").eq("project_id", projectId);
     if (error) { toast.error("Não foi possível carregar os acessos do projeto."); return; }
     setAccessByUser((data ?? []).reduce<Record<string, Access>>((accumulator, member) => {
@@ -26,12 +26,12 @@ export function ProjectAccessManager({ projectId }: { projectId: string }) {
       return accumulator;
     }, {}));
     setMembersLoaded(true);
-  };
+  }, [projectId]);
 
   useEffect(() => {
     setMembersLoaded(false);
     void loadMembers();
-  }, [projectId]);
+  }, [loadMembers]);
 
   useEffect(() => {
     const loadPeople = async () => {

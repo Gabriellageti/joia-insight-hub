@@ -11,24 +11,23 @@ import { getDeliveryStepsForProject, getProjectTypeLabel } from "@/lib/project-d
 interface ProjectDeliveryWorkflowProps {
   project: Project;
   tasks?: Task[];
+  onCreateTask?: (step: DeliveryStep) => void;
   onOpenTask?: (task: Task) => void;
 }
 
 const statusLabels: Record<Task["status"], string> = {
-  backlog: "Backlog",
-  next: "Próximas",
+  not_started: "Não iniciada",
   in_progress: "Em andamento",
   waiting: "Aguardando",
-  review: "Em revisão",
+  blocked: "Bloqueada",
   done: "Concluída",
 };
 
 const statusClasses: Record<Task["status"], string> = {
-  backlog: "bg-muted text-muted-foreground",
-  next: "bg-blue-100 text-blue-700",
+  not_started: "bg-muted text-muted-foreground",
   in_progress: "bg-amber-100 text-amber-700",
   waiting: "bg-orange-100 text-orange-700",
-  review: "bg-purple-100 text-purple-700",
+  blocked: "bg-red-100 text-red-700",
   done: "bg-green-100 text-green-700",
 };
 
@@ -63,6 +62,7 @@ const getStepStatus = (index: number, activeIndex: number, stepTasks: Task[]) =>
 export function ProjectDeliveryWorkflow({
   project,
   tasks = [],
+  onCreateTask,
   onOpenTask,
 }: ProjectDeliveryWorkflowProps) {
   const navigate = useNavigate();
@@ -88,6 +88,10 @@ export function ProjectDeliveryWorkflow({
   };
 
   const handleCreateInTaskControl = (step: DeliveryStep) => {
+    if (onCreateTask) {
+      onCreateTask(step);
+      return;
+    }
     const params = new URLSearchParams({ projectId: project.id, newStep: step.title });
     navigate(`/plano-acao?${params.toString()}`);
   };

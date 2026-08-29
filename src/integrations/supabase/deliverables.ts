@@ -9,6 +9,8 @@ export interface DeliverableRow {
   due_date: string | null;
   completed_at: string | null;
   responsible: string | null;
+  responsible_user_id: string | null;
+  item_type: string;
   created_at: string;
   updated_at: string;
 }
@@ -22,6 +24,8 @@ export interface DeliverableInsert {
   due_date?: string | null;
   completed_at?: string | null;
   responsible?: string | null;
+  responsible_user_id?: string | null;
+  item_type?: string;
 }
 
 export interface DeliverableUpdate {
@@ -32,6 +36,8 @@ export interface DeliverableUpdate {
   due_date?: string | null;
   completed_at?: string | null;
   responsible?: string | null;
+  responsible_user_id?: string | null;
+  item_type?: string;
 }
 
 export async function listDeliverables(): Promise<DeliverableRow[]> {

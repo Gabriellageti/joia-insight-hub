@@ -16,6 +16,7 @@ interface CardTemplateProps {
   onApply: (template: DiagnosticTemplate) => void;
   onEdit: (template: DiagnosticTemplate) => void;
   onDuplicate: (template: DiagnosticTemplate) => void;
+  onDelete?: (template: DiagnosticTemplate) => void;
   onArchive?: (template: DiagnosticTemplate) => void;
   primaryActionLabel?: string;
   disableApply?: boolean;
@@ -27,6 +28,7 @@ export function CardTemplate({
   onApply,
   onEdit,
   onDuplicate,
+  onDelete,
   onArchive,
   primaryActionLabel,
   disableApply,
@@ -70,6 +72,7 @@ export function CardTemplate({
               <DropdownMenuLabel>Ações</DropdownMenuLabel>
               <DropdownMenuItem onClick={() => onDuplicate(template)}>Duplicar</DropdownMenuItem>
               <DropdownMenuItem onClick={() => onEdit(template)}>Editar</DropdownMenuItem>
+              {onDelete && <DropdownMenuItem className="text-destructive" onClick={() => onDelete(template)}>Excluir</DropdownMenuItem>}
               {canArchive && onArchive && template.status !== "archived" && (
                 <DropdownMenuItem onClick={() => onArchive(template)}>Arquivar</DropdownMenuItem>
               )}

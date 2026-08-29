@@ -73,8 +73,10 @@ export async function ensureProjectTaskAssignee(projectId: string, userId: strin
   invalidateTaskAssignees(projectId);
 }
 
-export async function listTasks(): Promise<TaskRow[]> {
-  const { data, error } = await supabase.from("tasks").select("*").order("created_at", { ascending: false });
+export async function listTasks(options: { assignedTo?: string } = {}): Promise<TaskRow[]> {
+  let query = supabase.from("tasks").select("*");
+  if (options.assignedTo) query = query.eq("assigned_to", options.assignedTo);
+  const { data, error } = await query.order("created_at", { ascending: false });
 
   if (error) {
     throw new Error(error.message);

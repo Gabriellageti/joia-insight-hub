@@ -130,6 +130,10 @@ export interface ProjectDeliverable {
   title: string;
   status: "pending" | "in_progress" | "done";
   dueDate?: string;
+  description?: string;
+  responsibleUserId?: string;
+  responsibleName?: string;
+  itemType?: "deliverable" | "milestone";
   createdAt: string;
 }
 
@@ -151,12 +155,12 @@ export interface Task {
   type: "processo" | "financeiro" | "tecnologia" | "treinamento" | "compras" | "vendas";
   responsible: string;
   priority: "low" | "medium" | "high" | "urgent";
-  taskType?: "personal" | "project";
+  taskType?: "personal" | "client" | "project";
   assignedTo?: string;
   startDate?: string;
   dueDate: string;
   impact?: string;
-  status: "backlog" | "next" | "in_progress" | "waiting" | "review" | "done";
+  status: "not_started" | "in_progress" | "waiting" | "blocked" | "done";
   checklist?: { id: string; text: string; completed: boolean }[];
   evidenceRequired: boolean;
   evidenceFile?: string;
@@ -171,11 +175,18 @@ export interface Task {
   updatedAt?: string;
   sourceDiagnosticId?: string;
   sourceActionId?: string;
+  sourceMeetingId?: string;
+  sourceDecisionId?: string;
+  sourceNextStepId?: string;
   consultingDay?: number;
   createdBy?: string;
   completedAt?: string;
   completedBy?: string;
   previousStatus?: Task["status"];
+  observations?: string;
+  blockReason?: string;
+  blockReasonCategory?: "client" | "dependency" | "decision" | "resource" | "technical" | "other";
+  blockedAt?: string;
 }
 
 export interface ConsultingDayPlan {
@@ -321,6 +332,7 @@ export interface TemplateQuestion {
   includeInScore?: boolean;
   minValue?: number | null;
   maxValue?: number | null;
+  unit?: string;
   options?: string[];
   optionsWithWeight?: QuestionOption[];
   regraOportunidade?: TemplateOpportunityRule;
@@ -376,12 +388,16 @@ export interface Meeting {
   type: "online" | "presencial";
   location?: string;
   link?: string;
-  status: "scheduled" | "completed" | "cancelled";
+  status: "scheduled" | "in_progress" | "completed" | "cancelled";
   agenda?: string;
   participants: string[];
   hasMinutes: boolean;
   minutes?: MeetingMinutes;
   createdAt: string;
+  updatedAt?: string;
+  endTime?: string;
+  responsibleUserId?: string | null;
+  notes?: string;
 }
 
 export interface MeetingMinutes {

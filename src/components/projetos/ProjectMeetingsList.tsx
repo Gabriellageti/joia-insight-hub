@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,7 @@ interface ProjectMeetingsListProps {
 
 const statusConfig = {
   scheduled: { label: "Agendada", color: "bg-blue-100 text-blue-700" },
+  in_progress: { label: "Em andamento", color: "bg-amber-100 text-amber-700" },
   completed: { label: "Realizada", color: "bg-green-100 text-green-700" },
   cancelled: { label: "Cancelada", color: "bg-muted text-muted-foreground" },
 };
@@ -72,8 +74,9 @@ export function ProjectMeetingsList({ meetings, project }: ProjectMeetingsListPr
               </p>
             )}
             {sortedMeetings.map((meeting) => (
-              <div
+              <Link
                 key={meeting.id}
+                to={`/reunioes/${meeting.id}`}
                 className="flex items-center justify-between rounded-lg border border-border p-3"
               >
                 <div className="flex-1 min-w-0">
@@ -91,7 +94,7 @@ export function ProjectMeetingsList({ meetings, project }: ProjectMeetingsListPr
                 >
                   {statusConfig[meeting.status]?.label || meeting.status}
                 </Badge>
-              </div>
+              </Link>
             ))}
           </div>
         )}

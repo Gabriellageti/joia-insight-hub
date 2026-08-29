@@ -50,11 +50,10 @@ import { parseTaskDate } from "@/lib/tasks/dates";
 import type { Client, ConsultingDayPlan, Project, Task } from "@/types";
 
 const columns: { id: Task["status"]; title: string }[] = [
-  { id: "backlog", title: "Backlog" },
-  { id: "next", title: "Próximas" },
+  { id: "not_started", title: "Não iniciada" },
   { id: "in_progress", title: "Em andamento" },
   { id: "waiting", title: "Aguardando" },
-  { id: "review", title: "Em revisão" },
+  { id: "blocked", title: "Bloqueada" },
   { id: "done", title: "Concluídas" },
 ];
 
@@ -251,12 +250,11 @@ export function ConsultingDayWorkspace({
       low: 3,
     };
     const statusOrder: Record<Task["status"], number> = {
-      backlog: 0,
-      next: 1,
-      in_progress: 2,
-      waiting: 3,
-      review: 4,
-      done: 5,
+      not_started: 0,
+      in_progress: 1,
+      waiting: 2,
+      blocked: 3,
+      done: 4,
     };
     return [...matching].sort((a, b) => {
       if (sortBy === "priority")
@@ -310,7 +308,7 @@ export function ConsultingDayWorkspace({
       assignedTo: currentUserId || "",
       startDate: "",
       dueDate: "",
-      status: "backlog",
+      status: "not_started",
       evidenceRequired: false,
       createdAt: "",
       createdBy: currentUserId || "",
@@ -340,6 +338,12 @@ export function ConsultingDayWorkspace({
       !columns.some((column) => column.id === nextStatus)
     )
       return;
+    if (nextStatus === "blocked") {
+      const reason = window.prompt("Informe o motivo do bloqueio:");
+      if (!reason?.trim()) return;
+      void onUpdateTask(task.id, { status: nextStatus, blockReason: reason.trim(), blockReasonCategory: "other" });
+      return;
+    }
     void onUpdateTask(task.id, { status: nextStatus });
   };
 
@@ -717,7 +721,7 @@ export function ConsultingDayWorkspace({
                           </SelectItem>
                           <SelectItem value="urgent">Urgente</SelectItem>
                           <SelectItem value="high">Alta</SelectItem>
-                          <SelectItem value="medium">Normal</SelectItem>
+                          <SelectItem value="medium">Média</SelectItem>
                           <SelectItem value="low">Baixa</SelectItem>
                         </SelectContent>
                       </Select>

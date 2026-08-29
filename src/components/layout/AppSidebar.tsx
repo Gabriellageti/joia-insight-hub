@@ -13,7 +13,11 @@ import {
   Megaphone,
   Settings,
   ChevronDown,
-  Shapes
+  Shapes,
+  Sunrise,
+  Activity,
+  FileBarChart,
+  Siren,
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -35,21 +39,32 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 
+const startNavItems = [
+  { title: "Meu Dia", url: "/meu-dia", icon: Sunrise },
+  { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
+];
+
 const mainNavItems = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Clientes", url: "/clientes", icon: Users },
   { title: "Projetos", url: "/projetos", icon: FolderKanban },
+  { title: "Plano de Ação", url: "/plano-acao", icon: ListTodo },
+  { title: "Minhas Tarefas", url: "/minhas-tarefas", icon: ClipboardCheck },
+  { title: "Pendências", url: "/pendencias", icon: Siren },
+  { title: "Reuniões", url: "/reunioes", icon: Calendar },
+];
+
+const supportNavItems = [
   { title: "Diagnóstico", url: "/diagnostico", icon: ClipboardCheck },
   { title: "Templates", url: "/templates", icon: Shapes },
-  { title: "Controle de Tarefas", url: "/plano-acao", icon: ListTodo },
   { title: "Indicadores", url: "/indicadores", icon: BarChart3 },
-  { title: "Reuniões", url: "/reunioes", icon: Calendar },
   { title: "Documentos", url: "/documentos", icon: FileText },
 ];
 
 const managementNavItems = [
   { title: "Playbooks", url: "/playbooks", icon: BookOpen },
   { title: "Equipe", url: "/equipe", icon: UserCog },
+  { title: "Atividades", url: "/atividades", icon: Activity },
+  { title: "Relatório Operacional", url: "/relatorios/operacional", icon: FileBarChart },
   { title: "Financeiro", url: "/financeiro", icon: DollarSign },
   { title: "Marketing", url: "/marketing", icon: Megaphone },
 ];
@@ -79,8 +94,12 @@ export function AppSidebar() {
 
       <SidebarContent>
         <SidebarGroup>
+          <SidebarGroupLabel className="text-xs text-muted-foreground uppercase tracking-wider">Início</SidebarGroupLabel>
+          <SidebarGroupContent><SidebarMenu>{startNavItems.map((item) => <SidebarMenuItem key={item.title}><SidebarMenuButton asChild isActive={isActive(item.url)}><NavLink to={item.url} className="flex items-center gap-3"><item.icon className="h-4 w-4" /><span>{item.title}</span></NavLink></SidebarMenuButton></SidebarMenuItem>)}</SidebarMenu></SidebarGroupContent>
+        </SidebarGroup>
+        <SidebarGroup>
           <SidebarGroupLabel className="text-xs text-muted-foreground uppercase tracking-wider">
-            Principal
+            Operação
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -96,6 +115,13 @@ export function AppSidebar() {
               ))}
             </SidebarMenu>
           </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <Collapsible className="group/collapsible">
+            <CollapsibleTrigger asChild><SidebarGroupLabel className="text-xs text-muted-foreground uppercase tracking-wider cursor-pointer flex items-center justify-between hover:text-foreground">Ferramentas<ChevronDown className="h-3 w-3 transition-transform group-data-[state=open]/collapsible:rotate-180" /></SidebarGroupLabel></CollapsibleTrigger>
+            <CollapsibleContent><SidebarGroupContent><SidebarMenu>{supportNavItems.map((item) => <SidebarMenuItem key={item.title}><SidebarMenuButton asChild isActive={isActive(item.url)}><NavLink to={item.url} className="flex items-center gap-3"><item.icon className="h-4 w-4" /><span>{item.title}</span></NavLink></SidebarMenuButton></SidebarMenuItem>)}</SidebarMenu></SidebarGroupContent></CollapsibleContent>
+          </Collapsible>
         </SidebarGroup>
 
         {isAdmin && <SidebarGroup>

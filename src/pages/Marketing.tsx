@@ -76,7 +76,7 @@ export default function Marketing() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-foreground">Marketing e Comercial</h1>
           <p className="text-muted-foreground">CRM, propostas e calendário de conteúdo</p>
@@ -114,10 +114,10 @@ export default function Marketing() {
       </div>
 
       <Tabs defaultValue="crm">
-        <TabsList>
-          <TabsTrigger value="crm"><Users className="h-4 w-4 mr-2" />CRM</TabsTrigger>
-          <TabsTrigger value="proposals"><FileText className="h-4 w-4 mr-2" />Propostas</TabsTrigger>
-          <TabsTrigger value="content"><CalendarIcon className="h-4 w-4 mr-2" />Conteúdo</TabsTrigger>
+        <TabsList className="h-auto w-full justify-start overflow-x-auto">
+          <TabsTrigger className="shrink-0" value="crm"><Users className="h-4 w-4 mr-2" />CRM</TabsTrigger>
+          <TabsTrigger className="shrink-0" value="proposals"><FileText className="h-4 w-4 mr-2" />Propostas</TabsTrigger>
+          <TabsTrigger className="shrink-0" value="content"><CalendarIcon className="h-4 w-4 mr-2" />Conteúdo</TabsTrigger>
         </TabsList>
 
         <TabsContent value="crm" className="mt-4">

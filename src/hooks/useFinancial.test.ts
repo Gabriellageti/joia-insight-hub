@@ -34,7 +34,7 @@ describe("financial record payment mapping", () => {
     ["despesa", "despesa"],
     ["revenue", "receita"],
     ["receita", "receita"],
-  ])("mantém visível o tipo histórico %s como %s", (storedType, expectedType) => {
+  ] as const)("mantém visível o tipo histórico %s como %s", (storedType, expectedType) => {
     expect(mapRecordToLegacy(databaseRecord({ type: storedType })).type).toBe(expectedType);
   });
 

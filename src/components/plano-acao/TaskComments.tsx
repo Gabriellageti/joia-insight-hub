@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { MessageCircle, Send, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,15 +24,18 @@ interface TaskCommentsProps {
   taskTitle: string;
 }
 
-export function TaskComments({ taskId, taskTitle }: TaskCommentsProps) {
+export function TaskComments({ taskId }: TaskCommentsProps) {
   const { user } = useAuth();
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState("");
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const fetchComments = async () => {
+  const fetchComments = useCallback(async () => {
     setLoading(true);
+    setLoadError(false);
     try {
       const { data, error } = await supabase
         .from("task_comments")
@@ -43,36 +46,31 @@ export function TaskComments({ taskId, taskTitle }: TaskCommentsProps) {
       if (error) throw error;
       setComments(data || []);
     } catch (error) {
-      console.error("Erro ao carregar comentários:", error);
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
-  };
+  }, [taskId]);
 
   useEffect(() => {
     if (taskId) {
       fetchComments();
     }
-  }, [taskId]);
+  }, [fetchComments, taskId]);
 
-  const sendNotification = async (commentContent: string, commenterName: string) => {
+  const sendNotification = async (commentId: string) => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
-      await supabase.functions.invoke("notify-task-comment", {
+      const { error } = await supabase.functions.invoke("notify-task-comment", {
         body: {
-          taskId,
-          taskTitle,
-          commentContent,
-          commenterName,
-          commenterId: user?.id,
+          commentId,
         },
       });
-      console.log("Notification sent successfully");
-    } catch (error) {
-      console.error("Error sending notification:", error);
-      // Don't show error to user - notification is secondary
+      if (error) throw error;
+    } catch {
+      toast.warning("Comentário salvo, mas não foi possível enviar as notificações.");
     }
   };
 
@@ -89,12 +87,12 @@ export function TaskComments({ taskId, taskTitle }: TaskCommentsProps) {
 
       const commentContent = newComment.trim();
 
-      const { error } = await supabase.from("task_comments").insert({
+      const { data: createdComment, error } = await supabase.from("task_comments").insert({
         task_id: taskId,
         user_id: user.id,
         user_name: userName,
         content: commentContent,
-      });
+      }).select("id").single();
 
       if (error) throw error;
 
@@ -103,9 +101,8 @@ export function TaskComments({ taskId, taskTitle }: TaskCommentsProps) {
       toast.success("Comentário adicionado");
 
       // Send notification in background
-      sendNotification(commentContent, userName);
-    } catch (error) {
-      console.error("Erro ao adicionar comentário:", error);
+      void sendNotification(createdComment.id);
+    } catch {
       toast.error("Erro ao adicionar comentário");
     } finally {
       setSubmitting(false);
@@ -113,6 +110,8 @@ export function TaskComments({ taskId, taskTitle }: TaskCommentsProps) {
   };
 
   const handleDelete = async (commentId: string) => {
+    if (deletingId) return;
+    setDeletingId(commentId);
     try {
       const { error } = await supabase
         .from("task_comments")
@@ -123,9 +122,10 @@ export function TaskComments({ taskId, taskTitle }: TaskCommentsProps) {
 
       setComments((prev) => prev.filter((c) => c.id !== commentId));
       toast.success("Comentário removido");
-    } catch (error) {
-      console.error("Erro ao remover comentário:", error);
+    } catch {
       toast.error("Erro ao remover comentário");
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -148,6 +148,13 @@ export function TaskComments({ taskId, taskTitle }: TaskCommentsProps) {
       {loading ? (
         <div className="text-sm text-muted-foreground text-center py-4">
           Carregando comentários...
+        </div>
+      ) : loadError ? (
+        <div className="text-sm text-center py-4 space-y-2" role="alert">
+          <p>Não foi possível carregar os comentários.</p>
+          <Button type="button" variant="outline" size="sm" onClick={() => void fetchComments()}>
+            Tentar novamente
+          </Button>
         </div>
       ) : comments.length === 0 ? (
         <div className="text-sm text-muted-foreground text-center py-4">
@@ -184,6 +191,8 @@ export function TaskComments({ taskId, taskTitle }: TaskCommentsProps) {
                           size="icon"
                           className="h-6 w-6 text-muted-foreground hover:text-destructive"
                           onClick={() => handleDelete(comment.id)}
+                          disabled={deletingId === comment.id}
+                          aria-label={`Excluir comentário de ${comment.user_name}`}
                         >
                           <Trash2 className="h-3 w-3" />
                         </Button>
@@ -202,6 +211,7 @@ export function TaskComments({ taskId, taskTitle }: TaskCommentsProps) {
 
       <div className="flex gap-2">
         <Textarea
+          aria-label="Novo comentário"
           placeholder="Escreva um comentário..."
           value={newComment}
           onChange={(e) => setNewComment(e.target.value)}
@@ -217,6 +227,7 @@ export function TaskComments({ taskId, taskTitle }: TaskCommentsProps) {
           onClick={handleSubmit}
           disabled={!newComment.trim() || submitting}
           className="shrink-0"
+          aria-label="Enviar comentário"
         >
           <Send className="h-4 w-4" />
         </Button>
