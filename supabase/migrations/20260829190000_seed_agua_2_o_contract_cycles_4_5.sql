@@ -13,9 +13,9 @@ BEGIN
   SELECT count(*)
     INTO matching_clients
   FROM public.clients
-  WHERE upper(regexp_replace(trim(COALESCE(razao_social, '')), '\s+', ' ', 'g'))
+  WHERE upper(regexp_replace(trim(COALESCE(name, '')), '\s+', ' ', 'g'))
           = 'AGUA 2 O DISTRIBUIDORA DE BEBIDAS LTDA'
-     OR upper(regexp_replace(trim(COALESCE(nome_fantasia, '')), '\s+', ' ', 'g'))
+     OR upper(regexp_replace(trim(COALESCE(trade_name, '')), '\s+', ' ', 'g'))
           = 'AGUA 2 O DISTRIBUIDORA DE BEBIDAS LTDA';
 
   IF matching_clients <> 1 THEN
@@ -26,9 +26,9 @@ BEGIN
 
   SELECT * INTO target_client
   FROM public.clients
-  WHERE upper(regexp_replace(trim(COALESCE(razao_social, '')), '\s+', ' ', 'g'))
+  WHERE upper(regexp_replace(trim(COALESCE(name, '')), '\s+', ' ', 'g'))
           = 'AGUA 2 O DISTRIBUIDORA DE BEBIDAS LTDA'
-     OR upper(regexp_replace(trim(COALESCE(nome_fantasia, '')), '\s+', ' ', 'g'))
+     OR upper(regexp_replace(trim(COALESCE(trade_name, '')), '\s+', ' ', 'g'))
           = 'AGUA 2 O DISTRIBUIDORA DE BEBIDAS LTDA';
 
   FOR cycle IN
