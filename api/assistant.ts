@@ -160,12 +160,26 @@ async function handle(request: Request) {
   }
 
   const complete = async (args: JsonRecord) => {
-    const { error } = await trustedSupabase.rpc("complete_ai_interaction", {
+    const { error: trustedError } = await trustedSupabase.rpc("complete_ai_interaction", {
       p_interaction_id: interactionId,
       p_user_id: authData.user.id,
       ...args,
     });
-    if (error) throw new Error(`AI_AUDIT_COMPLETION_FAILED:${error.code || "unknown"}`);
+    if (!trustedError) return;
+
+    // Compatibility window: the P11 API is deployed before the database removes
+    // the previous user-scoped signature. This path disappears operationally as
+    // soon as the coordinated migration reloads the PostgREST schema cache.
+    if (trustedError.code === "PGRST202") {
+      const { error: legacyError } = await supabase.rpc("complete_ai_interaction", {
+        p_interaction_id: interactionId,
+        ...args,
+      });
+      if (!legacyError) return;
+      throw new Error(`AI_AUDIT_COMPLETION_FAILED:${legacyError.code || "unknown"}`);
+    }
+
+    throw new Error(`AI_AUDIT_COMPLETION_FAILED:${trustedError.code || "unknown"}`);
   };
   try {
     const { data: context, error: contextError } = await supabase.rpc("get_ai_context", {

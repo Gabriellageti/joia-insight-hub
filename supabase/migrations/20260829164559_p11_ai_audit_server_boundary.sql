@@ -58,4 +58,6 @@ GRANT EXECUTE ON FUNCTION public.complete_ai_interaction(
   uuid, uuid, text, text, jsonb, jsonb, text, text, integer, integer, text
 ) TO service_role;
 
+NOTIFY pgrst, 'reload schema';
+
 COMMIT;

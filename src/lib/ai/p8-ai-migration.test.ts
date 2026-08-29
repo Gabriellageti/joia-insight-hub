@@ -13,8 +13,10 @@ describe("P8 Assistente JoIA", () => {
     expect(endpoint).toContain("Authorization: authorization");
     expect(endpoint).toContain('supabase.rpc("get_ai_context"');
     expect(endpoint).toContain('trustedSupabase.rpc("complete_ai_interaction"');
+    expect(endpoint).toContain('trustedError.code === "PGRST202"');
     expect(p11Boundary).toContain("TO service_role");
     expect(p11Boundary).toContain("FROM PUBLIC, anon, authenticated");
+    expect(p11Boundary).toContain("NOTIFY pgrst, 'reload schema'");
   });
   test("persists every generation before calling the model", () => {
     expect(endpoint.indexOf('rpc("begin_ai_interaction"')).toBeLessThan(endpoint.indexOf("generateText({"));
