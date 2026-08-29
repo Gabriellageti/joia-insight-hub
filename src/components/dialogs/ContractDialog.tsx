@@ -24,6 +24,7 @@ import { useToast } from "@/components/ui/use-toast";
 import type { Contract } from "@/types";
 import {
   addBillingPeriod,
+  buildContractInstallments,
   getLocalTodayIso,
   type ContractBillingType,
 } from "@/lib/contract-billing";
@@ -109,22 +110,14 @@ export function ContractDialog({ open, onOpenChange, contract }: ContractDialogP
     const project = projects.find((p) => p.id === projectId);
     const clientName = client?.nomeFantasia || client?.razaoSocial || "";
 
-    const installments =
-      billingType === "projeto"
-        ? [
-            {
-              id: generateId(),
-              value: totalValueNum,
-              dueDate: firstDueDate,
-              status: "pending" as const,
-            },
-          ]
-        : Array.from({ length: installmentCountNum }).map((_, idx) => ({
-            id: generateId(),
-            value: installmentValue,
-            dueDate: addBillingPeriod(firstDueDate, idx, billingType),
-            status: "pending" as const,
-          }));
+    const installments = buildContractInstallments({
+      billingType,
+      totalValue: totalValueNum,
+      installmentCount: installmentCountNum,
+      firstDueDate,
+      existingInstallments: contract?.installments,
+      createId: generateId,
+    });
 
     const payload = {
       title,
