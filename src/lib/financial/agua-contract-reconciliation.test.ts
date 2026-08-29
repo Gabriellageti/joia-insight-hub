@@ -5,6 +5,10 @@ const migrationUrl = new URL(
   import.meta.url,
 );
 const sql = await Bun.file(migrationUrl).text();
+const linkRepairSql = await Bun.file(new URL(
+  "../../../supabase/migrations/20260829223000_repair_contract_installment_links.sql",
+  import.meta.url,
+)).text();
 
 describe("Agua 2 O contract reconciliation", () => {
   test("uses the deployed client schema and weekly contract type", () => {
@@ -25,5 +29,12 @@ describe("Agua 2 O contract reconciliation", () => {
     expect(sql).toContain("GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.financial_recurring_rules TO authenticated");
     expect(sql).toContain("financial_recurring_rules_finance_select");
     expect(sql).toContain("'financeiro_joia'");
+  });
+
+  test("repairs only unambiguous installment links without changing payment records", () => {
+    expect(linkRepairSql).toContain("matching_installments = 1");
+    expect(linkRepairSql).toContain("installment.item ->> 'dueDate' = charge.date::text");
+    expect(linkRepairSql).toContain("(installment.item ->> 'value')::numeric = charge.amount");
+    expect(linkRepairSql).not.toMatch(/UPDATE public\.financial_records/);
   });
 });
