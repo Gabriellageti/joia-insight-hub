@@ -20,9 +20,6 @@ export function useNotifications() {
     if (!user) { setNotifications([]); return; }
     setLoading(true); setError(null);
     try {
-      // Time-based automations run when the app opens, regains focus and every
-      // five minutes. Viewers may be denied by the RPC without losing alerts.
-      await supabase.rpc("run_scheduled_automations");
       const { error: refreshError } = await supabase.rpc("refresh_my_notifications");
       if (refreshError) throw refreshError;
       await loadNotifications();

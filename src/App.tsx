@@ -1,12 +1,12 @@
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { lazy, Suspense } from "react";
+import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
+import { lazy, Suspense, useEffect, useRef } from "react";
 import { BrowserRouter, Navigate, Routes, Route, useLocation } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { DataProvider } from "@/contexts/DataContext";
-import { AuthProvider } from "@/contexts/AuthContext";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AdminRoute } from "@/components/AdminRoute";
 import { MainLayout } from "@/components/layout/MainLayout";
@@ -53,6 +53,24 @@ const Automations = lazy(() => import("./pages/Automations"));
 
 const queryClient = new QueryClient();
 
+function SessionCacheBoundary({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  const client = useQueryClient();
+  const previousUserId = useRef<string | null | undefined>(undefined);
+
+  useEffect(() => {
+    const currentUserId = user?.id ?? null;
+
+    if (previousUserId.current !== undefined && previousUserId.current !== currentUserId) {
+      client.clear();
+    }
+
+    previousUserId.current = currentUserId;
+  }, [client, user?.id]);
+
+  return children;
+}
+
 function RouteBoundary({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   return <ErrorBoundary resetKey={location.pathname}>{children}</ErrorBoundary>;
@@ -73,8 +91,9 @@ const App = () => (
       <TooltipProvider>
         <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <AuthProvider>
-            <PwaInstallProvider>
-              <DataProvider>
+            <SessionCacheBoundary>
+              <PwaInstallProvider>
+                <DataProvider>
               <Toaster />
               <Sonner />
                 <RouteBoundary>
@@ -134,8 +153,9 @@ const App = () => (
                 </Routes>
                   </Suspense>
                 </RouteBoundary>
-              </DataProvider>
-            </PwaInstallProvider>
+                </DataProvider>
+              </PwaInstallProvider>
+            </SessionCacheBoundary>
           </AuthProvider>
         </BrowserRouter>
       </TooltipProvider>

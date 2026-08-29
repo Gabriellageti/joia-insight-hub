@@ -3,6 +3,7 @@ import { APICallError, generateText, Output } from "ai";
 import { z } from "zod";
 
 const MODEL = "openai/gpt-5.6-luna";
+const MAX_REQUEST_BYTES = 64 * 1024;
 const requestSchema = z.object({
   question: z.string().trim().min(3).max(2000),
   scope: z.object({ clientId: z.string().uuid().optional(), meetingId: z.string().uuid().optional(), reportId: z.string().uuid().optional() }).default({}),
@@ -23,8 +24,44 @@ const outputSchema = z.object({
 type Source = { id: string; label: string; url: string };
 type JsonRecord = Record<string, unknown>;
 
-function json(body: unknown, status = 200) {
-  return Response.json(body, { status, headers: { "Cache-Control": "no-store", "Content-Type": "application/json; charset=utf-8" } });
+function json(body: unknown, status = 200, requestId?: string, extraHeaders?: Record<string, string>) {
+  return Response.json(body, {
+    status,
+    headers: {
+      "Cache-Control": "no-store",
+      "Content-Type": "application/json; charset=utf-8",
+      ...(requestId ? { "X-Request-Id": requestId } : {}),
+      ...extraHeaders,
+    },
+  });
+}
+
+async function readJsonBody(request: Request): Promise<unknown> {
+  const declaredLength = Number(request.headers.get("content-length") || 0);
+  if (declaredLength > MAX_REQUEST_BYTES) throw new Error("PAYLOAD_TOO_LARGE");
+  if (!request.body) return null;
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let received = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      received += value.byteLength;
+      if (received > MAX_REQUEST_BYTES) {
+        await reader.cancel("payload too large");
+        throw new Error("PAYLOAD_TOO_LARGE");
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const body = new Uint8Array(received);
+  let offset = 0;
+  for (const chunk of chunks) { body.set(chunk, offset); offset += chunk.byteLength; }
+  return JSON.parse(new TextDecoder().decode(body));
 }
 
 export function collectContext(context: unknown) {
@@ -68,25 +105,68 @@ export function fallback(context: JsonRecord) {
 }
 
 async function handle(request: Request) {
-  if (request.method !== "POST") return json({ error: "Método não permitido" }, 405);
+  const requestIdHeader = request.headers.get("x-request-id");
+  const requestId = requestIdHeader && /^[a-zA-Z0-9._:-]{8,100}$/.test(requestIdHeader)
+    ? requestIdHeader
+    : crypto.randomUUID();
+  const startedAt = Date.now();
+  const logContext: { userId?: string } = {};
+  const respond = (body: unknown, status = 200, extraHeaders?: Record<string, string>) => {
+    const event = { requestId, route: "/api/assistant", status, durationMs: Date.now() - startedAt, userId: logContext.userId };
+    if (status >= 500) console.error("assistant_request_failed", event);
+    else if (status >= 400) console.warn("assistant_request_rejected", event);
+    else console.info("assistant_request_completed", event);
+    return json(body, status, requestId, extraHeaders);
+  };
+
+  if (request.method !== "POST") return respond({ error: "Método não permitido" }, 405, { Allow: "POST" });
+  if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json")) {
+    return respond({ error: "Content-Type deve ser application/json" }, 415);
+  }
   const authorization = request.headers.get("authorization");
-  if (!authorization?.startsWith("Bearer ")) return json({ error: "Sessão necessária" }, 401);
-  const parsed = requestSchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return json({ error: "Pergunta ou escopo inválido" }, 400);
+  if (!authorization?.startsWith("Bearer ")) return respond({ error: "Sessão necessária" }, 401);
+  let rawBody: unknown;
+  try {
+    rawBody = await readJsonBody(request);
+  } catch (error) {
+    if ((error as Error).message === "PAYLOAD_TOO_LARGE") {
+      return respond({ error: "Payload excede 64 KiB" }, 413);
+    }
+    return respond({ error: "JSON inválido" }, 400);
+  }
+  const parsed = requestSchema.safeParse(rawBody);
+  if (!parsed.success) return respond({ error: "Pergunta ou escopo inválido" }, 400);
 
   const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-  if (!supabaseUrl || !supabaseKey) return json({ error: "Backend não configurado" }, 503);
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !supabaseKey || !serviceRoleKey) return respond({ error: "Backend não configurado" }, 503);
   const supabase = createClient(supabaseUrl, supabaseKey, { global: { headers: { Authorization: authorization } }, auth: { persistSession: false, autoRefreshToken: false } });
+  const trustedSupabase = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
   const { data: authData, error: authError } = await supabase.auth.getUser(authorization.slice(7));
-  if (authError || !authData.user) return json({ error: "Sessão inválida" }, 401);
+  if (authError || !authData.user) return respond({ error: "Sessão inválida" }, 401);
+  logContext.userId = authData.user.id;
 
   const { question, scope, history } = parsed.data;
   const dbScope = { client_id: scope.clientId || null, meeting_id: scope.meetingId || null, report_id: scope.reportId || null };
   const { data: interactionId, error: beginError } = await supabase.rpc("begin_ai_interaction", { p_question: question, p_scope: dbScope });
-  if (beginError || !interactionId) return json({ error: beginError?.message || "Não foi possível iniciar a consulta" }, beginError?.code === "54000" ? 429 : 403);
+  if (beginError || !interactionId) {
+    const rateLimited = beginError?.code === "54000";
+    return respond(
+      { error: rateLimited ? "Limite temporário do assistente atingido" : "Não foi possível iniciar a consulta" },
+      rateLimited ? 429 : 403,
+      rateLimited ? { "Retry-After": "60" } : undefined,
+    );
+  }
 
-  const complete = (args: JsonRecord) => supabase.rpc("complete_ai_interaction", { p_interaction_id: interactionId, ...args });
+  const complete = async (args: JsonRecord) => {
+    const { error } = await trustedSupabase.rpc("complete_ai_interaction", {
+      p_interaction_id: interactionId,
+      p_user_id: authData.user.id,
+      ...args,
+    });
+    if (error) throw new Error(`AI_AUDIT_COMPLETION_FAILED:${error.code || "unknown"}`);
+  };
   try {
     const { data: context, error: contextError } = await supabase.rpc("get_ai_context", {
       p_question: question, p_client_id: scope.clientId || null, p_meeting_id: scope.meetingId || null, p_report_id: scope.reportId || null,
@@ -113,17 +193,21 @@ async function handle(request: Request) {
         sourceIds: [...new Set(task.sourceIds.filter((id) => sources.has(id)))],
       }));
       await complete({ p_status: "success", p_answer: generated.answer, p_citations: citations, p_suggested_tasks: suggestedTasks, p_model: MODEL, p_mode: "ai", p_input_tokens: result.usage.inputTokens ?? null, p_output_tokens: result.usage.outputTokens ?? null, p_error_message: null });
-      return json({ interactionId, answer: generated.answer, citations, suggestedTasks, mode: "ai", model: MODEL });
+      return respond({ interactionId, answer: generated.answer, citations, suggestedTasks, mode: "ai", model: MODEL });
     } catch (error) {
       const answer = fallback(context as JsonRecord);
       const allSources = [...sources.values()].slice(0, 8);
       const status = APICallError.isInstance(error) ? error.statusCode : undefined;
       await complete({ p_status: "success", p_answer: answer, p_citations: allSources, p_suggested_tasks: [], p_model: MODEL, p_mode: "fallback", p_input_tokens: null, p_output_tokens: null, p_error_message: `Gateway ${status || "indisponível"}` });
-      return json({ interactionId, answer, citations: allSources, suggestedTasks: [], mode: "fallback", model: MODEL });
+      return respond({ interactionId, answer, citations: allSources, suggestedTasks: [], mode: "fallback", model: MODEL });
     }
   } catch (error) {
-    await complete({ p_status: "error", p_answer: null, p_citations: [], p_suggested_tasks: [], p_model: MODEL, p_mode: "ai", p_input_tokens: null, p_output_tokens: null, p_error_message: (error as Error).message });
-    return json({ interactionId, error: "Não foi possível consultar o contexto permitido." }, 500);
+    try {
+      await complete({ p_status: "error", p_answer: null, p_citations: [], p_suggested_tasks: [], p_model: MODEL, p_mode: "ai", p_input_tokens: null, p_output_tokens: null, p_error_message: (error as Error).message });
+    } catch (auditError) {
+      console.error("assistant_audit_completion_failed", { requestId, userId: authData.user.id, reason: (auditError as Error).message });
+    }
+    return respond({ interactionId, error: "Não foi possível consultar o contexto permitido." }, 500);
   }
 }
 

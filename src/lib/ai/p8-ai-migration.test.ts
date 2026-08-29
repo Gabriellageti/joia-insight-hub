@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 const migration = await Bun.file("supabase/migrations/20260829090000_p8_ai_assistant.sql").text();
 const grants = await Bun.file("supabase/migrations/20260829090500_p8_revoke_ai_interaction_writes.sql").text();
+const p11Boundary = await Bun.file("supabase/migrations/20260829164559_p11_ai_audit_server_boundary.sql").text();
 const endpoint = await Bun.file("api/assistant.ts").text();
 
 describe("P8 Assistente JoIA", () => {
@@ -10,7 +11,10 @@ describe("P8 Assistente JoIA", () => {
     expect(migration).toContain("private.workspace_access_level(v_workspace)");
     for (const source of ["public.tasks", "public.projects", "public.meetings", "public.meeting_decisions", "public.documents", "public.consulting_reports"]) expect(migration).toContain(source);
     expect(endpoint).toContain("Authorization: authorization");
-    expect(endpoint).not.toContain("SERVICE_ROLE");
+    expect(endpoint).toContain('supabase.rpc("get_ai_context"');
+    expect(endpoint).toContain('trustedSupabase.rpc("complete_ai_interaction"');
+    expect(p11Boundary).toContain("TO service_role");
+    expect(p11Boundary).toContain("FROM PUBLIC, anon, authenticated");
   });
   test("persists every generation before calling the model", () => {
     expect(endpoint.indexOf('rpc("begin_ai_interaction"')).toBeLessThan(endpoint.indexOf("generateText({"));

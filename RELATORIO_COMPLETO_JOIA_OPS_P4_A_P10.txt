@@ -1,0 +1,591 @@
+RELATÓRIO COMPLETO — JOIA OPS / JOIA SOLUÇÕES
+Escopo: PWA e implementação sequencial dos módulos P4 ao P10
+Data de consolidação: 29/08/2026
+
+======================================================================
+1. RESUMO EXECUTIVO
+======================================================================
+
+O trabalho solicitado do P4 ao P10 foi implementado sequencialmente, com
+validação individual antes do início de cada etapa seguinte.
+
+Resultado consolidado:
+
+- PWA instalável implementada, permitindo instalar o JoIA Ops no celular
+  ou computador sem App Store ou Play Store.
+- P4 a P10 concluídos e versionados em commits separados.
+- 99 arquivos alterados.
+- 9.308 linhas adicionadas e 1.463 removidas.
+- Migrações de banco aplicadas no projeto Supabase.
+- Build de produção aprovado.
+- 135 testes unitários aprovados.
+- 9 testes de componentes aprovados.
+- 15 testes E2E aprovados.
+- Auditoria visual executada em 22 rotas e 5 larguras de tela.
+- Nenhum erro de console, página em branco ou overflow horizontal encontrado.
+- Frontend enviado à Vercel, mas o acesso público está atualmente protegido
+  pelo login da Vercel.
+- Publicação no GitHub bloqueada porque o repositório remoto configurado não
+  está acessível pela conta conectada.
+
+======================================================================
+2. APLICATIVO INSTALÁVEL — PWA
+======================================================================
+
+O JoIA Ops foi convertido em uma Progressive Web App (PWA).
+
+Isso permite ao usuário:
+
+- Instalar o sistema diretamente pelo navegador.
+- Ter um ícone do JoIA Ops na tela inicial.
+- Abrir o sistema em uma janela semelhante a um aplicativo nativo.
+- Instalar no Android, iPhone, Windows ou macOS.
+- Receber atualizações sem precisar baixar uma nova versão em uma loja.
+- Visualizar instruções específicas de instalação no iPhone.
+- Utilizar recursos básicos de cache e carregamento offline.
+
+Foram implementados:
+
+- Manifesto do aplicativo.
+- Service Worker.
+- Cache de recursos.
+- Detecção de atualização.
+- Aviso de nova versão.
+- Fluxo de instalação.
+- Ícones em 192x192 e 512x512.
+- Ícone maskable.
+- Apple Touch Icon.
+- Identidade visual para atalhos e notificações.
+
+Commit:
+633003a feat: make JoIA Ops installable as a PWA
+
+Merge correspondente:
+2d7b29d — PR #121
+
+======================================================================
+3. P4 — CENTRAL DE DOCUMENTOS
+======================================================================
+
+Commit: c5fb815
+
+Foi criada uma central unificada para armazenamento e gerenciamento de
+documentos.
+
+Principais entregas:
+
+- Pesquisa server-side.
+- Paginação e filtros.
+- Arquivamento e restauração.
+- Exclusão controlada.
+- Versionamento atômico de arquivos.
+- Registro de eventos e auditoria.
+- URLs assinadas para arquivos privados.
+- Reutilização de documentos em clientes e projetos.
+- Suporte a metadados de provedores externos.
+- Central incorporada às áreas de clientes e projetos.
+- Preservação da rota /documentos.
+
+Segurança:
+
+- Bucket privado.
+- Políticas RLS para documentos e arquivos.
+- Registro de eventos em document_events.
+- Acesso restrito ao workspace correspondente.
+
+Migração principal:
+20260829021434_p4_document_central.sql
+
+Relatório técnico:
+docs/relatorios/P4_CENTRAL_DOCUMENTOS.md
+
+Débitos e evoluções possíveis:
+
+- Integração futura com Google Drive ou outro provedor externo.
+- Upload retomável pode ser adicionado se o limite atual de 50 MB deixar de
+  atender às necessidades.
+
+======================================================================
+4. P5 — MODELOS DE PROJETOS E TAREFAS
+======================================================================
+
+Commit: d2a533c
+
+Foi criado um sistema de templates reutilizáveis para padronizar a criação de
+projetos.
+
+Principais entregas:
+
+- Modelos completos de projetos.
+- Modelos independentes de tarefas.
+- Etapas relativas ao início do projeto.
+- Datas calculadas automaticamente.
+- Checklists estruturados em JSON.
+- Aplicação atômica e idempotente.
+- Duplicação seletiva de projetos.
+- Referências a documentos sem duplicar os arquivos.
+- Snapshot da estrutura aplicada.
+- Registro de instanciações.
+- Nova rota /modelos-projeto.
+
+Foi incluído um modelo inicial de Consultoria Empresarial contendo:
+
+- 7 etapas.
+- 7 tarefas.
+- Estrutura reutilizável para novos projetos.
+
+Principais tabelas:
+
+- project_templates
+- project_template_stages
+- task_templates
+- task_template_checklist_items
+- project_stages
+- project_template_documents
+- project_document_links
+- project_template_instantiations
+
+Foram adicionadas 16 políticas RLS relacionadas ao módulo.
+
+Migrações:
+
+- 20260829050000
+- 20260829051500
+- 20260829052000
+- 20260829052500
+- 20260829053000
+
+Relatório técnico:
+docs/relatorios/P5_MODELOS_PROJETO.md
+
+Débitos e evoluções possíveis:
+
+- Seletor visual mais completo para documentos vinculados aos templates.
+- Ampliação do versionamento e arquivamento de modelos.
+
+======================================================================
+5. P6 — CENTRAL DE NOTIFICAÇÕES
+======================================================================
+
+Commit: 264b84f
+
+A central existente foi evoluída para concentrar notificações relevantes do
+sistema.
+
+Principais entregas:
+
+- Prioridades de notificação.
+- Links diretos para a ação relacionada.
+- Menções.
+- Alertas de reuniões próximas ou não concluídas.
+- Alertas de risco de cliente ou projeto.
+- Preferências por categoria.
+- Resolução automática quando o problema deixa de existir.
+- Atualização por Realtime.
+- Atualização ao retornar o foco para a aplicação.
+- Atualização periódica a cada cinco minutos.
+- Preparação para canais externos.
+
+A estrutura internal_notifications existente foi reaproveitada, evitando
+sistemas paralelos.
+
+Segurança:
+
+- Usuários acessam apenas as próprias notificações.
+- Conteúdo imutável pelo navegador.
+- Criação automática controlada pelo backend.
+
+Migrações:
+
+- 20260829070000
+- 20260829070500
+
+Relatório técnico:
+docs/relatorios/P6_NOTIFICACOES.md
+
+Débitos e evoluções possíveis:
+
+- E-mail, WhatsApp e push foram estruturalmente preparados, mas não ativados
+  por dependerem de credenciais externas.
+- Menções podem futuramente receber tokens estruturados mais sofisticados.
+
+======================================================================
+6. P7 — RELATÓRIOS DE CONSULTORIA
+======================================================================
+
+Commit: b862d52
+
+Foi implementado um módulo completo para criação e versionamento de relatórios
+de consultoria.
+
+Principais entregas:
+
+- Central de relatórios.
+- Geração inicial por cliente, período e projetos.
+- Consolidação automática de fontes do sistema.
+- 12 seções editáveis.
+- Rascunhos.
+- Finalização imutável.
+- Histórico de versões.
+- Criação de nova versão baseada em relatório anterior.
+- Exportação para PDF.
+- Impressão.
+- Cópia e compartilhamento.
+
+Rotas:
+
+- /relatorios/consultoria
+- /relatorios/consultoria/:id
+
+Tabela principal:
+
+- consulting_reports
+
+Segurança:
+
+- Membros podem visualizar.
+- Gestores podem criar e editar.
+- Relatórios finalizados tornam-se imutáveis.
+- Controle de concorrência para evitar sobrescritas.
+
+Migração:
+20260829080000_p7_consulting_reports.sql
+
+O PDF foi validado visualmente e pela extração do conteúdo textual.
+
+Relatório técnico:
+docs/relatorios/P7_RELATORIOS_CONSULTORIA.md
+
+Evoluções possíveis:
+
+- Gráficos adicionais.
+- Branding configurável.
+- Mais modelos de relatório.
+- Aprimoramento do fluxo de compartilhamento.
+
+======================================================================
+7. P8 — ASSISTENTE DE IA
+======================================================================
+
+Commit: 8171e6b
+
+Foi implementado um assistente de IA seguro e contextualizado.
+
+Principais entregas:
+
+- Nova rota /assistente.
+- Contexto por workspace.
+- Contexto opcional por cliente, projeto, reunião ou relatório.
+- Rastreamento das fontes utilizadas.
+- Histórico recente.
+- Auditoria das interações e gerações.
+- Sugestões de tarefas.
+- Revisão humana obrigatória antes de qualquer criação.
+- Nenhuma escrita operacional automática.
+- Interface construída com componentes especializados para IA.
+- Fallback estruturado quando o provedor não estiver disponível.
+
+Backend:
+
+- Endpoint api/assistant.ts.
+- Vercel AI Gateway.
+- Modelo configurado: openai/gpt-5.6-luna.
+- Duração máxima de execução configurada para 60 segundos.
+
+Segurança:
+
+- O navegador não pode gravar diretamente a auditoria de IA.
+- Contexto obtido respeitando RLS.
+- Fontes persistidas e relacionadas à geração.
+- Instruções existentes nos dados tratadas como conteúdo não confiável.
+- Cada geração possui identificação e histórico.
+- Sugestões não provocam escritas automáticas no sistema.
+
+Migrações:
+
+- 20260829090000_p8_ai_assistant.sql
+- 20260829090500_p8_revoke_ai_interaction_writes.sql
+
+Relatório técnico:
+docs/relatorios/P8_ASSISTENTE_IA.md
+
+Dependências e débitos:
+
+- Disponibilidade da IA depende da configuração correta do deployment e do
+  OIDC/AI Gateway da Vercel.
+- A migração futura do React Router para a versão 7 deve ser avaliada para
+  solucionar alertas moderados de dependências.
+
+======================================================================
+8. P9 — CRM E PROCESSO COMERCIAL
+======================================================================
+
+Commit: 84ab8ae
+
+Foi implementado um CRM conectado ao restante do JoIA Ops.
+
+Principais entregas:
+
+- Nova rota /comercial.
+- Kanban responsivo.
+- Oito etapas comerciais.
+- Formulário de oportunidades.
+- Movimentação entre etapas.
+- Registro obrigatório do motivo de perda.
+- Histórico de atividades.
+- Propostas comerciais e respectivos status.
+- Próximos passos e follow-ups.
+- Integração com Meu Dia.
+- Conversão de oportunidade ganha em cliente.
+- Detecção de possíveis clientes duplicados.
+- Criação de projeto após a conversão.
+- Integração com os modelos criados no P5.
+
+Indicadores:
+
+- Oportunidades abertas.
+- Valor do pipeline.
+- Propostas enviadas.
+- Ganhos e perdas.
+- Taxa de conversão.
+- Origem das oportunidades.
+
+Principais tabelas:
+
+- commercial_activities
+- commercial_proposals
+- commercial_follow_ups
+- commercial_pipeline_stages
+
+Funções:
+
+- schedule_commercial_follow_up
+- find_lead_client_duplicates
+- convert_lead_to_client
+
+Segurança:
+
+- Leitura por membros.
+- Escrita por gestores.
+- Exclusão reservada a administradores.
+- Follow-ups vinculados ao responsável.
+
+Migrações:
+
+- 20260829100000
+- 20260829100500
+
+Relatório técnico:
+docs/relatorios/P9_CRM_COMERCIAL.md
+
+Evoluções possíveis:
+
+- Editor visual das etapas do pipeline.
+- Migração futura para React Router 7.
+
+======================================================================
+9. P10 — AUTOMAÇÕES
+======================================================================
+
+Commit: 3bbeb79
+
+Foi implementado um motor central de automações baseado em condições e ações.
+
+Nova rota:
+
+- /automacoes
+
+Principais recursos:
+
+- Ativação e desativação de regras.
+- Execução manual.
+- Histórico de execuções.
+- Métricas.
+- Registro de erros e duração.
+- Eventos transacionais.
+- Avaliações periódicas.
+- Atualização ao abrir o sistema ou retornar o foco.
+- Verificação automática a cada cinco minutos.
+- Isolamento de erros entre regras.
+- Proteção contra loops.
+- Idempotência.
+- Deduplicação de notificações.
+- Advisory lock para impedir execuções concorrentes.
+
+Regras implementadas:
+
+1. Tarefa urgente atrasada notifica o responsável.
+2. Projeto inativo alerta gestores e altera a atenção de saúde.
+3. Reunião finalizada registra confirmação.
+4. Oportunidade ganha sugere a criação do cliente.
+5. Cliente criado sugere um novo projeto.
+6. Aplicação de template confirma e registra a estrutura.
+7. Próximo passo comercial atrasado cria tarefa vinculada.
+8. Tarefa bloqueada por muito tempo alerta gestores.
+
+Principais tabelas:
+
+- automation_rules
+- automation_events
+- automation_runs
+- automation_connectors
+
+Controles de segurança:
+
+- Profundidade máxima de cinco eventos encadeados.
+- Identificadores de correlação e causa.
+- Chaves exclusivas de idempotência.
+- Gestão das regras restrita a gestores.
+- Conectores externos criados como inativos.
+- Erros de uma regra não interrompem as demais.
+
+Conectores futuros preparados:
+
+- Google Calendar.
+- Google Drive.
+- Gmail.
+- WhatsApp.
+- Slack.
+- APIs externas.
+
+Migrações:
+
+- 20260829110000
+- 20260829110500
+
+Relatório técnico:
+docs/relatorios/P10_AUTOMACOES.md
+
+======================================================================
+10. VALIDAÇÃO FINAL
+======================================================================
+
+Bateria consolidada executada:
+
+- npm run check: aprovado.
+- 135 testes unitários: aprovados.
+- 9 testes de componentes: aprovados.
+- Build de produção: aprovado.
+- Geração da PWA e Service Worker: aprovada.
+- 15 testes Playwright E2E: aprovados.
+- Auditoria em 22 rotas.
+- Larguras testadas: 320, 375, 768, 1024 e 1440 pixels.
+- Nenhuma página em branco.
+- Nenhum erro de console.
+- Nenhum overflow horizontal.
+
+No Supabase, as migrações P4 a P10 foram aplicadas no projeto:
+
+uopxixfgaaxsgqgrfpvx
+
+O lint do banco não encontrou erros relacionados aos módulos novos.
+
+Permanece somente um aviso legado em:
+
+public.create_financial_recurring_expense
+
+Esse aviso é anterior ao escopo deste trabalho.
+
+======================================================================
+11. COMMITS
+======================================================================
+
+- PWA: 633003a
+- Merge da PWA na main: 2d7b29d
+- P4: c5fb815
+- P5: d2a533c
+- P6: 264b84f
+- P7: b862d52
+- P8: 8171e6b
+- P9: 84ab8ae
+- P10: 3bbeb79
+
+Branch com P4 a P10:
+
+codex/p4-p10-platform
+
+Estado local no momento da consolidação:
+
+- Árvore de trabalho limpa.
+- Todos os P commitados individualmente.
+
+======================================================================
+12. SITUAÇÃO DA PUBLICAÇÃO
+======================================================================
+
+SUPABASE
+
+As estruturas de banco, políticas RLS, funções e migrações P4 a P10 estão
+aplicadas no projeto Supabase.
+
+VERCEL
+
+Foi criado um deployment de produção:
+
+https://joia-ops-live-joia-solucoes-projects.vercel.app
+
+Deployment ID:
+
+dpl_81s8pnJ1XpwUDEWMLdY1iHXFKpP4
+
+No momento, a URL redireciona para autenticação da Vercel porque o projeto está
+com Deployment Protection. O build foi enviado, mas ainda não foi possível
+confirmar o funcionamento público e autenticado nessa URL.
+
+Também foi criado um preview:
+
+https://joia-ci9ofy671-joia-solucoes-projects.vercel.app
+
+GITHUB
+
+O push não pôde ser concluído porque o remote configurado:
+
+https://github.com/Gabriellageti/joia-insight-hub.git
+
+retorna:
+
+Repository not found
+
+A conta GitHub conectada possui acesso aos repositórios da organização
+joiasolucoes-alt, mas não ao remote configurado.
+
+Estado exato da publicação:
+
+- Código P4 a P10: concluído e commitado localmente.
+- Supabase: atualizado.
+- Vercel: deployment criado, porém protegido.
+- GitHub: ainda não sincronizado por falta de acesso ao repositório remoto.
+
+======================================================================
+13. PENDÊNCIAS PARA ENCERRAMENTO INTEGRAL DA PUBLICAÇÃO
+======================================================================
+
+1. Corrigir ou substituir o remote do GitHub por um repositório acessível.
+2. Enviar a branch codex/p4-p10-platform ao GitHub.
+3. Integrar essa branch à branch principal após revisão.
+4. Confirmar que o projeto correto está vinculado à conta/equipe da Vercel.
+5. Remover ou configurar adequadamente o Deployment Protection caso o sistema
+   deva ser acessível publicamente.
+6. Validar o fluxo autenticado completo no deployment final.
+7. Confirmar as variáveis de ambiente de produção do Supabase e do AI Gateway.
+8. Ativar conectores externos somente após cadastrar credenciais e revisar
+   permissões.
+
+======================================================================
+14. CONCLUSÃO
+======================================================================
+
+O escopo funcional da PWA e dos módulos P4 a P10 foi implementado, testado e
+validado no código e no banco de dados. Os módulos foram construídos de forma
+integrada, reutilizando estruturas existentes e evitando fluxos paralelos para
+documentos, notificações, oportunidades e estados operacionais.
+
+As pendências restantes não são falhas de implementação dos módulos. Elas estão
+concentradas no acesso à infraestrutura externa de publicação:
+
+- permissão para o repositório GitHub correto;
+- configuração da conta/equipe da Vercel;
+- liberação ou ajuste da proteção do deployment;
+- validação autenticada do ambiente final.
+
+Fim do relatório.
