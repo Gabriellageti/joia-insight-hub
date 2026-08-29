@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, CalendarClock, Check, ChevronDown, ChevronUp, Clipboard, ExternalLink, FileUp, Focus, ListChecks, Loader2, Plus, SquareCheckBig, Trash2, Users } from "lucide-react";
+import { ArrowLeft, CalendarClock, Check, ChevronDown, ChevronUp, Clipboard, ExternalLink, FileUp, Focus, ListChecks, Loader2, Plus, Sparkles, SquareCheckBig, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -118,7 +118,7 @@ export default function ReuniaoDetalhes() {
       {isMeetingStale(data.meeting) ? <Alert variant="destructive"><AlertTitle>Reunião pendente</AlertTitle><AlertDescription>A data já passou, mas a reunião continua agendada. Inicie, conclua ou cancele o registro.</AlertDescription></Alert> : null}
 
       {data.meeting.status === "Realizada" ? (
-        <Card><CardHeader className="flex-row items-center justify-between"><CardTitle>Resumo da reunião</CardTitle><Button variant="outline" size="sm" onClick={() => void navigator.clipboard.writeText(buildMeetingSummary(data)).then(() => toast.success("Resumo copiado."))}><Clipboard className="mr-2 h-4 w-4" />Copiar texto</Button></CardHeader><CardContent><pre className="whitespace-pre-wrap font-sans text-sm text-muted-foreground">{buildMeetingSummary(data)}</pre></CardContent></Card>
+        <Card><CardHeader className="flex-row items-center justify-between gap-2"><CardTitle>Resumo da reunião</CardTitle><div className="flex flex-wrap gap-2"><Button asChild variant="outline" size="sm"><Link to={`/assistente?meetingId=${data.meeting.id}&auto=1&prompt=${encodeURIComponent("Gere um resumo desta reunião, destaque decisões e próximos passos e sugira tarefas que ainda precisam ser confirmadas.")}`}><Sparkles className="mr-2 h-4 w-4" />Gerar com IA</Link></Button><Button variant="outline" size="sm" onClick={() => void navigator.clipboard.writeText(buildMeetingSummary(data)).then(() => toast.success("Resumo copiado."))}><Clipboard className="mr-2 h-4 w-4" />Copiar texto</Button></div></CardHeader><CardContent><pre className="whitespace-pre-wrap font-sans text-sm text-muted-foreground">{buildMeetingSummary(data)}</pre></CardContent></Card>
       ) : null}
 
       <div className="grid gap-5 xl:grid-cols-2">

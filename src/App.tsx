@@ -47,6 +47,7 @@ const TemplateDiagnosticPreview = lazy(() => import("./pages/templates/TemplateD
 const ProjectTemplates = lazy(() => import("./pages/ProjectTemplates"));
 const ConsultingReports = lazy(() => import("./pages/ConsultingReports"));
 const ConsultingReportDetail = lazy(() => import("./pages/ConsultingReportDetail"));
+const Assistant = lazy(() => import("./pages/Assistant"));
 
 const queryClient = new QueryClient();
 
@@ -98,6 +99,7 @@ const App = () => (
                           <Route path="/modelos-projeto" element={<ProjectTemplates />} />
                           <Route path="/relatorios/consultoria" element={<ConsultingReports />} />
                           <Route path="/relatorios/consultoria/:id" element={<ConsultingReportDetail />} />
+                          <Route path="/assistente" element={<Assistant />} />
                           <Route path="/templates/novo" element={<TemplateCreate />} />
                           <Route path="/templates/:id/editar" element={<TemplateEdit />} />
                           <Route path="/templates/:id/preview" element={<TemplatePreview />} />

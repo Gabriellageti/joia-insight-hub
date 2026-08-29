@@ -140,6 +140,71 @@ export type Database = {
           },
         ]
       }
+      ai_interactions: {
+        Row: {
+          answer: string | null
+          citations: Json
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          input_tokens: number | null
+          mode: string
+          model: string | null
+          output_tokens: number | null
+          question: string
+          scope: Json
+          status: string
+          suggested_tasks: Json
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          answer?: string | null
+          citations?: Json
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          input_tokens?: number | null
+          mode?: string
+          model?: string | null
+          output_tokens?: number | null
+          question: string
+          scope?: Json
+          status?: string
+          suggested_tasks?: Json
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          answer?: string | null
+          citations?: Json
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          input_tokens?: number | null
+          mode?: string
+          model?: string | null
+          output_tokens?: number | null
+          question?: string
+          scope?: Json
+          status?: string
+          suggested_tasks?: Json
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_interactions_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_contacts: {
         Row: {
           client_id: string
@@ -3708,9 +3773,28 @@ export type Database = {
         }
         Returns: number
       }
+      begin_ai_interaction: {
+        Args: { p_question: string; p_scope?: Json }
+        Returns: string
+      }
       claim_task_comment_notification: {
         Args: { _channel: string; _comment_id: string; _recipient_id: string }
         Returns: boolean
+      }
+      complete_ai_interaction: {
+        Args: {
+          p_answer?: string
+          p_citations?: Json
+          p_error_message?: string
+          p_input_tokens?: number
+          p_interaction_id: string
+          p_mode?: string
+          p_model?: string
+          p_output_tokens?: number
+          p_status: string
+          p_suggested_tasks?: Json
+        }
+        Returns: undefined
       }
       create_consulting_report_version: {
         Args: { p_report_id: string }
@@ -3771,6 +3855,15 @@ export type Database = {
           p_project_ids?: string[]
         }
         Returns: string
+      }
+      get_ai_context: {
+        Args: {
+          p_client_id?: string
+          p_meeting_id?: string
+          p_question: string
+          p_report_id?: string
+        }
+        Returns: Json
       }
       get_operations_dashboard: {
         Args: {

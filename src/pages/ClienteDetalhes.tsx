@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { AlertTriangle, ArrowLeft, BriefcaseBusiness, CalendarClock, CheckCircle2, Clock3, Edit, FileText, FolderKanban, ListTodo, Route, Trash2, Users } from "lucide-react";
+import { AlertTriangle, ArrowLeft, BriefcaseBusiness, CalendarClock, CheckCircle2, Clock3, Edit, FileText, FolderKanban, ListTodo, Route, Sparkles, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -63,7 +63,7 @@ export default function ClienteDetalhes() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-3"><Button asChild variant="ghost" className="px-2"><Link to="/clientes"><ArrowLeft className="mr-2 h-4 w-4" />Voltar</Link></Button><div><p className="text-sm text-muted-foreground">Central do cliente</p><h1 className="text-2xl font-semibold">{displayName}</h1></div><Badge variant={client.status === "ativo" ? "default" : "secondary"}>{client.status === "ativo" ? "Ativo" : "Inativo"}</Badge></div>
-        <div className="flex flex-wrap gap-2"><FavoriteButton entityType="client" entityId={client.id} /><Button variant="outline" onClick={() => navigate(`/relatorios/consultoria?clientId=${client.id}`)}><FileText className="mr-2 h-4 w-4" />Gerar relatório</Button><Button variant="outline" onClick={() => navigate(`/clientes/${id}/jornada`)}><Route className="mr-2 h-4 w-4" />Jornada</Button><Button variant="outline" onClick={() => setDialogOpen(true)}><Edit className="mr-2 h-4 w-4" />Editar</Button><Button variant="ghost" className="text-destructive" onClick={() => void handleDelete()}><Trash2 className="mr-2 h-4 w-4" />Excluir</Button></div>
+        <div className="flex flex-wrap gap-2"><FavoriteButton entityType="client" entityId={client.id} /><Button variant="outline" onClick={() => navigate(`/assistente?clientId=${client.id}&auto=1&prompt=${encodeURIComponent(`Resuma o cliente ${displayName}: situação atual, projetos, atividades, últimas reuniões, pendências, riscos e próximos passos.`)}`)}><Sparkles className="mr-2 h-4 w-4" />Resumir com IA</Button><Button variant="outline" onClick={() => navigate(`/relatorios/consultoria?clientId=${client.id}`)}><FileText className="mr-2 h-4 w-4" />Gerar relatório</Button><Button variant="outline" onClick={() => navigate(`/clientes/${id}/jornada`)}><Route className="mr-2 h-4 w-4" />Jornada</Button><Button variant="outline" onClick={() => setDialogOpen(true)}><Edit className="mr-2 h-4 w-4" />Editar</Button><Button variant="ghost" className="text-destructive" onClick={() => void handleDelete()}><Trash2 className="mr-2 h-4 w-4" />Excluir</Button></div>
       </div>
 
       <Tabs defaultValue="overview" className="space-y-5">

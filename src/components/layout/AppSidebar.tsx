@@ -19,6 +19,7 @@ import {
   FileBarChart,
   Siren,
   Layers3,
+  Bot,
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -43,6 +44,7 @@ import {
 const startNavItems = [
   { title: "Meu Dia", url: "/meu-dia", icon: Sunrise },
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
+  { title: "Assistente JoIA", url: "/assistente", icon: Bot },
 ];
 
 const mainNavItems = [
