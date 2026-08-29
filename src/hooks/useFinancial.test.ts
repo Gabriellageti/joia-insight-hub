@@ -25,6 +25,8 @@ const databaseRecord = (overrides: Partial<FinancialRecordRow> = {}): FinancialR
   is_internal: false,
   created_at: "2026-07-01T12:00:00Z",
   updated_at: "2026-07-20T12:00:00Z",
+  recurrence_rule_id: null,
+  workspace_id: "workspace-1",
   ...overrides,
 });
 

@@ -18,6 +18,7 @@ import {
   Activity,
   FileBarChart,
   Siren,
+  Layers3,
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -56,6 +57,7 @@ const mainNavItems = [
 const supportNavItems = [
   { title: "Diagnóstico", url: "/diagnostico", icon: ClipboardCheck },
   { title: "Templates", url: "/templates", icon: Shapes },
+  { title: "Modelos de Projeto", url: "/modelos-projeto", icon: Layers3 },
   { title: "Indicadores", url: "/indicadores", icon: BarChart3 },
   { title: "Documentos", url: "/documentos", icon: FileText },
 ];
