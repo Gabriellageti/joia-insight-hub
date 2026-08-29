@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Search, Plus, LogOut, Loader2 } from "lucide-react";
+import { Search, Plus, LogOut, Loader2, Download } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +21,7 @@ import { MeetingDialog } from "@/components/dialogs/MeetingDialog";
 import { TaskDialog } from "@/components/dialogs/TaskDialog";
 import { toast } from "sonner";
 import { NotificationCenter } from "@/components/notifications/NotificationCenter";
+import { usePwaInstall } from "@/contexts/PwaInstallContext";
 
 interface SearchResult {
   id: string;
@@ -31,6 +32,7 @@ interface SearchResult {
 
 export function TopBar() {
   const { user, signOut } = useAuth();
+  const { canInstall, install, platform: installPlatform } = usePwaInstall();
   const { clients, projects, diagnostics, clientsLoading, projectsLoading } = useData();
   const navigate = useNavigate();
   const searchInput = useRef<HTMLInputElement>(null);
@@ -86,7 +88,7 @@ export function TopBar() {
 
   return (
     <>
-      <header className="min-h-14 border-b border-border bg-card flex items-center justify-between px-2 sm:px-4 gap-2">
+      <header className="min-h-14 border-b border-border bg-card flex items-center justify-between px-2 pt-[env(safe-area-inset-top)] sm:px-4 gap-2">
         <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-4">
           <SidebarTrigger className="shrink-0" aria-label="Abrir menu lateral" />
           <Popover open={searchOpen} onOpenChange={setSearchOpen}>
@@ -168,6 +170,15 @@ export function TopBar() {
                 <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
               </div>
               <DropdownMenuSeparator />
+              {canInstall ? (
+                <>
+                  <DropdownMenuItem onSelect={() => void install()}>
+                    <Download className="h-4 w-4 mr-2" />
+                    {installPlatform === "ios" ? "Como instalar" : "Instalar aplicativo"}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                </>
+              ) : null}
               <DropdownMenuItem onClick={handleSignOut} className="text-destructive">
                 <LogOut className="h-4 w-4 mr-2" /> Sair
               </DropdownMenuItem>

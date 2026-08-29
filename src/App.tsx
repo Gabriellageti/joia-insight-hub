@@ -12,6 +12,7 @@ import { AdminRoute } from "@/components/AdminRoute";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { ErrorBoundary } from "@/components/system/ErrorBoundary";
 import { Loader2 } from "lucide-react";
+import { PwaInstallProvider } from "@/components/pwa/PwaInstallProvider";
 
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const MeuDia = lazy(() => import("./pages/MeuDia"));
@@ -66,12 +67,13 @@ const App = () => (
       <TooltipProvider>
         <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <AuthProvider>
-            <DataProvider>
-            <Toaster />
-            <Sonner />
-              <RouteBoundary>
-                <Suspense fallback={<RouteLoading />}>
-              <Routes>
+            <PwaInstallProvider>
+              <DataProvider>
+              <Toaster />
+              <Sonner />
+                <RouteBoundary>
+                  <Suspense fallback={<RouteLoading />}>
+                <Routes>
                 <Route path="/auth" element={<Auth />} />
                 <Route
                   path="/*"
@@ -117,10 +119,11 @@ const App = () => (
                     </ProtectedRoute>
                   }
                 />
-              </Routes>
-                </Suspense>
-              </RouteBoundary>
-            </DataProvider>
+                </Routes>
+                  </Suspense>
+                </RouteBoundary>
+              </DataProvider>
+            </PwaInstallProvider>
           </AuthProvider>
         </BrowserRouter>
       </TooltipProvider>
