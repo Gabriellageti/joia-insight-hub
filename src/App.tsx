@@ -8,6 +8,7 @@ import { ThemeProvider } from "next-themes";
 import { DataProvider } from "@/contexts/DataContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { AdminRoute } from "@/components/AdminRoute";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { ErrorBoundary } from "@/components/system/ErrorBoundary";
 import { Loader2 } from "lucide-react";
@@ -103,13 +104,13 @@ const App = () => (
                           <Route path="/reunioes" element={<Reunioes />} />
                           <Route path="/reunioes/:id" element={<ReuniaoDetalhes />} />
                           <Route path="/documentos" element={<Documentos />} />
-                          <Route path="/playbooks" element={<Playbooks />} />
-                          <Route path="/equipe" element={<Equipe />} />
-                          <Route path="/atividades" element={<Atividades />} />
-                          <Route path="/relatorios/operacional" element={<RelatorioOperacional />} />
-                          <Route path="/financeiro" element={<Financeiro />} />
-                          <Route path="/marketing" element={<Marketing />} />
-                          <Route path="/configuracoes" element={<Configuracoes />} />
+                          <Route path="/playbooks" element={<AdminRoute><Playbooks /></AdminRoute>} />
+                          <Route path="/equipe" element={<AdminRoute><Equipe /></AdminRoute>} />
+                          <Route path="/atividades" element={<AdminRoute><Atividades /></AdminRoute>} />
+                          <Route path="/relatorios/operacional" element={<AdminRoute><RelatorioOperacional /></AdminRoute>} />
+                          <Route path="/financeiro" element={<AdminRoute><Financeiro /></AdminRoute>} />
+                          <Route path="/marketing" element={<AdminRoute><Marketing /></AdminRoute>} />
+                          <Route path="/configuracoes" element={<AdminRoute><Configuracoes /></AdminRoute>} />
                           <Route path="*" element={<NotFound />} />
                         </Routes>
                       </MainLayout>

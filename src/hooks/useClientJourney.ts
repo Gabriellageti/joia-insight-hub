@@ -132,9 +132,6 @@ export function useClientJourney(clientId: string | undefined) {
       { id: 'assessment_presented', label: 'Assessment apresentado', completed: assessmentPresented },
     ];
 
-    const hasOpportunities = clientDiagnostics.some(d => 
-      d.status === 'completed' && (d.opportunities || 0) > 0
-    );
     const hasSpecificProjects = clientProjects.some(p => 
       p.name.toLowerCase().includes('compras') || 
       p.name.toLowerCase().includes('vendas') ||
@@ -142,7 +139,6 @@ export function useClientJourney(clientId: string | undefined) {
     );
 
     const definitionChecklist: PhaseChecklist[] = [
-      { id: 'opportunities_identified', label: 'Oportunidades identificadas do Kickoff', completed: hasOpportunities },
       { id: 'areas_prioritized', label: 'Áreas priorizadas', completed: hasSpecificProjects },
       { id: 'specific_projects_created', label: 'Projetos específicos criados', completed: hasSpecificProjects },
       { id: 'responsibles_defined', label: 'Responsáveis definidos', completed: clientProjects.some(p => p.responsible) },
@@ -261,7 +257,6 @@ function getActionDescription(itemId: string): string {
     kickoff_started: 'Inicie o diagnóstico de Kickoff para conhecer a empresa',
     kickoff_completed: 'Finalize o diagnóstico de Kickoff',
     assessment_presented: 'Agende uma reunião para apresentar o assessment ao cliente',
-    opportunities_identified: 'Revise as oportunidades identificadas no Kickoff',
     areas_prioritized: 'Defina com o cliente quais áreas atacar primeiro',
     specific_projects_created: 'Crie projetos específicos para cada área priorizada',
     responsibles_defined: 'Defina os responsáveis por cada projeto',

@@ -143,8 +143,6 @@ export function CardDiagnostico({ diagnostic, onEdit, onDelete, onDuplicate }: C
         </div>
         <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
           <span>Responsável: {diagnostic.responsibleName || "Não definido"}</span>
-          <span className="h-1 w-1 rounded-full bg-border" />
-          <span>Oportunidades: {diagnostic.opportunities}</span>
           {diagnostic.score !== undefined && diagnostic.status === "completed" && (
             <span className="font-semibold text-emerald-700">Score: {diagnostic.score}</span>
           )}
@@ -172,11 +170,6 @@ export function CardDiagnostico({ diagnostic, onEdit, onDelete, onDuplicate }: C
         <div className="flex flex-wrap items-center gap-3 text-sm">
           <Badge variant="outline">Última atualização</Badge>
           <span className="text-muted-foreground">{diagnostic.updatedAt}</span>
-          {diagnostic.opportunities > 0 && (
-            <Badge variant="secondary" className="bg-accent/10 text-accent-foreground">
-              {diagnostic.opportunities} oportunidades
-            </Badge>
-          )}
         </div>
       </CardContent>
       <CardFooter className="flex items-center justify-between pt-0">

@@ -86,11 +86,14 @@ test("CRUD e persistência do Kanban usam o mesmo registro", async ({ page }) =>
 
   const card = page.getByText("Auditoria financeira revisada", { exact: true }).locator("xpath=ancestor::*[@role='button'][1]");
   const inProgress = page.locator('section[aria-labelledby="column-in_progress"]');
+  await expect(card).toHaveAttribute("aria-busy", "false");
   await card.focus();
   await expect(card).toBeFocused();
-  await page.keyboard.press("Space");
-  for (let step = 0; step < 14; step += 1) await page.keyboard.press("ArrowRight");
-  await page.keyboard.press("Space");
+  await card.press("Space");
+  await expect(card).toHaveAttribute("aria-pressed", "true");
+  await card.press("ArrowRight");
+  await expect(page.locator('[role="status"]').filter({ hasText: "in_progress" })).toContainText("in_progress");
+  await card.press("Space");
   await expect.poll(() => backend.tasks[0].status).toBe("in_progress");
   await expect(inProgress.getByText("Auditoria financeira revisada", { exact: true })).toBeVisible();
   await page.reload();
@@ -132,7 +135,9 @@ test("CRUD e persistência do Kanban usam o mesmo registro", async ({ page }) =>
   await page.goto(`/projetos/${projectId}`);
   await expect(page.getByRole("heading", { name: "Consultoria Ciclo 3" })).toBeVisible();
   await page.getByRole("tab", { name: "Kanban" }).click();
-  await expect(page.getByText("Auditoria financeira revisada", { exact: true })).toBeVisible();
+  const projectCard = page.locator('section[aria-labelledby="column-blocked"]').getByText("Auditoria financeira revisada", { exact: true });
+  await projectCard.scrollIntoViewIfNeeded();
+  await expect(projectCard).toBeVisible();
   await expectNoDocumentOverflow(page);
   expect(backend.mutations.some((item) => item.startsWith("POST:"))).toBe(true);
   expect(backend.mutations.some((item) => item.startsWith("DELETE:"))).toBe(true);

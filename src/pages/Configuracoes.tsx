@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { NotificationSettings } from "@/components/settings/NotificationSettings";
 import { OperationalSettings } from "@/components/settings/OperationalSettings";
+import { UserAccessManager } from "@/components/settings/UserAccessManager";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import type { WorkspaceRole } from "@/lib/authorization";
@@ -144,6 +145,7 @@ export default function Configuracoes() {
         <TabsContent value="users"><Card><CardHeader><CardTitle>Membros do workspace</CardTitle><CardDescription>Papéis são persistidos no banco e validados por RLS.</CardDescription></CardHeader><CardContent className="space-y-3">
           {members.length === 0 ? <p className="text-sm text-muted-foreground">Nenhum membro encontrado.</p> : members.map((member) => <div key={member.userId} className="flex flex-col gap-2 rounded-md border p-3 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><p className="font-medium truncate">{member.name}</p><p className="text-xs text-muted-foreground truncate">{member.userId}</p></div><Select value={member.role} onValueChange={(role: WorkspaceRole) => void updateMemberRole(member, role)} disabled={!canManageWorkspace || member.userId === user?.id}><SelectTrigger className="w-full sm:w-48"><SelectValue /></SelectTrigger><SelectContent>{(Object.keys(roleLabels) as WorkspaceRole[]).map((role) => <SelectItem key={role} value={role} disabled={role === "owner" && activeMembership?.role !== "owner"}>{roleLabels[role]}</SelectItem>)}</SelectContent></Select></div>)}
           <Button variant="outline" disabled>Convidar membro · Em breve</Button>
+          <div className="border-t pt-4"><h3 className="mb-3 font-medium">Acesso interno JoIA</h3><UserAccessManager /></div>
         </CardContent></Card></TabsContent>
 
         <TabsContent value="notifications"><NotificationSettings /></TabsContent>

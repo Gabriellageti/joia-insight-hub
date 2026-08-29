@@ -32,7 +32,6 @@ const sortOptions = [
   { value: "recent", label: "Mais recentes" },
   { value: "oldest", label: "Mais antigos" },
   { value: "progress", label: "Maior progresso" },
-  { value: "opportunities", label: "Mais oportunidades" },
   { value: "score", label: "Maior score" },
 ];
 
@@ -215,8 +214,6 @@ export default function Diagnostico() {
           return (parseDatePtBR(a.updatedAt)?.getTime() || 0) - (parseDatePtBR(b.updatedAt)?.getTime() || 0);
         case "progress":
           return (b.progress || 0) - (a.progress || 0);
-        case "opportunities":
-          return (b.opportunities || 0) - (a.opportunities || 0);
         case "score":
           return (b.score || 0) - (a.score || 0);
         default:

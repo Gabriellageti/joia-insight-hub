@@ -11,8 +11,14 @@ export type TaskHistoryEntry = TaskHistoryRow & { user_name: string };
 
 const assigneeCache = new Map<string, Promise<TaskAssignee[]>>();
 
-export function listTaskAssignees(projectId?: string): Promise<TaskAssignee[]> {
-  const cacheKey = projectId || "personal";
+export function invalidateTaskAssignees(projectId?: string): void {
+  const key = projectId || "personal";
+  assigneeCache.delete(`${key}:all`);
+  assigneeCache.delete(`${key}:members`);
+}
+
+export function listTaskAssignees(projectId?: string, includeAvailableTeam = false): Promise<TaskAssignee[]> {
+  const cacheKey = `${projectId || "personal"}:${includeAvailableTeam ? "all" : "members"}`;
   const cached = assigneeCache.get(cacheKey);
   if (cached) return cached;
 
@@ -21,6 +27,17 @@ export function listTaskAssignees(projectId?: string): Promise<TaskAssignee[]> {
       const { data, error } = await supabase.from("profiles").select("id, full_name").order("full_name");
       if (error) throw new Error(error.message);
       return data ?? [];
+    }
+
+    if (includeAvailableTeam) {
+      const { data, error } = await supabase
+        .from("employees")
+        .select("user_id, name")
+        .eq("status", "active")
+        .not("user_id", "is", null)
+        .order("name");
+      if (error) throw new Error(error.message);
+      return (data ?? []).flatMap((employee) => employee.user_id ? [{ id: employee.user_id, full_name: employee.name }] : []);
     }
 
     const { data: memberships, error: membershipError } = await supabase
@@ -46,6 +63,14 @@ export function listTaskAssignees(projectId?: string): Promise<TaskAssignee[]> {
 
   assigneeCache.set(cacheKey, request);
   return request;
+}
+
+export async function ensureProjectTaskAssignee(projectId: string, userId: string): Promise<void> {
+  const { error } = await supabase
+    .from("project_members")
+    .upsert({ project_id: projectId, user_id: userId, access_level: "editor" }, { onConflict: "project_id,user_id", ignoreDuplicates: true });
+  if (error) throw new Error(error.message);
+  invalidateTaskAssignees(projectId);
 }
 
 export async function listTasks(options: { assignedTo?: string } = {}): Promise<TaskRow[]> {

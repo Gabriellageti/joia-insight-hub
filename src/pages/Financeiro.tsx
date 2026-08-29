@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   CreditCard,
   DollarSign,
@@ -9,6 +9,9 @@ import {
   TrendingDown,
   TrendingUp,
   Check,
+  AlertTriangle,
+  BarChart3,
+  WalletCards,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -54,6 +57,8 @@ import { useFinancial, type FinancialRecord } from "@/hooks/useFinancial";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ContractDialog } from "@/components/dialogs/ContractDialog";
 import type { Contract } from "@/types";
+import { toast } from "sonner";
+import { createRecurringExpense, listRecurringExpenseRules, setRecurringExpenseActive, type RecurringExpenseRule } from "@/integrations/supabase/recurring-expenses";
 
 const statusConfig = {
   Pendente: { label: "A vencer", color: "bg-yellow-100 text-yellow-700" },
@@ -107,6 +112,7 @@ export default function Financeiro() {
   const {
     receivables,
     expenses,
+    records,
     summary,
     loading,
     error,
@@ -115,6 +121,7 @@ export default function Financeiro() {
     updateRecord,
     deleteRecord,
     markAsPaid,
+    undoPayment,
   } = useFinancial();
 
   const [editingExpense, setEditingExpense] = useState<FinancialRecord | null>(null);
@@ -122,6 +129,17 @@ export default function Financeiro() {
   const [editingReceivable, setEditingReceivable] = useState<FinancialRecord | null>(null);
   const [showContractDialog, setShowContractDialog] = useState(false);
   const [editingContract, setEditingContract] = useState<Contract | null>(null);
+  const [paymentRecord, setPaymentRecord] = useState<FinancialRecord | null>(null);
+  const [paymentForm, setPaymentForm] = useState({
+    paidAt: getTodayIso(),
+    paymentMethod: "",
+    paymentNotes: "",
+  });
+  const [receivableSearch, setReceivableSearch] = useState("");
+  const [receivableStatusFilter, setReceivableStatusFilter] = useState("all");
+  const [payableSearch, setPayableSearch] = useState("");
+  const [payableStatusFilter, setPayableStatusFilter] = useState("all");
+  const [recurringRules, setRecurringRules] = useState<RecurringExpenseRule[]>([]);
 
   // Expense form state
   const [expenseForm, setExpenseForm] = useState({
@@ -130,7 +148,15 @@ export default function Financeiro() {
     projectId: "",
     value: "",
     date: getTodayIso(),
+    recurring: false,
+    frequency: "monthly" as "monthly" | "quarterly" | "annual",
   });
+
+  const loadRecurringRules = async () => {
+    try { setRecurringRules(await listRecurringExpenseRules()); } catch (error) { toast.error("Não foi possível carregar as despesas recorrentes.", { description: (error as Error).message }); }
+  };
+
+  useEffect(() => { void loadRecurringRules(); }, []);
 
   // Receivable form state
   const [receivableForm, setReceivableForm] = useState({
@@ -152,6 +178,19 @@ export default function Financeiro() {
     [expenses]
   );
 
+  const filteredExpenses = useMemo(
+    () => sortedExpenses.filter((expense) => {
+      const search = payableSearch.toLocaleLowerCase("pt-BR");
+      const projectName = projects.find((project) => project.id === expense.projectId)?.name;
+      const matchesSearch = !search || [expense.description, expense.category, projectName]
+        .some((value) => value?.toLocaleLowerCase("pt-BR").includes(search));
+      const matchesStatus = payableStatusFilter === "all" ||
+        (payableStatusFilter === "paid" ? expense.status === "Pago" : expense.status !== "Pago");
+      return matchesSearch && matchesStatus;
+    }),
+    [sortedExpenses, payableSearch, payableStatusFilter, projects]
+  );
+
   const sortedReceivables = useMemo(
     () =>
       [...receivables].sort((a, b) => {
@@ -162,6 +201,32 @@ export default function Financeiro() {
     [receivables]
   );
 
+  const filteredReceivables = useMemo(
+    () => sortedReceivables.filter((record) => {
+      const search = receivableSearch.toLocaleLowerCase("pt-BR");
+      const status = record.status === "Pago" ? "Pago" : record.date && new Date(record.date) < new Date() ? "Vencido" : "Pendente";
+      const client = clients.find((item) => item.id === record.clientId);
+      const projectName = projects.find((project) => project.id === record.projectId)?.name;
+      const matchesSearch = !search || [record.description, client?.nomeFantasia, client?.razaoSocial, projectName]
+        .some((value) => value?.toLocaleLowerCase("pt-BR").includes(search));
+      const matchesStatus = receivableStatusFilter === "all" ||
+        (receivableStatusFilter === "open" ? status !== "Pago" : status === receivableStatusFilter);
+      return matchesSearch && matchesStatus;
+    }),
+    [sortedReceivables, receivableSearch, receivableStatusFilter, clients, projects]
+  );
+
+  const cashFlowRecords = useMemo(
+    () => [...records].sort((a, b) => (b.paidAt || b.date || "").localeCompare(a.paidAt || a.date || "")),
+    [records]
+  );
+
+  const expensesByCategory = useMemo(() => Object.entries(expenses.reduce<Record<string, number>>((totals, expense) => {
+    const category = expense.category || "Sem categoria";
+    totals[category] = (totals[category] || 0) + expense.amount;
+    return totals;
+  }, {})).sort(([, a], [, b]) => b - a), [expenses]);
+
   const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
 
   const resetExpenseForm = () => {
@@ -171,6 +236,8 @@ export default function Financeiro() {
       projectId: "",
       value: "",
       date: getTodayIso(),
+      recurring: false,
+      frequency: "monthly",
     });
     setEditingExpense(null);
   };
@@ -196,6 +263,8 @@ export default function Financeiro() {
       projectId: expense.projectId || "",
       value: String(expense.amount ?? ""),
       date: formatDateInputValue(expense.date),
+      recurring: false,
+      frequency: "monthly",
     });
   };
 
@@ -229,17 +298,34 @@ export default function Financeiro() {
       projectName: project?.name,
       amount: Number(expenseForm.value),
       date: expenseForm.date,
-      status: "Pago" as const,
+      status: editingExpense?.status || ("Pendente" as const),
       isInternal: true,
     };
 
-    if (editingExpense) {
-      await updateRecord(editingExpense.id, payload);
-    } else {
-      await addRecord(payload);
+    try {
+      if (expenseForm.recurring && !editingExpense) {
+        await createRecurringExpense({ description: payload.description, category: payload.category, projectId: payload.projectId, amount: payload.amount, frequency: expenseForm.frequency, startDate: payload.date });
+        await Promise.all([refresh(), loadRecurringRules()]);
+        toast.success("Despesa recorrente criada com previsão de 12 meses.");
+      } else if (editingExpense) {
+        await updateRecord(editingExpense.id, payload);
+      } else {
+        await addRecord(payload);
+      }
+    } catch (error) {
+      toast.error("Não foi possível salvar a despesa.", { description: (error as Error).message });
+      return;
     }
 
     resetExpenseForm();
+  };
+
+  const handleToggleRecurringRule = async (rule: RecurringExpenseRule) => {
+    try {
+      await setRecurringExpenseActive(rule.id, !rule.active);
+      await Promise.all([refresh(), loadRecurringRules()]);
+      toast.success(rule.active ? "Recorrência pausada e previsões futuras removidas." : "Recorrência reativada.");
+    } catch (error) { toast.error("Não foi possível atualizar a recorrência.", { description: (error as Error).message }); }
   };
 
   const handleReceivableSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -262,7 +348,8 @@ export default function Financeiro() {
       projectName: project?.name,
       amount: Number(receivableForm.value),
       date: receivableForm.dueDate,
-      status: "Pendente" as const,
+      // Editing the receivable must not implicitly undo an existing payment.
+      status: editingReceivable?.status || ("Pendente" as const),
       isInternal: false,
     };
 
@@ -283,8 +370,30 @@ export default function Financeiro() {
     await deleteRecord(id);
   };
 
-  const handleMarkAsPaid = async (id: string) => {
-    await markAsPaid(id);
+  const openPaymentDialog = (record: FinancialRecord) => {
+    setPaymentRecord(record);
+    setPaymentForm({
+      paidAt: formatDateInputValue(record.paidAt) || getTodayIso(),
+      paymentMethod: record.paymentMethod || "",
+      paymentNotes: record.paymentNotes || "",
+    });
+  };
+
+  const handleConfirmPayment = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!paymentRecord || !paymentForm.paidAt) return;
+    await markAsPaid(paymentRecord.id, {
+      paidAt: paymentForm.paidAt,
+      paymentMethod: paymentForm.paymentMethod,
+      paymentNotes: paymentForm.paymentNotes.trim(),
+    });
+    setPaymentRecord(null);
+  };
+
+  const handleUndoPayment = async () => {
+    if (!paymentRecord) return;
+    await undoPayment(paymentRecord.id);
+    setPaymentRecord(null);
   };
 
   const getClientName = (clientId?: string) => {
@@ -349,75 +458,23 @@ export default function Financeiro() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-5">
       <div>
         <h1 className="text-2xl font-semibold text-foreground">Financeiro JoIA</h1>
         <p className="text-muted-foreground">Controle receitas, despesas e margem por projeto</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-6">
+      <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Card className="min-w-0 border-accent bg-accent/5 shadow-sm">
+          <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Receita Mensal</p>
-                <p className="text-2xl font-bold">{formatCurrency(summary.totalRevenue)}</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {receivables.filter((r) => r.status === "Pago").length} pagamentos recebidos
-                </p>
+                <p className="text-sm font-medium text-foreground">Saldo em caixa hoje</p>
+                <p className="text-xl font-bold tabular-nums text-foreground">{formatCurrency(summary.cashBalance)}</p>
+                <p className="mt-1 text-xs text-muted-foreground">Receitas recebidas − despesas registradas</p>
               </div>
-              <div className="p-3 bg-accent rounded-lg">
-                <DollarSign className="h-5 w-5 text-accent-foreground" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">A Receber</p>
-                <p className="text-2xl font-bold">{formatCurrency(summary.pendingAmount)}</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {summary.pendingCount} faturas pendentes
-                  {summary.overdueCount > 0 && (
-                    <span className="text-destructive"> ({summary.overdueCount} vencidas)</span>
-                  )}
-                </p>
-              </div>
-              <div className="p-3 bg-muted rounded-lg">
-                <CreditCard className="h-5 w-5 text-muted-foreground" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Despesas</p>
-                <p className="text-2xl font-bold">{formatCurrency(summary.totalExpenses)}</p>
-                <p className="text-xs text-muted-foreground mt-1">{expenses.length} lançamentos</p>
-              </div>
-              <div className="p-3 bg-muted rounded-lg">
-                <Receipt className="h-5 w-5 text-muted-foreground" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-accent">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Margem Média</p>
-                <p className="text-2xl font-bold text-accent">{summary.margin.toFixed(0)}%</p>
-                <p className="text-xs text-muted-foreground mt-1">Receita - Despesas</p>
-              </div>
-              <div className="p-3 bg-accent rounded-lg">
-                {summary.margin >= 0 ? (
+              <div className="shrink-0 rounded-lg bg-accent p-2.5">
+                {summary.cashBalance >= 0 ? (
                   <TrendingUp className="h-5 w-5 text-accent-foreground" />
                 ) : (
                   <TrendingDown className="h-5 w-5 text-accent-foreground" />
@@ -426,17 +483,104 @@ export default function Financeiro() {
             </div>
           </CardContent>
         </Card>
+
+        <Card className="min-w-0">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Receita Mensal</p>
+                <p className="text-xl font-bold tabular-nums">{formatCurrency(summary.totalRevenue)}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {receivables.filter((r) => r.status === "Pago").length} pagamentos recebidos
+                </p>
+              </div>
+              <div className="shrink-0 rounded-lg bg-accent p-2.5">
+                <DollarSign className="h-5 w-5 text-accent-foreground" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="min-w-0">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">A Receber</p>
+                <p className="text-xl font-bold tabular-nums">{formatCurrency(summary.pendingAmount)}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {summary.pendingCount} faturas pendentes
+                  {summary.overdueCount > 0 && (
+                    <span className="text-destructive"> ({summary.overdueCount} vencidas)</span>
+                  )}
+                </p>
+              </div>
+              <div className="shrink-0 rounded-lg bg-muted p-2.5">
+                <CreditCard className="h-5 w-5 text-muted-foreground" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="min-w-0">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Despesas</p>
+                <p className="text-xl font-bold tabular-nums">{formatCurrency(summary.totalExpenses)}</p>
+                <p className="text-xs text-muted-foreground mt-1">{expenses.length} lançamentos</p>
+              </div>
+              <div className="shrink-0 rounded-lg bg-muted p-2.5">
+                <Receipt className="h-5 w-5 text-muted-foreground" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
       </div>
 
-      <Tabs defaultValue="receivables">
-        <TabsList className="h-auto w-full justify-start overflow-x-auto">
+      <Tabs defaultValue="overview" className="min-w-0">
+        <TabsList className="max-w-full overflow-x-auto">
+          <TabsTrigger value="overview">Visão Geral</TabsTrigger>
           <TabsTrigger value="receivables">Contas a Receber</TabsTrigger>
-          <TabsTrigger value="expenses">Despesas</TabsTrigger>
+          <TabsTrigger value="expenses">Contas a Pagar</TabsTrigger>
+          <TabsTrigger value="cashflow">Fluxo de Caixa</TabsTrigger>
+          <TabsTrigger value="reports">Relatórios</TabsTrigger>
           <TabsTrigger value="contracts">Contratos</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="receivables" className="mt-4">
+        <TabsContent value="overview" className="mt-4 grid gap-4 lg:grid-cols-3">
+          <Card className="lg:col-span-2">
+            <CardHeader><CardTitle>Próximas ações financeiras</CardTitle></CardHeader>
+            <CardContent className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-lg border p-4">
+                <div className="flex items-center gap-2 text-sm font-medium"><CreditCard className="h-4 w-4" /> A receber</div>
+                <p className="mt-2 text-2xl font-bold tabular-nums">{formatCurrency(summary.pendingAmount)}</p>
+                <p className="text-xs text-muted-foreground">{summary.pendingCount} cobrança(s) em aberto</p>
+              </div>
+              <div className="rounded-lg border p-4">
+                <div className="flex items-center gap-2 text-sm font-medium"><WalletCards className="h-4 w-4" /> A pagar</div>
+                <p className="mt-2 text-2xl font-bold tabular-nums">{formatCurrency(summary.payableAmount)}</p>
+                <p className="text-xs text-muted-foreground">{summary.payableCount} conta(s) em aberto</p>
+              </div>
+              {summary.overdueCount > 0 && (
+                <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 sm:col-span-2">
+                  <div className="flex items-center gap-2 font-medium text-destructive"><AlertTriangle className="h-4 w-4" /> Atenção necessária</div>
+                  <p className="mt-1 text-sm">Existem {summary.overdueCount} recebimento(s) vencido(s) aguardando regularização.</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
           <Card>
+            <CardHeader><CardTitle>Saldo projetado</CardTitle></CardHeader>
+            <CardContent>
+              <p className="text-3xl font-bold tabular-nums">{formatCurrency(summary.projectedBalance)}</p>
+              <p className="mt-2 text-sm text-muted-foreground">Saldo atual + valores a receber − contas a pagar.</p>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="receivables" className="mt-4">
+          <Card className="min-w-0 overflow-hidden">
             <CardHeader>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <CardTitle>Contas a Receber</CardTitle>
@@ -446,8 +590,18 @@ export default function Financeiro() {
                 </Button>
               </div>
             </CardHeader>
-            <CardContent>
-              {sortedReceivables.length === 0 ? (
+            <CardContent className="min-w-0">
+              <div className="mb-4 flex flex-col gap-2 sm:flex-row">
+                <Input value={receivableSearch} onChange={(event) => setReceivableSearch(event.target.value)} placeholder="Buscar cliente, projeto ou descrição" className="sm:max-w-sm" />
+                <Select value={receivableStatusFilter} onValueChange={setReceivableStatusFilter}>
+                  <SelectTrigger className="sm:w-48"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os status</SelectItem><SelectItem value="open">Em aberto</SelectItem>
+                    <SelectItem value="Pendente">A vencer</SelectItem><SelectItem value="Vencido">Vencido</SelectItem><SelectItem value="Pago">Pago</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {filteredReceivables.length === 0 ? (
                 <div className="py-10 text-center text-muted-foreground">
                   Nenhuma conta a receber cadastrada.
                 </div>
@@ -460,12 +614,13 @@ export default function Financeiro() {
                       <TableHead>Descrição</TableHead>
                       <TableHead>Valor</TableHead>
                       <TableHead>Vencimento</TableHead>
+                      <TableHead>Pagamento</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {sortedReceivables.map((item) => {
+                    {filteredReceivables.map((item) => {
                       const status = getReceivableStatus(item);
                       return (
                         <TableRow key={item.id}>
@@ -475,23 +630,35 @@ export default function Financeiro() {
                           <TableCell>{formatCurrency(item.amount)}</TableCell>
                           <TableCell>{formatDate(item.date)}</TableCell>
                           <TableCell>
+                            {item.paidAt ? (
+                              <div>
+                                <div>{formatDate(item.paidAt)}</div>
+                                {item.paymentMethod && (
+                                  <div className="text-xs text-muted-foreground">{item.paymentMethod}</div>
+                                )}
+                              </div>
+                            ) : "—"}
+                          </TableCell>
+                          <TableCell>
                             <Badge className={statusConfig[status || "Pendente"].color} variant="outline">
                               {statusConfig[status || "Pendente"].label}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
-                              {status !== "Pago" && (
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleMarkAsPaid(item.id)}
-                                  title="Marcar como pago"
-                                >
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => openPaymentDialog(item)}
+                                title={status === "Pago" ? "Editar pagamento" : "Marcar como pago"}
+                              >
+                                {status === "Pago" ? (
+                                  <Pencil className="h-4 w-4 text-green-600" />
+                                ) : (
                                   <Check className="h-4 w-4 text-green-600" />
-                                </Button>
-                              )}
+                                )}
+                              </Button>
                               <Button
                                 type="button"
                                 variant="ghost"
@@ -534,9 +701,9 @@ export default function Financeiro() {
         </TabsContent>
 
         <TabsContent value="expenses" className="mt-4 space-y-4">
-          <Card>
+          <Card className="min-w-0 overflow-hidden">
             <CardHeader>
-              <CardTitle>{editingExpense ? "Editar despesa" : "Registrar nova despesa"}</CardTitle>
+              <CardTitle>{editingExpense ? "Editar conta" : "Nova conta a pagar"}</CardTitle>
             </CardHeader>
             <CardContent>
               <form className="grid gap-4" onSubmit={handleExpenseSubmit}>
@@ -598,7 +765,7 @@ export default function Financeiro() {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="expense-date">Data</Label>
+                    <Label htmlFor="expense-date">Vencimento</Label>
                     <Input
                       id="expense-date"
                       type="date"
@@ -624,9 +791,17 @@ export default function Financeiro() {
                   </div>
                 </div>
 
+                {!editingExpense && <div className="rounded-lg border bg-muted/30 p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                    <div><p className="font-medium">Despesa recorrente</p><p className="text-sm text-muted-foreground">Gera contas previstas para os próximos 12 meses.</p></div>
+                    <label className="flex items-center gap-2 text-sm font-medium"><input type="checkbox" checked={expenseForm.recurring} onChange={(event) => setExpenseForm((prev) => ({ ...prev, recurring: event.target.checked }))} />Repetir despesa</label>
+                  </div>
+                  {expenseForm.recurring && <div className="mt-3 max-w-xs space-y-2"><Label htmlFor="expense-frequency">Frequência</Label><Select value={expenseForm.frequency} onValueChange={(frequency: "monthly" | "quarterly" | "annual") => setExpenseForm((prev) => ({ ...prev, frequency }))}><SelectTrigger id="expense-frequency"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="monthly">Mensal</SelectItem><SelectItem value="quarterly">Trimestral</SelectItem><SelectItem value="annual">Anual</SelectItem></SelectContent></Select></div>}
+                </div>}
+
                 <div className="flex flex-wrap gap-2">
                   <Button type="submit" disabled={!isExpenseFormValid}>
-                    {editingExpense ? "Salvar alterações" : "Registrar despesa"}
+                    {editingExpense ? "Salvar alterações" : "Registrar conta"}
                   </Button>
                   {editingExpense && (
                     <Button type="button" variant="ghost" onClick={resetExpenseForm}>
@@ -638,15 +813,29 @@ export default function Financeiro() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="min-w-0 overflow-hidden">
+            <CardHeader><CardTitle>Despesas recorrentes</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              {recurringRules.length === 0 ? <p className="text-sm text-muted-foreground">Nenhuma recorrência cadastrada.</p> : recurringRules.map((rule) => <div key={rule.id} className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-medium">{rule.description}</p><p className="text-sm text-muted-foreground">{formatCurrency(Number(rule.amount))} · {{ monthly: "Mensal", quarterly: "Trimestral", annual: "Anual" }[rule.frequency]} · dia {rule.day_of_month}</p></div><Button variant={rule.active ? "outline" : "secondary"} size="sm" onClick={() => void handleToggleRecurringRule(rule)}>{rule.active ? "Pausar" : "Reativar"}</Button></div>)}
+            </CardContent>
+          </Card>
+
+          <Card className="min-w-0 overflow-hidden">
             <CardHeader>
               <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
-                <CardTitle>Despesas registradas</CardTitle>
+                <CardTitle>Contas a pagar</CardTitle>
                 <span className="text-sm text-muted-foreground">Total: {formatCurrency(totalExpenses)}</span>
               </div>
             </CardHeader>
-            <CardContent>
-              {sortedExpenses.length === 0 ? (
+            <CardContent className="min-w-0">
+              <div className="mb-4 flex flex-col gap-2 sm:flex-row">
+                <Input value={payableSearch} onChange={(event) => setPayableSearch(event.target.value)} placeholder="Buscar descrição, categoria ou projeto" className="sm:max-w-sm" />
+                <Select value={payableStatusFilter} onValueChange={setPayableStatusFilter}>
+                  <SelectTrigger className="sm:w-48"><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="all">Todos os status</SelectItem><SelectItem value="open">Em aberto</SelectItem><SelectItem value="paid">Pagas</SelectItem></SelectContent>
+                </Select>
+              </div>
+              {filteredExpenses.length === 0 ? (
                 <div className="py-10 text-center text-muted-foreground">
                   Nenhuma despesa cadastrada ainda.
                 </div>
@@ -659,19 +848,24 @@ export default function Financeiro() {
                       <TableHead>Projeto</TableHead>
                       <TableHead>Data</TableHead>
                       <TableHead>Valor</TableHead>
+                      <TableHead>Status</TableHead>
                       <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {sortedExpenses.map((expense) => (
+                    {filteredExpenses.map((expense) => (
                       <TableRow key={expense.id}>
                         <TableCell className="font-medium">{expense.description}</TableCell>
                         <TableCell>{expense.category}</TableCell>
                         <TableCell>{getProjectName(expense.projectId)}</TableCell>
                         <TableCell>{formatDate(expense.date)}</TableCell>
                         <TableCell>{formatCurrency(expense.amount)}</TableCell>
+                        <TableCell><Badge variant="outline" className={expense.status === "Pago" ? statusConfig.Pago.color : statusConfig.Pendente.color}>{expense.status === "Pago" ? "Pago" : "A pagar"}</Badge></TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
+                            <Button type="button" variant="ghost" size="icon" onClick={() => openPaymentDialog(expense)} title={expense.status === "Pago" ? "Editar pagamento" : "Marcar como paga"}>
+                              <Check className="h-4 w-4 text-green-600" />
+                            </Button>
                             <Button
                               type="button"
                               variant="ghost"
@@ -713,8 +907,24 @@ export default function Financeiro() {
           </Card>
         </TabsContent>
 
+        <TabsContent value="cashflow" className="mt-4">
+          <Card className="overflow-hidden">
+            <CardHeader><CardTitle>Movimentações do fluxo de caixa</CardTitle></CardHeader>
+            <CardContent>
+              <Table><TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Movimentação</TableHead><TableHead>Descrição</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Valor</TableHead></TableRow></TableHeader>
+                <TableBody>{cashFlowRecords.map((record) => <TableRow key={record.id}><TableCell>{formatDate(record.paidAt || record.date)}</TableCell><TableCell>{record.type === "receita" ? "Entrada" : "Saída"}</TableCell><TableCell>{record.description || "-"}</TableCell><TableCell>{record.status || "Pendente"}</TableCell><TableCell className={`text-right font-medium ${record.type === "receita" ? "text-green-600" : "text-destructive"}`}>{record.type === "receita" ? "+" : "−"} {formatCurrency(record.amount)}</TableCell></TableRow>)}</TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="reports" className="mt-4 grid gap-4 lg:grid-cols-2">
+          <Card><CardHeader><CardTitle>Despesas por categoria</CardTitle></CardHeader><CardContent className="space-y-3">{expensesByCategory.map(([category, amount]) => <div key={category} className="flex items-center justify-between border-b pb-2 text-sm"><span>{category}</span><strong>{formatCurrency(amount)}</strong></div>)}</CardContent></Card>
+          <Card><CardHeader><CardTitle>Resumo operacional</CardTitle></CardHeader><CardContent className="space-y-3"><div className="flex justify-between"><span>Receitas cadastradas</span><strong>{receivables.length}</strong></div><div className="flex justify-between"><span>Despesas cadastradas</span><strong>{expenses.length}</strong></div><div className="flex justify-between"><span>Resultado do mês</span><strong>{formatCurrency(summary.totalRevenue - summary.totalExpenses)}</strong></div><div className="flex justify-between"><span>Margem do mês</span><strong>{summary.margin.toFixed(1)}%</strong></div></CardContent></Card>
+        </TabsContent>
+
         <TabsContent value="contracts" className="mt-4">
-          <Card>
+          <Card className="min-w-0 overflow-hidden">
             <CardHeader>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <CardTitle>Contratos Ativos</CardTitle>
@@ -729,7 +939,7 @@ export default function Financeiro() {
                 </Button>
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="min-w-0">
               {contracts.length === 0 ? (
                 <div className="py-10 text-center text-muted-foreground">
                   Nenhum contrato cadastrado. Crie um para gerar cobranças automaticamente.
@@ -924,12 +1134,96 @@ export default function Financeiro() {
               </div>
             </div>
 
+            {editingReceivable?.status === "Pago" && (
+              <div className="rounded-md border p-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium">Data do pagamento</p>
+                    <p className="text-sm text-muted-foreground">{formatDate(editingReceivable.paidAt)}</p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setShowReceivableDialog(false);
+                      openPaymentDialog(editingReceivable);
+                    }}
+                  >
+                    Corrigir detalhes do pagamento
+                  </Button>
+                </div>
+              </div>
+            )}
+
             <DialogFooter>
               <Button type="button" variant="ghost" onClick={resetReceivableForm}>
                 Cancelar
               </Button>
               <Button type="submit" disabled={!isReceivableFormValid}>
                 {editingReceivable ? "Salvar" : "Adicionar"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(paymentRecord)} onOpenChange={(open) => !open && setPaymentRecord(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{paymentRecord?.status === "Pago" ? "Editar pagamento" : paymentRecord?.type === "despesa" ? "Confirmar conta paga" : "Confirmar recebimento"}</DialogTitle>
+          </DialogHeader>
+          <form className="grid gap-4" onSubmit={handleConfirmPayment}>
+            <div className="space-y-2">
+              <Label htmlFor="payment-date">Data efetiva do pagamento</Label>
+              <Input
+                id="payment-date"
+                type="date"
+                required
+                value={paymentForm.paidAt}
+                onChange={(event) => setPaymentForm((prev) => ({ ...prev, paidAt: event.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="payment-method">Forma de pagamento (opcional)</Label>
+              <Input
+                id="payment-method"
+                value={paymentForm.paymentMethod}
+                onChange={(event) => setPaymentForm((prev) => ({ ...prev, paymentMethod: event.target.value }))}
+                placeholder="Ex: PIX, boleto, transferência"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="payment-notes">Observações (opcional)</Label>
+              <Input
+                id="payment-notes"
+                value={paymentForm.paymentNotes}
+                onChange={(event) => setPaymentForm((prev) => ({ ...prev, paymentNotes: event.target.value }))}
+                placeholder="Detalhes sobre o recebimento"
+              />
+            </div>
+            <DialogFooter>
+              {paymentRecord?.status === "Pago" && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button type="button" variant="destructive">Desfazer recebimento</Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Desfazer recebimento?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        O lançamento voltará para pendente e a data, a forma e as observações do pagamento serão apagadas.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleUndoPayment}>Desfazer recebimento</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
+              <Button type="button" variant="ghost" onClick={() => setPaymentRecord(null)}>Cancelar</Button>
+              <Button type="submit" disabled={!paymentForm.paidAt}>
+                {paymentRecord?.status === "Pago" ? "Salvar detalhes" : paymentRecord?.type === "despesa" ? "Confirmar pagamento" : "Confirmar recebimento"}
               </Button>
             </DialogFooter>
           </form>

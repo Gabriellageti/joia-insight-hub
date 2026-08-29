@@ -1,12 +1,14 @@
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import {
   closestCorners,
+  defaultKeyboardCoordinateGetter,
   DndContext,
   KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
   type DragEndEvent,
+  type KeyboardCoordinateGetter,
 } from "@dnd-kit/core";
 import { KanbanColumn } from "./KanbanColumn";
 import { TaskCard } from "./TaskCard";
@@ -24,9 +26,30 @@ interface TaskKanbanProps {
 
 export function TaskKanban({ tasks, savingTaskIds, onEdit, onDelete, onToggleComplete, onStatusChange }: TaskKanbanProps) {
   const savingIds = useMemo(() => new Set(savingTaskIds), [savingTaskIds]);
+  const getKeyboardCoordinates = useCallback<KeyboardCoordinateGetter>((event, args) => {
+    if (event.code !== "ArrowLeft" && event.code !== "ArrowRight") {
+      return defaultKeyboardCoordinateGetter(event, args);
+    }
+
+    const activeTask = tasks.find((task) => task.id === String(args.active));
+    const currentStatus = TASK_STATUSES.some(({ id }) => id === args.context.over?.id)
+      ? String(args.context.over?.id)
+      : activeTask?.status;
+    const currentIndex = TASK_STATUSES.findIndex(({ id }) => id === currentStatus);
+    const targetIndex = currentIndex + (event.code === "ArrowRight" ? 1 : -1);
+    const targetStatus = TASK_STATUSES[targetIndex]?.id;
+    const targetContainer = targetStatus ? args.context.droppableContainers.get(targetStatus) : undefined;
+    const targetRect = targetStatus
+      ? args.context.droppableRects.get(targetStatus)
+        ?? targetContainer?.rect.current
+        ?? targetContainer?.node.current?.getBoundingClientRect()
+      : undefined;
+
+    return targetRect ? { x: targetRect.left, y: args.currentCoordinates.y } : args.currentCoordinates;
+  }, [tasks]);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(KeyboardSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: getKeyboardCoordinates }),
   );
   const tasksByColumn = useMemo(
     () => Object.fromEntries(TASK_STATUSES.map(({ id }) => [id, tasks.filter((task) => task.status === id)])) as Record<Task["status"], Task[]>,

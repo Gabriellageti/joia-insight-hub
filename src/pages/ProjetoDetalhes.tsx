@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useData } from "@/contexts/DataContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ArrowLeft, Edit, Route, Plus } from "lucide-react";
 import { getProjectTypeLabel } from "@/lib/project-delivery";
@@ -23,6 +25,7 @@ import {
 } from "@/components/projetos";
 import { ActivityFeed } from "@/components/meetings";
 import { FavoriteButton } from "@/components/operations/FavoriteButton";
+import { ProjectAccessManager } from "@/components/projetos/ProjectAccessManager";
 
 const phaseColors: Record<string, string> = {
   Diagnóstico: "bg-blue-100 text-blue-700",
@@ -37,6 +40,7 @@ export default function ProjetoDetalhes() {
   const navigate = useNavigate();
   const { projects, clients, tasks, diagnostics, meetings, deliverables } =
     useData();
+  const { isAdmin } = useAuth();
 
   const [projectDialogOpen, setProjectDialogOpen] = useState(false);
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
@@ -200,6 +204,13 @@ export default function ProjetoDetalhes() {
         <ProjectProgressCard project={project} />
         <ProjectStatusCard project={project} />
       </div>
+
+      {isAdmin && (
+        <Card>
+          <CardHeader><CardTitle className="text-base">Acesso da equipe</CardTitle><p className="text-sm text-muted-foreground">Operador executa o trabalho. Sócio do projeto também acessa os dados financeiros deste projeto.</p></CardHeader>
+          <CardContent><ProjectAccessManager projectId={project.id} /></CardContent>
+        </Card>
+      )}
 
       {/* Esteira de Entrega */}
       <ProjectDeliveryWorkflow

@@ -87,6 +87,15 @@ export function ProjectDeliveryWorkflow({
     navigate(`/plano-acao?${params.toString()}`);
   };
 
+  const handleCreateInTaskControl = (step: DeliveryStep) => {
+    if (onCreateTask) {
+      onCreateTask(step);
+      return;
+    }
+    const params = new URLSearchParams({ projectId: project.id, newStep: step.title });
+    navigate(`/plano-acao?${params.toString()}`);
+  };
+
   return (
     <Card>
       <CardHeader className="space-y-3">
@@ -97,13 +106,13 @@ export function ProjectDeliveryWorkflow({
               Esteira de Entrega
             </CardTitle>
             <p className="text-sm text-muted-foreground">
-              Acompanhe as etapas de construção para {getProjectTypeLabel(project.projectType).toLowerCase()}.
+              Acompanhe as etapas de construção para {getProjectTypeLabel(project.projectType).toLowerCase()}. Tarefas e fase são conduzidas pelo Controle de Tarefas.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="secondary">{getProjectTypeLabel(project.projectType)}</Badge>
             <Button variant="outline" size="sm" onClick={() => handleOpenInActionPlan()}>
-              Plano de ação
+              Controle de tarefas
               <ExternalLink className="ml-1 h-3.5 w-3.5" />
             </Button>
           </div>
@@ -154,9 +163,9 @@ export function ProjectDeliveryWorkflow({
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2 md:justify-end">
-                    <Button variant="outline" size="sm" onClick={() => onCreateTask?.(step)}>
+                    <Button variant="outline" size="sm" onClick={() => handleCreateInTaskControl(step)}>
                       <Plus className="mr-1 h-3.5 w-3.5" />
-                      Criar tarefa
+                      Criar no controle
                     </Button>
                     {stepTasks[0] && (
                       <Button variant="secondary" size="sm" onClick={() => onOpenTask?.(stepTasks[0])}>

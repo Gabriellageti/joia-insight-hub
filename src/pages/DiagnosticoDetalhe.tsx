@@ -27,7 +27,7 @@ import {
   resolveAnswerValue,
 } from "@/lib/diagnostic-evaluation";
 import { buildActionPlan, generateRecommendations } from "@/lib/recommendations";
-import { DiagnosticReportPayload, ImpactProjection, Task } from "@/types";
+import { ActionPlan, ActionRecommendation, DiagnosticReportPayload, ImpactProjection, Task } from "@/types";
 import { NextStepsSuggestionModal, SuggestedNextStep } from "@/components/plano-acao";
 import { generateNextStepsSuggestions, isKickoffTemplate } from "@/lib/next-steps";
 import { useAuth } from "@/contexts/AuthContext";
@@ -40,6 +40,13 @@ export default function DiagnosticoDetalhe() {
   const [isExecuting, setIsExecuting] = useState(false);
   const [showNextStepsModal, setShowNextStepsModal] = useState(false);
   const [nextStepsSuggestions, setNextStepsSuggestions] = useState<SuggestedNextStep[]>([]);
+  const [completionPreview, setCompletionPreview] = useState<{
+    answers: Record<string, DiagnosticAnswer>;
+    score: number;
+    recommendations: ActionRecommendation[];
+    actionPlan: ActionPlan;
+  } | null>(null);
+  const [selectedActionIds, setSelectedActionIds] = useState<string[]>([]);
 
   const diagnostic = useMemo(
     () => diagnostics.find((item) => item.id === id),
@@ -49,6 +56,7 @@ export default function DiagnosticoDetalhe() {
   const template = useMemo(
     () => {
       if (!diagnostic) return null;
+      if (diagnostic.templateSnapshot) return diagnostic.templateSnapshot;
       // Tentar encontrar por templateId primeiro
       if (diagnostic.templateId) {
         const found = templates.find((t) => t.id === diagnostic.templateId);
@@ -99,12 +107,17 @@ export default function DiagnosticoDetalhe() {
     progress: number
   ) => {
     const answeredCount = Object.keys(answers).length;
-    updateDiagnostic(diagnostic.id, {
+    const updated = await updateDiagnostic(diagnostic.id, {
       progress,
       answeredQuestions: answeredCount,
+      answers,
       status: progress > 0 ? "in_progress" : diagnostic.status,
       hasResponses: answeredCount > 0,
     });
+
+    if (!updated) {
+      throw new Error("Não foi possível salvar as respostas do diagnóstico.");
+    }
   };
 
   const handleComplete = async (answers: Record<string, DiagnosticAnswer>) => {
@@ -129,6 +142,11 @@ export default function DiagnosticoDetalhe() {
         recommendations,
         score: scoreSummary.score,
       });
+
+      setCompletionPreview({ answers, score: scoreSummary.score, recommendations, actionPlan });
+      setSelectedActionIds(actionPlan.actions.map((action) => action.id));
+      toast.success("Revise as ações antes de concluir o diagnóstico.");
+      return;
 
       let createdTasks: Task[] = [];
       let kanbanError: string | null = null;
@@ -197,6 +215,41 @@ export default function DiagnosticoDetalhe() {
     } finally {
       setIsExecuting(false);
     }
+  };
+
+  const handleConfirmCompletion = async () => {
+    if (!completionPreview) return;
+
+    const actionPlan = {
+      ...completionPreview.actionPlan,
+      actions: completionPreview.actionPlan.actions.filter((action) => selectedActionIds.includes(action.id)),
+    };
+    const createdTasks = await createActionPlan({ diagnostic, actionPlan });
+    const reportPayload: DiagnosticReportPayload = {
+      diagnosticId: diagnostic.id,
+      generatedAt: new Date().toISOString(),
+      score: completionPreview.score,
+      recommendations: completionPreview.recommendations,
+      actionPlanSummary: {
+        title: actionPlan.title,
+        actions: actionPlan.actions.length,
+        taskIds: createdTasks.map((task) => task.id),
+      },
+    };
+
+    const updated = await updateDiagnostic(diagnostic.id, {
+      progress: 100,
+      answeredQuestions: Object.keys(completionPreview.answers).length,
+      answers: completionPreview.answers,
+      status: "completed",
+      hasResponses: true,
+      score: completionPreview.score,
+      actionPlan,
+      reportPayload,
+    });
+    if (!updated) throw new Error("Não foi possível concluir o diagnóstico.");
+    setCompletionPreview(null);
+    toast.success(actionPlan.actions.length ? "Diagnóstico concluído e ações enviadas ao Kanban." : "Diagnóstico concluído sem novas ações.");
   };
 
   const handleConfirmNextSteps = async (selectedIds: string[]) => {
@@ -729,6 +782,39 @@ export default function DiagnosticoDetalhe() {
         suggestions={nextStepsSuggestions}
         onConfirm={handleConfirmNextSteps}
       />
+
+      {completionPreview && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-background/80 p-4 backdrop-blur-sm sm:items-center">
+          <Card className="max-h-[85vh] w-full max-w-2xl overflow-auto">
+            <CardHeader>
+              <CardTitle>Revise o plano antes de concluir</CardTitle>
+              <CardDescription>
+                Resultado do diagnóstico: {completionPreview.score}%. Selecione apenas as ações que devem entrar no plano do projeto.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {completionPreview.actionPlan.actions.map((action) => {
+                const selected = selectedActionIds.includes(action.id);
+                return (
+                  <button
+                    key={action.id}
+                    type="button"
+                    onClick={() => setSelectedActionIds((current) => selected ? current.filter((id) => id !== action.id) : [...current, action.id])}
+                    className={`w-full rounded-lg border p-3 text-left transition-colors ${selected ? "border-primary bg-primary/5" : "border-border opacity-60"}`}
+                  >
+                    <p className="font-medium">{action.title}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">{action.description}</p>
+                  </button>
+                );
+              })}
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" onClick={() => setCompletionPreview(null)}>Voltar ao diagnóstico</Button>
+                <Button onClick={() => void handleConfirmCompletion()}>Concluir com {selectedActionIds.length} ações</Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

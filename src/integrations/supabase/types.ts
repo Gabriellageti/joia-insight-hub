@@ -151,6 +151,7 @@ export type Database = {
       }
       clients: {
         Row: {
+          address: string | null
           cnpj: string | null
           contact_email: string | null
           contact_name: string | null
@@ -160,10 +161,13 @@ export type Database = {
           money_hypothesis: number | null
           name: string
           segment: string | null
+          state_registration: string | null
           status: string | null
+          trade_name: string | null
           updated_at: string
         }
         Insert: {
+          address?: string | null
           cnpj?: string | null
           contact_email?: string | null
           contact_name?: string | null
@@ -173,10 +177,13 @@ export type Database = {
           money_hypothesis?: number | null
           name: string
           segment?: string | null
+          state_registration?: string | null
           status?: string | null
+          trade_name?: string | null
           updated_at?: string
         }
         Update: {
+          address?: string | null
           cnpj?: string | null
           contact_email?: string | null
           contact_name?: string | null
@@ -186,7 +193,9 @@ export type Database = {
           money_hypothesis?: number | null
           name?: string
           segment?: string | null
+          state_registration?: string | null
           status?: string | null
+          trade_name?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -417,6 +426,7 @@ export type Database = {
       diagnostics: {
         Row: {
           action_plan: Json | null
+          answers: Json
           answered_questions: number | null
           area: string | null
           auto_generate_opportunities: boolean | null
@@ -441,11 +451,13 @@ export type Database = {
           status: string | null
           template_id: string | null
           template_name: string | null
+          template_snapshot: Json | null
           total_questions: number | null
           updated_at: string
         }
         Insert: {
           action_plan?: Json | null
+          answers?: Json
           answered_questions?: number | null
           area?: string | null
           auto_generate_opportunities?: boolean | null
@@ -470,11 +482,13 @@ export type Database = {
           status?: string | null
           template_id?: string | null
           template_name?: string | null
+          template_snapshot?: Json | null
           total_questions?: number | null
           updated_at?: string
         }
         Update: {
           action_plan?: Json | null
+          answers?: Json
           answered_questions?: number | null
           area?: string | null
           auto_generate_opportunities?: boolean | null
@@ -499,6 +513,7 @@ export type Database = {
           status?: string | null
           template_id?: string | null
           template_name?: string | null
+          template_snapshot?: Json | null
           total_questions?: number | null
           updated_at?: string
         }
@@ -2178,6 +2193,16 @@ export type Database = {
       get_team_operations: {
         Args: { _workspace_id?: string }
         Returns: Json
+      }
+      set_financial_record_payment: {
+        Args: {
+          p_financial_record_id: string
+          p_paid: boolean
+          p_paid_at?: string | null
+          p_payment_method?: string | null
+          p_payment_notes?: string | null
+        }
+        Returns: Database["public"]["Tables"]["financial_records"]["Row"][]
       }
       has_role: {
         Args: {

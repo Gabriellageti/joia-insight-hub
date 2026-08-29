@@ -213,7 +213,7 @@ export default function ClienteJornada() {
                 className="w-full justify-start"
                 onClick={() => navigate('/plano-acao')}
               >
-                Ver Plano de Ação
+                Ver Controle de Tarefas
               </Button>
               <Button 
                 variant="outline" 

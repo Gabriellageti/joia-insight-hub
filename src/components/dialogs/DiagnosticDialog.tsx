@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
@@ -91,7 +90,7 @@ const toInputDateValue = (value?: string) => {
 
 export function DiagnosticDialog({ open, onOpenChange, diagnostic, defaultTemplateId, onSuccess }: DiagnosticDialogProps) {
   const navigate = useNavigate();
-  const { projects, clients, templates, applyDiagnostic, updateDiagnostic, addProjectAuditLog, duplicateDiagnostic } = useData();
+  const { projects, clients, templates, applyDiagnostic, updateDiagnostic, addProjectAuditLog, duplicateDiagnostic, addTask } = useData();
   const { user } = useAuth();
 
   const isEditing = Boolean(diagnostic?.id);
@@ -111,7 +110,6 @@ export function DiagnosticDialog({ open, onOpenChange, diagnostic, defaultTempla
     responsibleId: "",
     name: "",
     dueDate: "",
-    autoGenerateOpportunities: true,
     status: "draft" as Diagnostic["status"],
   });
 
@@ -150,7 +148,6 @@ export function DiagnosticDialog({ open, onOpenChange, diagnostic, defaultTempla
         responsibleId: diagnostic.responsibleId || user?.id || "",
         name: diagnostic.name,
         dueDate: diagnostic.dueDate || "",
-        autoGenerateOpportunities: diagnostic.autoGenerateOpportunities ?? true,
         status: diagnostic.status,
       });
       setNameTouched(true);
@@ -168,7 +165,6 @@ export function DiagnosticDialog({ open, onOpenChange, diagnostic, defaultTempla
         responsibleId: user?.id || "",
         name: "",
         dueDate: "",
-        autoGenerateOpportunities: true,
         status: "draft",
       }));
       setNameTouched(false);
@@ -227,11 +223,34 @@ export function DiagnosticDialog({ open, onOpenChange, diagnostic, defaultTempla
         responsibleName: formData.responsibleName,
         responsibleId: formData.responsibleId,
         dueDate: formData.dueDate,
-        autoGenerateOpportunities: formData.autoGenerateOpportunities,
         name: formData.name || getDefaultDiagnosticName(formData.templateName, formData.projectName),
       };
 
       const created = await applyDiagnostic(payload);
+      await addTask({
+        title: `Aplicar diagnóstico: ${formData.templateName}`,
+        description: "Conduza o roteiro guiado, registre as respostas e valide o plano de ação ao concluir.",
+        projectId: formData.projectId,
+        projectName: formData.projectName,
+        clientId: formData.clientId,
+        clientName: formData.clientName,
+        type: "processo",
+        responsible: formData.responsibleName || "Equipe JoIA",
+        priority: "medium",
+        taskType: "project",
+        assignedTo: formData.responsibleId,
+        dueDate: formData.dueDate || new Date().toISOString().slice(0, 10),
+        impact: "Aplicação de diagnóstico",
+        status: "not_started",
+        evidenceRequired: false,
+        sourceDiagnosticId: created.id,
+        what: `Aplicar ${formData.templateName}`,
+        why: "Mapear a situação atual e orientar o plano de ação do projeto.",
+        where: formData.projectName,
+        when: formData.dueDate,
+        who: formData.responsibleName,
+        how: "Seguir o roteiro guiado do diagnóstico e registrar as respostas.",
+      });
       toast.success("Diagnóstico criado com sucesso");
       
       // Call onSuccess callback
@@ -261,7 +280,6 @@ export function DiagnosticDialog({ open, onOpenChange, diagnostic, defaultTempla
         status: formData.status,
         responsibleName: formData.responsibleName,
         dueDate: formData.dueDate,
-        autoGenerateOpportunities: formData.autoGenerateOpportunities,
       });
       addProjectAuditLog({
         projectId: diagnostic.projectId,
@@ -367,16 +385,6 @@ export function DiagnosticDialog({ open, onOpenChange, diagnostic, defaultTempla
                 onChange={(e) => setFormData((prev) => ({ ...prev, dueDate: formatDatePtBR(e.target.value) }))}
               />
               <Calendar className="h-4 w-4 text-muted-foreground" />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label>Gerar oportunidades automaticamente ao concluir</Label>
-            <div className="flex items-center justify-between rounded-lg border px-3 py-2">
-              <span className="text-sm text-muted-foreground">Cria oportunidades assim que o diagnóstico for finalizado</span>
-              <Switch
-                checked={formData.autoGenerateOpportunities}
-                onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, autoGenerateOpportunities: checked }))}
-              />
             </div>
           </div>
           {isEditing && (

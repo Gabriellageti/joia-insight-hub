@@ -23,6 +23,8 @@ interface AuthContextType {
   memberships: WorkspaceMembership[];
   activeMembership: WorkspaceMembership | null;
   appRoles: AppRole[];
+  roles: string[];
+  isAdmin: boolean;
   can: (permission: AuthorizationPermission) => boolean;
   refreshAuthorization: () => Promise<void>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null }>;
@@ -159,6 +161,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       memberships,
       activeMembership,
       appRoles,
+      roles: appRoles,
+      isAdmin: appRoles.includes('admin_joia'),
       can,
       refreshAuthorization,
       signUp,

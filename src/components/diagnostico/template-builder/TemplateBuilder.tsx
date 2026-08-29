@@ -25,10 +25,7 @@ import {
 import {
   DiagnosticTemplate,
   DiagnosticTemplateStatus,
-  Opportunity,
-  OpportunityRuleCondition,
   QuestionOption,
-  TemplateOpportunityRule,
   TemplateQuestion,
   TemplateSection,
 } from "@/types";
@@ -83,58 +80,6 @@ const createQuestion = (order: number): TemplateQuestion => ({
   placeholder: "",
   maxFileSizeMB: null,
   allowedFileTypes: [],
-});
-
-const opportunityTypes: Opportunity["type"][] = [
-  "Receita incremental",
-  "Redução de custos",
-  "Eficiência operacional",
-  "Risco evitado",
-  "Outro",
-];
-
-const defaultOpportunityCondition = (type: TemplateQuestion["type"]): OpportunityRuleCondition => {
-  switch (type) {
-    case "yes_no":
-      return { type: "yes_no", expectedAnswer: "no" };
-    case "scale":
-      return { type: "scale", minValue: 0, maxValue: 10 };
-    case "number":
-      return { type: "number", operator: "<=", value: 0, unit: "numero" };
-    case "multiple_choice":
-      return { type: "multiple_choice", matchingOptions: [], matchStrategy: "any" };
-    case "text":
-      return { type: "text", keyword: "" };
-    default:
-      return { type: "always" };
-  }
-};
-
-const syncConditionWithType = (
-  condition: OpportunityRuleCondition | undefined,
-  type: TemplateQuestion["type"]
-): OpportunityRuleCondition => {
-  if (!condition || condition.type !== type) {
-    return defaultOpportunityCondition(type);
-  }
-  return condition;
-};
-
-const buildOpportunityRule = (
-  question: TemplateQuestion,
-  overrides?: Partial<TemplateOpportunityRule>
-): TemplateOpportunityRule => ({
-  id: overrides?.id || question.regraOportunidade?.id || `opp-${crypto.randomUUID()}`,
-  name: overrides?.name ?? question.regraOportunidade?.name ?? `Oportunidade para ${question.title}`,
-  description: overrides?.description ?? question.regraOportunidade?.description ?? "",
-  type: overrides?.type || question.regraOportunidade?.type || "Eficiência operacional",
-  estimatedValue: overrides?.estimatedValue ?? question.regraOportunidade?.estimatedValue ?? null,
-  confidence: overrides?.confidence || question.regraOportunidade?.confidence || "media",
-  evidenceType: overrides?.evidenceType || question.regraOportunidade?.evidenceType || "a_coletar",
-  enabled: overrides?.enabled ?? question.regraOportunidade?.enabled ?? true,
-  autoGenerate: overrides?.autoGenerate ?? question.regraOportunidade?.autoGenerate ?? true,
-  condition: syncConditionWithType(overrides?.condition ?? question.regraOportunidade?.condition, question.type),
-  audit: question.regraOportunidade?.audit,
 });
 
 const parseNumericInput = (value: string) => (value === "" ? null : Number(value));
@@ -212,7 +157,7 @@ export function TemplateBuilder({ initialTemplate, onSubmit, isSubmitting }: Tem
         .filter(Boolean),
       status,
       version: formState.version || "v1.0",
-      revision: initialTemplate ? (initialTemplate.revision || 1) + 1 : 1,
+      revision: initialTemplate?.revision || 1,
       sections: normalizedSections,
       sectionsCount: normalizedSections.length,
       questionCount,
@@ -310,35 +255,7 @@ export function TemplateBuilder({ initialTemplate, onSubmit, isSubmitting }: Tem
         : ["pdf", "jpg", "png"];
     }
 
-    const nextRule = question.regraOportunidade
-      ? buildOpportunityRule({ ...question, type: nextType }, {
-          condition: syncConditionWithType(question.regraOportunidade.condition, nextType),
-        })
-      : undefined;
-
-    updateQuestion(sectionId, question.id, {
-      ...typeSpecific,
-      regraOportunidade: nextRule,
-    });
-  };
-
-  const updateQuestionRule = (
-    sectionId: string,
-    questionId: string,
-    updater: (question: TemplateQuestion) => TemplateOpportunityRule | undefined
-  ) => {
-    setFormState((prev) => ({
-      ...prev,
-      sections: prev.sections.map((section) => {
-        if (section.id !== sectionId) return section;
-        return {
-          ...section,
-          questions: section.questions?.map((question) =>
-            question.id === questionId ? { ...question, regraOportunidade: updater(question) } : question
-          ),
-        };
-      }),
-    }));
+    updateQuestion(sectionId, question.id, typeSpecific);
   };
 
   const removeQuestion = (sectionId: string, questionId: string) => {
@@ -350,245 +267,6 @@ export function TemplateBuilder({ initialTemplate, onSubmit, isSubmitting }: Tem
           : section
       ),
     }));
-  };
-
-  const handleOpportunityToggle = (
-    sectionId: string,
-    questionId: string,
-    enabled: boolean
-  ) => {
-    updateQuestionRule(sectionId, questionId, (question) => buildOpportunityRule(question, { enabled }));
-  };
-
-  const handleOpportunityFieldChange = (
-    sectionId: string,
-    questionId: string,
-    updater: (rule: TemplateOpportunityRule, question: TemplateQuestion) => TemplateOpportunityRule
-  ) => {
-    updateQuestionRule(sectionId, questionId, (question) => {
-      const baseRule = buildOpportunityRule(question);
-      return updater(baseRule, question);
-    });
-  };
-
-  const handleOpportunityConditionChange = (
-    sectionId: string,
-    questionId: string,
-    updater: (condition: OpportunityRuleCondition, question: TemplateQuestion) => OpportunityRuleCondition
-  ) => {
-    updateQuestionRule(sectionId, questionId, (question) => {
-      const baseRule = buildOpportunityRule(question);
-      const nextCondition = updater(baseRule.condition || defaultOpportunityCondition(question.type), question);
-      return { ...baseRule, condition: nextCondition };
-    });
-  };
-
-  const renderOpportunityConditionFields = (sectionId: string, question: TemplateQuestion) => {
-    const condition = question.regraOportunidade?.condition || defaultOpportunityCondition(question.type);
-
-    if (question.type === "yes_no") {
-      return (
-        <div className="space-y-2">
-          <Label>Condição</Label>
-          <Select
-            value={condition.type === "yes_no" ? condition.expectedAnswer : "no"}
-            onValueChange={(value) =>
-              handleOpportunityConditionChange(sectionId, question.id, () => ({
-                type: "yes_no",
-                expectedAnswer: value as "yes" | "no",
-              }))
-            }
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Selecione" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="no">Quando a resposta for Não</SelectItem>
-              <SelectItem value="yes">Quando a resposta for Sim</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      );
-    }
-
-    if (question.type === "scale") {
-      const current = condition.type === "scale" ? condition : { type: "scale", minValue: null, maxValue: null };
-      return (
-        <div className="space-y-2">
-          <Label>Faixa de escala que gera oportunidade</Label>
-          <div className="grid grid-cols-2 gap-2">
-            <Input
-              type="number"
-              min={0}
-              value={current.minValue ?? ""}
-              onChange={(event) =>
-                handleOpportunityConditionChange(sectionId, question.id, (previous) => ({
-                  type: "scale",
-                  minValue: parseNumericInput(event.target.value),
-                  maxValue: previous.type === "scale" ? previous.maxValue ?? null : null,
-                }))
-              }
-              placeholder="Mínimo"
-            />
-            <Input
-              type="number"
-              min={0}
-              value={current.maxValue ?? ""}
-              onChange={(event) =>
-                handleOpportunityConditionChange(sectionId, question.id, (previous) => ({
-                  type: "scale",
-                  minValue: previous.type === "scale" ? previous.minValue ?? null : null,
-                  maxValue: parseNumericInput(event.target.value),
-                }))
-              }
-              placeholder="Máximo"
-            />
-          </div>
-          <p className="text-xs text-muted-foreground">Use para escalas de 1 a 5 ou 0 a 10.</p>
-        </div>
-      );
-    }
-
-    if (question.type === "number") {
-      const current = condition.type === "number" ? condition : { type: "number", operator: "<=", value: null };
-      return (
-        <div className="space-y-2">
-          <Label>Condição numérica</Label>
-          <div className="grid grid-cols-3 gap-2">
-            <Select
-              value={current.operator}
-              onValueChange={(value) =>
-                handleOpportunityConditionChange(sectionId, question.id, (previous) => ({
-                  type: "number",
-                  operator: value as ">" | ">=" | "<" | "<=" | "=",
-                  value: previous.type === "number" ? previous.value ?? null : null,
-                  unit: previous.type === "number" ? previous.unit || "numero" : "numero",
-                }))
-              }
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value=">">Maior que</SelectItem>
-                <SelectItem value=">=">Maior ou igual a</SelectItem>
-                <SelectItem value="<">Menor que</SelectItem>
-                <SelectItem value="<=">Menor ou igual a</SelectItem>
-                <SelectItem value="=">Igual a</SelectItem>
-              </SelectContent>
-            </Select>
-            <Input
-              type="number"
-              value={current.value ?? ""}
-              onChange={(event) =>
-                handleOpportunityConditionChange(sectionId, question.id, (previous) => ({
-                  type: "number",
-                  operator: previous.type === "number" ? previous.operator : "<=",
-                  value: parseNumericInput(event.target.value),
-                  unit: previous.type === "number" ? previous.unit || "numero" : "numero",
-                }))
-              }
-              placeholder="Valor"
-            />
-            <Select
-              value={current.type === "number" && "unit" in current && current.unit ? current.unit : "numero"}
-              onValueChange={(value) =>
-                handleOpportunityConditionChange(sectionId, question.id, (previous) => ({
-                  type: "number",
-                  operator: previous.type === "number" ? previous.operator : "<=",
-                  value: previous.type === "number" ? previous.value ?? null : null,
-                  unit: value as "numero" | "moeda" | "percentual",
-                }))
-              }
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="numero">Número</SelectItem>
-                <SelectItem value="moeda">Moeda</SelectItem>
-                <SelectItem value="percentual">Percentual</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <p className="text-xs text-muted-foreground">Configure para perguntas de número, moeda ou %.</p>
-        </div>
-      );
-    }
-
-    if (question.type === "multiple_choice") {
-      const current =
-        condition.type === "multiple_choice"
-          ? condition
-          : { type: "multiple_choice", matchingOptions: [], matchStrategy: "any" };
-      return (
-        <div className="space-y-2">
-          <Label>Opções que geram oportunidade</Label>
-          <Input
-            value={(current.matchingOptions || []).join(", ")}
-            onChange={(event) =>
-              handleOpportunityConditionChange(sectionId, question.id, (previous) => ({
-                type: "multiple_choice",
-                matchingOptions: event.target.value
-                  .split(",")
-                  .map((item) => item.trim())
-                  .filter(Boolean),
-                matchStrategy: previous.type === "multiple_choice" ? previous.matchStrategy || "any" : "any",
-              }))
-            }
-            placeholder="Separe por vírgula"
-          />
-          <Select
-            value={current.matchStrategy || "any"}
-            onValueChange={(value) =>
-              handleOpportunityConditionChange(sectionId, question.id, (previous) => ({
-                type: "multiple_choice",
-                matchingOptions:
-                  previous.type === "multiple_choice" ? previous.matchingOptions || [] : current.matchingOptions || [],
-                matchStrategy: value as "any" | "all",
-              }))
-            }
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="any">Qualquer opção listada</SelectItem>
-              <SelectItem value="all">Todas as opções listadas</SelectItem>
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-muted-foreground">Use as mesmas opções configuradas na pergunta.</p>
-        </div>
-      );
-    }
-
-    if (question.type === "text") {
-      const keyword = condition.type === "text" ? condition.keyword || "" : "";
-      return (
-        <div className="space-y-2">
-          <Label>Palavra-chave ou marcador</Label>
-          <Input
-            value={keyword}
-            onChange={(event) =>
-              handleOpportunityConditionChange(sectionId, question.id, () => ({
-                type: "text",
-                keyword: event.target.value,
-              }))
-            }
-            placeholder="Ex.: risco, atraso, falta de processo"
-          />
-          <p className="text-xs text-muted-foreground">
-            Referência para revisão manual da resposta.
-          </p>
-        </div>
-      );
-    }
-
-    return (
-      <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
-        Configure o tipo da pergunta para habilitar regras de oportunidade.
-      </div>
-    );
   };
 
   const handleSectionDragStart = (sectionId: string) => setDraggingSectionId(sectionId);
@@ -705,6 +383,7 @@ export function TemplateBuilder({ initialTemplate, onSubmit, isSubmitting }: Tem
       ...payload,
       status: "published" as DiagnosticTemplateStatus,
       version: nextVersion,
+      revision: (initialTemplate?.revision || 0) + 1,
       lastPublishedAt: publishedAt,
       updatedAt: publishedAt,
     };
@@ -936,7 +615,7 @@ export function TemplateBuilder({ initialTemplate, onSubmit, isSubmitting }: Tem
                                   required
                                 />
                               </div>
-                              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-center">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-center">
                                 <div className="space-y-2">
                                 <Label>Tipo</Label>
                                 <Select
@@ -958,26 +637,6 @@ export function TemplateBuilder({ initialTemplate, onSubmit, isSubmitting }: Tem
                                     </SelectContent>
                                   </Select>
                                 </div>
-                                <div className="space-y-2">
-                                  <Label>Criticidade</Label>
-                                  <Select
-                                    value={question.criticality}
-                                    onValueChange={(value) =>
-                                      updateQuestion(section.id, question.id, {
-                                        criticality: value as TemplateQuestion["criticality"],
-                                      })
-                                    }
-                                  >
-                                    <SelectTrigger>
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="baixa">Baixa</SelectItem>
-                                      <SelectItem value="media">Média</SelectItem>
-                                      <SelectItem value="alta">Alta</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </div>
                                 <div className="flex items-center justify-between rounded-md border px-3 py-2">
                                   <div>
                                     <p className="text-sm font-medium">Obrigatória</p>
@@ -992,39 +651,62 @@ export function TemplateBuilder({ initialTemplate, onSubmit, isSubmitting }: Tem
                                     }
                                   />
                                 </div>
-                                <div className="flex items-center justify-between rounded-md border px-3 py-2">
-                                  <div>
-                                    <p className="text-sm font-medium">Entra no score</p>
-                                    <p className="text-xs text-muted-foreground">
-                                      Desative para perguntas que não devem impactar a nota.
-                                    </p>
-                                  </div>
-                                  <Switch
-                                    checked={question.includeInScore ?? true}
-                                    onCheckedChange={(checked) =>
-                                      updateQuestion(section.id, question.id, { includeInScore: checked })
-                                    }
-                                  />
-                                </div>
                               </div>
                               <div className="space-y-2">
-                                <Label>Descrição ou instrução</Label>
+                                <Label>Contexto para quem responde</Label>
                                 <Textarea
                                   value={question.description || ""}
                                   onChange={(event) =>
                                     updateQuestion(section.id, question.id, { description: event.target.value })
                                   }
-                                  placeholder="Explique o contexto ou dê exemplos de resposta."
+                                  placeholder="Explique em linguagem simples o assunto da pergunta e dê exemplos do que uma boa resposta pode trazer."
                                 />
                               </div>
+
+                              <details className="rounded-md border bg-muted/20 p-3">
+                                <summary className="cursor-pointer text-sm font-medium">
+                                  Configurações avançadas
+                                </summary>
+                                <div className="mt-4 space-y-3">
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <div className="space-y-2">
+                                      <Label>Criticidade</Label>
+                                      <Select
+                                        value={question.criticality}
+                                        onValueChange={(value) =>
+                                          updateQuestion(section.id, question.id, {
+                                            criticality: value as TemplateQuestion["criticality"],
+                                          })
+                                        }
+                                      >
+                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="baixa">Baixa</SelectItem>
+                                          <SelectItem value="media">Média</SelectItem>
+                                          <SelectItem value="alta">Alta</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                    <div className="flex items-center justify-between rounded-md border px-3 py-2">
+                                      <div>
+                                        <p className="text-sm font-medium">Entra no score</p>
+                                        <p className="text-xs text-muted-foreground">Desative para perguntas que não devem impactar a nota.</p>
+                                      </div>
+                                      <Switch
+                                        checked={question.includeInScore ?? true}
+                                        onCheckedChange={(checked) => updateQuestion(section.id, question.id, { includeInScore: checked })}
+                                      />
+                                    </div>
+                                  </div>
                               <div className="space-y-2">
-                                <Label>Texto auxiliar</Label>
-                                <Input
+                                <Label>Guia de campo para quem aplica</Label>
+                                <Textarea
                                   value={question.helperText || ""}
                                   onChange={(event) =>
                                     updateQuestion(section.id, question.id, { helperText: event.target.value })
                                   }
-                                  placeholder="Dica rápida para quem está respondendo"
+                                  placeholder="Como fazer a pergunta, o que observar e como aprofundar a conversa se a resposta for vaga."
+                                  rows={3}
                                 />
                               </div>
 
@@ -1184,7 +866,7 @@ export function TemplateBuilder({ initialTemplate, onSubmit, isSubmitting }: Tem
                                   </div>
 
                                   <p className="text-xs text-muted-foreground">
-                                    Use pesos para equilibrar opções e refletir impacto na nota ou nas regras de oportunidade.
+                                    Use pesos para equilibrar opções e refletir o impacto na nota.
                                   </p>
                                 </div>
                               )}
@@ -1221,156 +903,8 @@ export function TemplateBuilder({ initialTemplate, onSubmit, isSubmitting }: Tem
                                   </div>
                                 </div>
                               )}
-                              <div className="rounded-md border bg-muted/40 p-3 space-y-3">
-                                <div className="flex items-center justify-between gap-3">
-                                  <div>
-                                    <p className="text-sm font-medium">Gerar oportunidade</p>
-                                    <p className="text-xs text-muted-foreground">
-                                      Ative para criar uma regra automática vinculada à resposta.
-                                    </p>
-                                  </div>
-                                  <Switch
-                                    checked={question.regraOportunidade?.enabled ?? false}
-                                    onCheckedChange={(checked) => handleOpportunityToggle(section.id, question.id, checked)}
-                                  />
                                 </div>
-
-                                {question.regraOportunidade?.enabled && (
-                                  <div className="space-y-3">
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                      <div className="space-y-2">
-                                        <Label>Nome da regra</Label>
-                                        <Input
-                                          value={question.regraOportunidade.name}
-                                          onChange={(event) =>
-                                            handleOpportunityFieldChange(section.id, question.id, (rule) => ({
-                                              ...rule,
-                                              name: event.target.value,
-                                            }))
-                                          }
-                                          placeholder="Descreva a oportunidade gerada"
-                                        />
-                                      </div>
-                                      <div className="space-y-2">
-                                        <Label>Tipo de oportunidade</Label>
-                                        <Select
-                                          value={question.regraOportunidade.type}
-                                          onValueChange={(value) =>
-                                            handleOpportunityFieldChange(section.id, question.id, (rule) => ({
-                                              ...rule,
-                                              type: value as Opportunity["type"],
-                                            }))
-                                          }
-                                        >
-                                          <SelectTrigger>
-                                            <SelectValue />
-                                          </SelectTrigger>
-                                          <SelectContent>
-                                            {opportunityTypes.map((type) => (
-                                              <SelectItem key={type} value={type}>
-                                                {type}
-                                              </SelectItem>
-                                            ))}
-                                          </SelectContent>
-                                        </Select>
-                                      </div>
-                                    </div>
-
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                      <div className="space-y-2">
-                                        <Label>Valor estimado (R$)</Label>
-                                        <Input
-                                          type="number"
-                                          value={question.regraOportunidade.estimatedValue ?? ""}
-                                          onChange={(event) =>
-                                            handleOpportunityFieldChange(section.id, question.id, (rule) => ({
-                                              ...rule,
-                                              estimatedValue: parseNumericInput(event.target.value),
-                                            }))
-                                          }
-                                          placeholder="50000"
-                                        />
-                                      </div>
-                                      <div className="space-y-2">
-                                        <Label>Confiança</Label>
-                                        <Select
-                                          value={question.regraOportunidade.confidence || "media"}
-                                          onValueChange={(value) =>
-                                            handleOpportunityFieldChange(section.id, question.id, (rule) => ({
-                                              ...rule,
-                                              confidence: value as TemplateOpportunityRule["confidence"],
-                                            }))
-                                          }
-                                        >
-                                          <SelectTrigger>
-                                            <SelectValue />
-                                          </SelectTrigger>
-                                          <SelectContent>
-                                            <SelectItem value="baixa">Baixa</SelectItem>
-                                            <SelectItem value="media">Média</SelectItem>
-                                            <SelectItem value="alta">Alta</SelectItem>
-                                          </SelectContent>
-                                        </Select>
-                                      </div>
-                                      <div className="space-y-2">
-                                        <Label>Evidência</Label>
-                                        <Select
-                                          value={question.regraOportunidade.evidenceType || "a_coletar"}
-                                          onValueChange={(value) =>
-                                            handleOpportunityFieldChange(section.id, question.id, (rule) => ({
-                                              ...rule,
-                                              evidenceType: value as TemplateOpportunityRule["evidenceType"],
-                                            }))
-                                          }
-                                        >
-                                          <SelectTrigger>
-                                            <SelectValue />
-                                          </SelectTrigger>
-                                          <SelectContent>
-                                            <SelectItem value="a_coletar">A coletar</SelectItem>
-                                            <SelectItem value="upload">Upload</SelectItem>
-                                          </SelectContent>
-                                        </Select>
-                                      </div>
-                                    </div>
-
-                                    <div className="space-y-2">
-                                      <Label>Descrição</Label>
-                                      <Textarea
-                                        value={question.regraOportunidade.description || ""}
-                                        onChange={(event) =>
-                                          handleOpportunityFieldChange(section.id, question.id, (rule) => ({
-                                            ...rule,
-                                            description: event.target.value,
-                                          }))
-                                        }
-                                        placeholder="Explique o impacto ou evidência esperada"
-                                        rows={3}
-                                      />
-                                    </div>
-
-                                    {renderOpportunityConditionFields(section.id, question)}
-
-                                    <div className="flex items-center justify-between rounded-md border px-3 py-2">
-                                      <div>
-                                        <p className="text-sm font-medium">Gerar automaticamente</p>
-                                        <p className="text-xs text-muted-foreground">
-                                          Cria a oportunidade assim que a condição for atendida.
-                                        </p>
-                                      </div>
-                                      <Switch
-                                        checked={question.regraOportunidade.autoGenerate}
-                                        onCheckedChange={(checked) =>
-                                          handleOpportunityFieldChange(section.id, question.id, (rule) => ({
-                                            ...rule,
-                                            autoGenerate: checked,
-                                          }))
-                                        }
-                                      />
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
+                              </details>
                             </div>
                             );
                           })}

@@ -329,7 +329,7 @@ type LegacyClient = Partial<Omit<Client, "address">> & {
 const mapSupabaseClientToLegacy = (client: ClientRow): LegacyClient => ({
   id: client.id,
   name: client.name,
-  tradeName: client.name,
+  tradeName: client.trade_name || client.name,
   razaoSocial: client.name,
   cnpj: client.cnpj || "",
   segment: client.segment || "",
@@ -344,7 +344,7 @@ const mapSupabaseClientToLegacy = (client: ClientRow): LegacyClient => ({
   risk: "low",
   lastContact: formatDateFromIso(client.updated_at || client.created_at),
   createdAt: formatDateFromIso(client.created_at),
-  endereco: {},
+  endereco: client.address ? { logradouro: client.address } : {},
   preferenciasRelacionamento: {},
 });
 
@@ -356,12 +356,14 @@ const buildSupabaseClientInsert = (client: LegacyClient): SupabaseClientInsert =
 
   return {
     name: client.razaoSocial || client.name || client.tradeName || "Cliente",
+    trade_name: client.tradeName || null,
     cnpj: client.cnpj || null,
     segment: client.segment || client.segmentoTags?.[0] || null,
     status: client.status || "ativo",
     contact_name: client.contatoPrincipal?.nome || client.primaryContactName || null,
     contact_email: client.contatoPrincipal?.email || client.primaryContactEmail || null,
     contact_phone: client.contatoPrincipal?.whatsapp || client.primaryContactPhone || null,
+    address: typeof client.address === "string" ? client.address : null,
     created_at: timestamp,
     updated_at: timestamp,
   };
@@ -372,6 +374,7 @@ const buildSupabaseClientUpdate = (client: LegacyClient): SupabaseClientUpdate =
 
   if (typeof client.razaoSocial !== "undefined" || typeof client.name !== "undefined" || typeof client.tradeName !== "undefined") {
     payload.name = client.razaoSocial || client.name || client.tradeName;
+    payload.trade_name = client.tradeName || null;
   }
 
   if (typeof client.cnpj !== "undefined") {
@@ -390,6 +393,10 @@ const buildSupabaseClientUpdate = (client: LegacyClient): SupabaseClientUpdate =
     payload.contact_name = client.contatoPrincipal?.nome || client.primaryContactName || null;
     payload.contact_email = client.contatoPrincipal?.email || client.primaryContactEmail || null;
     payload.contact_phone = client.contatoPrincipal?.whatsapp || client.primaryContactPhone || null;
+  }
+
+  if (typeof client.address === "string") {
+    payload.address = client.address;
   }
 
   return payload;
@@ -436,6 +443,7 @@ const mapSupabaseEmployee = (employee: EmployeeRow): Employee => {
 
   return {
     id: employee.id,
+    userId: employee.user_id,
     name: employee.name,
     email: employee.email || "",
     role: employee.role || "Analista",
@@ -993,6 +1001,7 @@ const normalizeDiagnostic = (diagnostic: Partial<Diagnostic>): Diagnostic => {
     clientName: diagnostic.clientName || "",
     templateId: diagnostic.templateId || "",
     templateName,
+    templateSnapshot: diagnostic.templateSnapshot,
     status: diagnostic.status || "draft",
     progress: progressValue,
     score: diagnostic.score,
@@ -1001,6 +1010,7 @@ const normalizeDiagnostic = (diagnostic: Partial<Diagnostic>): Diagnostic => {
     updatedAt: diagnostic.updatedAt || createdAt,
     totalQuestions,
     answeredQuestions,
+    answers: diagnostic.answers || {},
     autoGenerateOpportunities: diagnostic.autoGenerateOpportunities ?? true,
     responsibleName: diagnostic.responsibleName || "Equipe JoIA",
     responsibleId: diagnostic.responsibleId,
@@ -1223,8 +1233,7 @@ type SupabaseEmployeeInsert = Database["public"]["Tables"]["employees"]["Insert"
 type SupabaseEmployeeUpdate = Database["public"]["Tables"]["employees"]["Update"];
 
 const buildSupabaseEmployeeInsert = (
-  employee: Omit<Employee, "id" | "createdAt">,
-  userId?: string | null
+  employee: Omit<Employee, "id" | "createdAt">
 ): SupabaseEmployeeInsert => {
   const timestamp = new Date().toISOString();
 
@@ -1235,7 +1244,9 @@ const buildSupabaseEmployeeInsert = (
     status: employee.status || "onboarding",
     hire_date: toSupabaseDate(employee.startDate),
     avatar_url: employee.avatarUrl || null,
-    user_id: userId || null,
+    // The account is linked only after the person signs in with this e-mail.
+    // The administrator creating the employee must never become their account.
+    user_id: null,
     created_at: timestamp,
     updated_at: timestamp,
   };
@@ -1501,6 +1512,7 @@ const mapSupabaseDiagnosticToLegacy = (diagnostic: ExtendedDiagnosticRow): Diagn
   clientName: diagnostic.client_name || "",
   templateId: diagnostic.template_id || "",
   templateName: diagnostic.template_name || "",
+  templateSnapshot: diagnostic.template_snapshot as unknown as Diagnostic["templateSnapshot"],
   status: (diagnostic.status as Diagnostic["status"]) || "draft",
   progress: diagnostic.progress ?? 0,
   score: diagnostic.score ?? undefined,
@@ -1509,6 +1521,7 @@ const mapSupabaseDiagnosticToLegacy = (diagnostic: ExtendedDiagnosticRow): Diagn
   updatedAt: formatDateFromIso(diagnostic.updated_at),
   totalQuestions: diagnostic.total_questions ?? 0,
   answeredQuestions: diagnostic.answered_questions ?? 0,
+  answers: (diagnostic.answers as unknown as Diagnostic["answers"]) || {},
   autoGenerateOpportunities: diagnostic.auto_generate_opportunities ?? true,
   responsibleName: diagnostic.responsible_name || undefined,
   responsibleId: diagnostic.responsible_id || undefined,
@@ -1530,12 +1543,14 @@ const buildSupabaseDiagnosticInsert = (diagnostic: Diagnostic): SupabaseDiagnost
     project_name: diagnostic.projectName || null,
     template_id: toSupabaseUuid(diagnostic.templateId),
     template_name: diagnostic.templateName || null,
+    template_snapshot: toJsonValue(diagnostic.templateSnapshot),
     status: diagnostic.status,
     progress: diagnostic.progress ?? 0,
     score: diagnostic.score ?? null,
     opportunities_count: diagnostic.opportunities ?? 0,
     total_questions: diagnostic.totalQuestions ?? 0,
     answered_questions: diagnostic.answeredQuestions ?? 0,
+    answers: toJsonValue(diagnostic.answers) ?? {},
     auto_generate_opportunities: diagnostic.autoGenerateOpportunities ?? true,
     responsible_name: diagnostic.responsibleName || null,
     responsible_id: toSupabaseUuid(diagnostic.responsibleId),
@@ -1557,12 +1572,14 @@ const buildSupabaseDiagnosticUpdate = (diagnostic: Partial<Diagnostic>): Supabas
   if (typeof diagnostic.projectName !== "undefined") payload.project_name = diagnostic.projectName || null;
   if (typeof diagnostic.templateId !== "undefined") payload.template_id = toSupabaseUuid(diagnostic.templateId);
   if (typeof diagnostic.templateName !== "undefined") payload.template_name = diagnostic.templateName || null;
+  if (typeof diagnostic.templateSnapshot !== "undefined") payload.template_snapshot = toJsonValue(diagnostic.templateSnapshot);
   if (typeof diagnostic.status !== "undefined") payload.status = diagnostic.status;
   if (typeof diagnostic.progress !== "undefined") payload.progress = diagnostic.progress;
   if (typeof diagnostic.score !== "undefined") payload.score = diagnostic.score ?? null;
   if (typeof diagnostic.opportunities !== "undefined") payload.opportunities_count = diagnostic.opportunities ?? 0;
   if (typeof diagnostic.totalQuestions !== "undefined") payload.total_questions = diagnostic.totalQuestions;
   if (typeof diagnostic.answeredQuestions !== "undefined") payload.answered_questions = diagnostic.answeredQuestions;
+  if (typeof diagnostic.answers !== "undefined") payload.answers = toJsonValue(diagnostic.answers) ?? {};
   if (typeof diagnostic.autoGenerateOpportunities !== "undefined") {
     payload.auto_generate_opportunities = diagnostic.autoGenerateOpportunities ?? true;
   }
@@ -1808,7 +1825,7 @@ const initialClientContacts: ClientContact[] = [
 
 export function DataProvider({ children }: { children: ReactNode }) {
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const { toast } = useToast();
   const currentUserName = resolveUserName(user);
   const [clients, setClients] = useState<Client[]>(initialClients.map(normalizeClient));
@@ -2020,7 +2037,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [toast, user?.id, projectsLoading, clientsLoading, location.pathname]);
 
   useEffect(() => {
-    if (!user) {
+    if (!user || !isAdmin) {
       setPlaybooks(initialPlaybooks);
       return;
     }
@@ -2041,10 +2058,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
     };
 
     fetchPlaybooks();
-  }, [toast, user]);
+  }, [toast, user, isAdmin]);
 
   useEffect(() => {
-    if (!user) {
+    if (!user || !isAdmin) {
+      setExpenses([]);
       return;
     }
 
@@ -2067,10 +2085,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
     };
 
     fetchExpenses();
-  }, [toast, user]);
+  }, [toast, user, isAdmin]);
 
   useEffect(() => {
-    if (!user) {
+    if (!user || !isAdmin) {
       setEmployees([]);
       return;
     }
@@ -2091,7 +2109,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     };
 
     fetchEmployees();
-  }, [toast, user]);
+  }, [toast, user, isAdmin]);
 
   // Fetch indicators from Supabase
   useEffect(() => {
@@ -2115,7 +2133,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   // Fetch leads from Supabase
   useEffect(() => {
-    if (!user) {
+    if (!user || !isAdmin) {
       setLeads([]);
       return;
     }
@@ -2131,7 +2149,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     };
 
     fetchLeadsData();
-  }, [toast, user]);
+  }, [isAdmin, toast, user]);
 
   // Fetch deliverables from Supabase
   useEffect(() => {
@@ -2156,7 +2174,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   // Fetch content items from Supabase
   useEffect(() => {
-    if (!user) {
+    if (!user || !isAdmin) {
       setContentItems([]);
       return;
     }
@@ -2172,7 +2190,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     };
 
     fetchContentItemsData();
-  }, [toast, user]);
+  }, [isAdmin, toast, user]);
 
   // Fetch contracts from Supabase
   useEffect(() => {
@@ -2346,7 +2364,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         templateQuestionCount: diagnostic.templateQuestionCount ?? template?.questionCount,
         templateName: diagnostic.templateName || template?.name || diagnostic.templateId,
       });
-      const normalized = normalizeDiagnostic(created);
+      const normalized = normalizeDiagnostic({ ...created, templateSnapshot: template });
 
       try {
         const payload = buildSupabaseDiagnosticInsert(normalized);
@@ -3141,7 +3159,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
     employees,
     addEmployee: async (employee) => {
-      const payload = buildSupabaseEmployeeInsert(employee, user?.id);
+      const payload = buildSupabaseEmployeeInsert(employee);
 
       try {
         const created = await createSupabaseEmployee(payload);

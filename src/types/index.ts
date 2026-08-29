@@ -260,6 +260,7 @@ export interface Diagnostic {
   clientName: string;
   templateId: string;
   templateName: string;
+  templateSnapshot?: DiagnosticTemplate;
   status: "draft" | "in_progress" | "completed";
   progress: number;
   score?: number;
@@ -268,6 +269,7 @@ export interface Diagnostic {
   updatedAt: string;
   totalQuestions: number;
   answeredQuestions: number;
+  answers?: Record<string, import("@/types/diagnostic-execution").DiagnosticAnswer>;
   autoGenerateOpportunities?: boolean;
   responsibleName?: string;
   responsibleId?: string;
@@ -475,6 +477,7 @@ export interface Playbook {
 
 export interface Employee {
   id: string;
+  userId?: string | null;
   name: string;
   email?: string;
   role: string;
