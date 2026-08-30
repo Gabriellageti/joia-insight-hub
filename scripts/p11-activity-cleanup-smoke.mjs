@@ -32,7 +32,8 @@ try {
   const clientId = await insert("clients", { name: "P11-E2E-Cleanup Client", workspace_id: a.workspaceId });
   const projectId = await insert("projects", { name: "P11-E2E-Cleanup Project", client_id: clientId, workspace_id: a.workspaceId });
   ok(await admin.from("project_members").insert({ project_id: projectId, user_id: a.userId, access_level: "manager" }));
-  const taskId = await insert("tasks", { title: "P11-E2E-Cleanup Task", client_id: clientId, project_id: projectId, workspace_id: a.workspaceId });
+  const taskId = await insert("tasks", { title: "P11-E2E-Cleanup Task", client_id: clientId, project_id: projectId, workspace_id: a.workspaceId,
+    task_type: "project", assigned_to: a.userId, created_by: a.userId });
   ok(await a.client.from("tasks").update({ title: "P11-E2E-Cleanup Task updated" }).eq("id", taskId).select("id").single());
   ok(await a.client.from("tasks").delete().eq("id", taskId));
   assert.deepEqual(ok(await admin.from("tasks").select("id").eq("id", taskId)), []);
