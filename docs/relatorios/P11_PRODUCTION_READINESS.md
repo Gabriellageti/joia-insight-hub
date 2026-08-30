@@ -13,7 +13,7 @@ O rollout coordenado foi executado no projeto oficial. A API compatível foi pub
 
 O domínio está `Ready`, `/api/health` responde saudável, os headers de segurança estão presentes e a chave privilegiada Supabase permanece exclusivamente server-side. Storage, RLS, concorrência de CRM/templates, sessão, PWA, rate limit, request ID, fallback e audit trail receberam ensaios reais com fixtures sintéticas removidas ao final.
 
-O resultado permanece **NO-GO**. O AI Gateway aceita OIDC, mas retorna 403 porque a equipe Vercel não possui cartão válido cadastrado para liberar créditos. A IA opera em fallback e os ensaios que dependem do modelo real continuam **BLOQUEADO — NÃO VALIDADO**. Backup/PITR/restore, GitHub e parte do smoke funcional visual de produção também seguem sem evidência completa. Não iniciar P12.
+O resultado permanece **NO-GO**. O AI Gateway aceita OIDC, mas retorna 403 porque a equipe Vercel não possui cartão válido cadastrado para liberar créditos. A IA opera em fallback e os ensaios que dependem do modelo real continuam **BLOQUEADO — NÃO VALIDADO**. Backup/PITR/restore e parte do smoke funcional visual de produção também seguem sem evidência completa. O acesso/publicação da branch GitHub foi resolvido em 30/08/2026; a integração com a `main` ainda exige revisão. Não iniciar P12.
 
 ## Pontuação recalculada
 
@@ -26,7 +26,7 @@ O resultado permanece **NO-GO**. O AI Gateway aceita OIDC, mas retorna 403 porqu
 | PWA | 93/100 | Manifesto, SW, offline, logout/login e multiaba aprovados no domínio oficial |
 | Observabilidade | 82/100 | Health, request IDs e audit trail reais; falta drain/alerta |
 | Performance | 68/100 | Build/navegação aprovados; carga e Web Vitals reais pendentes |
-| Deploy | 88/100 | Projeto, envs, build, promoção e domínio validados; GitHub/rollback completo pendentes |
+| Deploy | 88/100 | Projeto, envs, build, promoção, domínio e branch GitHub validados; integração na main/rollback completo pendentes |
 
 ## Environment Variables
 
@@ -178,7 +178,7 @@ Somente dados sintéticos `example.invalid` e workspaces P11 foram usados e remo
 | Browser oficial | 12/12 rotas, sessão/PWA PASS |
 | Headers | PASS |
 | AI Gateway generativo | **BLOQUEADO — 403 billing/cartão** |
-| GitHub oficial | **BLOQUEADO — `Repository not found` para `gustavosantosfip`** |
+| GitHub oficial | PASS — branch publicada usando a credencial existente de `Gabriellageti`; `gustavosantosfip` continua sem acesso |
 | Backup/PITR/restore | **BLOQUEADO — NÃO VALIDADO** |
 
 ## Pendências para GO
@@ -186,10 +186,21 @@ Somente dados sintéticos `example.invalid` e workspaces P11 foram usados e remo
 1. Cadastrar método de pagamento válido na equipe Vercel e repetir a matriz generativa, prompt injection e conteúdo hostil armazenado.
 2. Executar no domínio oficial os fluxos visuais completos ainda marcados como bloqueados.
 3. Comprovar backup/PITR, retenção, RPO/RTO e restore isolado no Supabase.
-4. Corrigir o acesso/remote GitHub e publicar os commits sem force push.
+4. Revisar e integrar a branch publicada à `main`, preservando os commits remotos exclusivos; não usar force push.
 5. Configurar drain/alertas e executar carga/Web Vitals.
 6. Confirmar proteção contra senhas vazadas e tratar o drift histórico separadamente.
 
+## Atualização GitHub — 30/08/2026
+
+- O remote correto permanece `https://github.com/Gabriellageti/joia-insight-hub.git`; o repositório existe e é privado.
+- A API confirmou que `gustavosantosfip` não tem acesso nem convite pendente. O HTTP 404 era uma negação de acesso, não ausência do repositório.
+- A conta `Gabriellageti`, já autenticada nesta máquina, possui acesso administrativo. O helper Git local deste repositório passou a selecionar essa credencial no keyring, sem gravar token em arquivo.
+- A conta global do GitHub CLI permanece `gustavosantosfip`. Nenhuma permissão de colaborador foi alterada.
+- `fetch` e `push --set-upstream origin codex/p4-p10-platform` concluídos com sucesso.
+- O SHA `828c17e64a832203c4c327a73c120c67c0dddc89` foi confirmado idêntico localmente e no GitHub após a primeira publicação.
+- Na comparação anterior à atualização deste relatório, a `main` remota tinha 11 commits exclusivos e a branch local tinha 10. A `main` foi preservada; não houve merge ou force push.
+- Nenhum deploy Vercel nem alteração de banco foi solicitado ou executado nesta correção de autenticação GitHub.
+
 # NO-GO
 
-O P11 está publicado e operacional no domínio oficial, mas publicação não equivale a prontidão. IA generativa, recuperação de dados, GitHub e parte do smoke funcional real impedem GO. A classificação permanece **NO-GO** e o P12 não deve ser iniciado.
+O P11 está publicado e operacional no domínio oficial, e a branch também está no GitHub, mas publicação não equivale a prontidão. IA generativa, recuperação de dados, integração revisada na `main` e parte do smoke funcional real impedem GO. A classificação permanece **NO-GO** e o P12 não deve ser iniciado.
