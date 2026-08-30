@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Search, Filter, MoreHorizontal, Edit, Trash2, CheckCircle2, AlertTriangle, ListTodo, PlayCircle } from "lucide-react";
+import { Plus, Search, Filter, MoreHorizontal, Edit, Trash2, CheckCircle2, AlertTriangle, ListTodo, PlayCircle, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -19,6 +19,7 @@ import { getProjectTypeLabel } from "@/lib/project-delivery";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DuplicateProjectDialog } from "@/components/dialogs/DuplicateProjectDialog";
 
 const statusColors = { green: "bg-green-500", yellow: "bg-yellow-500", red: "bg-red-500" };
 const phaseColors: Record<string, string> = { "Diagnóstico": "bg-blue-100 text-blue-700", "Quick wins": "bg-purple-100 text-purple-700", "Estruturação": "bg-orange-100 text-orange-700", "Acompanhamento": "bg-green-100 text-green-700", "Cultura e treinamento": "bg-teal-100 text-teal-700" };
@@ -39,6 +40,7 @@ export default function Projetos() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [duplicateProjectTarget, setDuplicateProjectTarget] = useState<Project | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [statusFilter, setStatusFilter] = useState("all");
   const [phaseFilter, setPhaseFilter] = useState("all");
@@ -179,7 +181,7 @@ export default function Projetos() {
               <div className="flex min-w-0 items-start gap-2"><div className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${completed ? "bg-emerald-500" : statusColors[project.status]}`} /><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="font-medium">{project.name}</p>{completed && <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">Concluído</Badge>}</div><p className="truncate text-xs text-muted-foreground">{project.clientName || "Projeto interno"} · {getProjectTypeLabel(project.projectType)}</p><Badge className={`mt-2 ${phaseColors[project.phase] || "bg-muted text-muted-foreground"}`} variant="outline">{project.phase}</Badge></div></div>
               <div className="min-w-0 border-l-0 lg:border-l lg:pl-4"><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Próxima ação</p>{completed ? <span className="mt-1 block text-sm text-emerald-700">Nenhuma ação pendente</span> : nextAction ? <div className="mt-1"><p className="truncate text-sm font-medium">{nextAction.title}</p><p className="truncate text-xs text-muted-foreground">{nextAction.responsible || "Responsável pendente"}{nextAction.dueDate ? ` · ${nextAction.dueDate}` : " · Sem prazo"}</p></div> : <span className="mt-1 block text-sm text-amber-700">Sem próxima ação</span>}</div>
               <div className="grid grid-cols-2 gap-3 text-sm lg:grid-cols-1"><div className="flex min-w-0 items-center gap-2"><Avatar className="h-7 w-7 shrink-0"><AvatarFallback className="bg-primary/10 text-primary">{getInitials(responsibleName)}</AvatarFallback></Avatar><span className="truncate">{responsibleName}</span></div><div className="text-muted-foreground">{forecastEndDate ? <span className={overdue ? "font-medium text-destructive" : ""}>{forecastEndDate}{overdue ? " · Atrasado" : ""}</span> : "Sem previsão"}</div></div>
-              <div className="flex items-center gap-3 lg:justify-end"><TooltipProvider><Tooltip><TooltipTrigger asChild><div className="w-20 space-y-1"><span className="text-xs">{Math.round(project.progress)}%</span><Progress value={project.progress} className="h-1.5" /></div></TooltipTrigger><TooltipContent><p>Calculado por tarefas, entregáveis e fases</p></TooltipContent></Tooltip></TooltipProvider><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8" onClick={(event) => event.stopPropagation()}><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={(event) => { event.stopPropagation(); setEditingProject(project); setDialogOpen(true); }}><Edit className="mr-2 h-4 w-4" />Editar</DropdownMenuItem><DropdownMenuItem onClick={(event) => { event.stopPropagation(); setDeleteId(project.id); }} className="text-destructive"><Trash2 className="mr-2 h-4 w-4" />Excluir</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div>
+              <div className="flex items-center gap-3 lg:justify-end"><TooltipProvider><Tooltip><TooltipTrigger asChild><div className="w-20 space-y-1"><span className="text-xs">{Math.round(project.progress)}%</span><Progress value={project.progress} className="h-1.5" /></div></TooltipTrigger><TooltipContent><p>Calculado por tarefas, entregáveis e fases</p></TooltipContent></Tooltip></TooltipProvider><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8" onClick={(event) => event.stopPropagation()}><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={(event) => { event.stopPropagation(); setEditingProject(project); setDialogOpen(true); }}><Edit className="mr-2 h-4 w-4" />Editar</DropdownMenuItem><DropdownMenuItem onClick={(event) => { event.stopPropagation(); setDuplicateProjectTarget(project); }}><Copy className="mr-2 h-4 w-4" />Duplicar</DropdownMenuItem><DropdownMenuItem onClick={(event) => { event.stopPropagation(); setDeleteId(project.id); }} className="text-destructive"><Trash2 className="mr-2 h-4 w-4" />Excluir</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div>
             </div>
           </div>;
         })}
@@ -187,6 +189,7 @@ export default function Projetos() {
         </CardContent>
       </Card>
       <ProjectDialog open={dialogOpen} onOpenChange={setDialogOpen} project={editingProject} />
+      <DuplicateProjectDialog project={duplicateProjectTarget} open={Boolean(duplicateProjectTarget)} onOpenChange={(value) => { if (!value) setDuplicateProjectTarget(null); }} />
       <AlertDialog open={!!deleteId} onOpenChange={(open) => { if (!open && !deleting) setDeleteId(null); }}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Confirmar exclusão</AlertDialogTitle><AlertDialogDescription>Tem certeza que deseja excluir este projeto?</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel><AlertDialogAction onClick={() => void handleDelete()} disabled={deleting}>{deleting ? "Excluindo..." : "Excluir"}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
     </div>
   );

@@ -76,6 +76,7 @@ import {
   updateTask as updateSupabaseTask,
   type TaskRow,
 } from "@/integrations/supabase/tasks";
+import { applyProjectTemplate } from "@/lib/project-templates";
 import {
   createPlaybook,
   deletePlaybookRecord,
@@ -179,8 +180,9 @@ interface DataContextType {
     options?: {
       opportunities?: Omit<Opportunity, "id" | "createdAt" | "updatedAt" | "source">[];
       seedStructure?: boolean;
+      templateId?: string;
     }
-  ) => Promise<void>;
+  ) => Promise<Project>;
   updateProject: (id: string, project: Partial<Project>) => Promise<void>;
   deleteProject: (id: string) => Promise<void>;
 
@@ -500,6 +502,16 @@ const mapSupabaseIndicatorToLegacy = (indicator: IndicatorRow): Indicator => ({
   createdAt: formatDateFromIso(indicator.created_at),
 });
 
+const toLegacyLeadStatus = (status?: string | null): Lead["status"] => {
+  const normalized = status?.toLowerCase();
+  if (normalized === "won") return "won";
+  if (normalized === "lost") return "lost";
+  if (normalized === "meeting") return "meeting";
+  if (["proposal", "negotiation"].includes(normalized || "")) return "proposal";
+  if (["contacted", "first_contact", "qualification"].includes(normalized || "")) return "contacted";
+  return "new";
+};
+
 const mapSupabaseLeadToLegacy = (lead: LeadRow): Lead => ({
   id: lead.id,
   company: lead.company || "",
@@ -507,7 +519,7 @@ const mapSupabaseLeadToLegacy = (lead: LeadRow): Lead => ({
   email: lead.email || undefined,
   phone: lead.phone || undefined,
   source: lead.source || "Inbound",
-  status: (lead.status?.toLowerCase() as Lead["status"]) || "new",
+  status: toLegacyLeadStatus(lead.status),
   value: (lead as { value?: number }).value || 0,
   nextAction: (lead as { next_action?: string }).next_action || "",
   nextActionDate: (lead as { next_action_date?: string }).next_action_date || undefined,
@@ -1367,6 +1379,13 @@ const normalizeTaskPriority = (value?: string | null): Task["priority"] => {
   return "medium";
 };
 
+const normalizeTaskChecklist = (value: TaskRow["checklist"]): NonNullable<Task["checklist"]> =>
+  Array.isArray(value) ? value.flatMap((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+    const record = item as Record<string, unknown>;
+    return typeof record.text === "string" ? [{ id: typeof record.id === "string" ? record.id : crypto.randomUUID(), text: record.text, completed: record.completed === true }] : [];
+  }) : [];
+
 // Funções de mapeamento para tarefas
 const mapSupabaseTaskToLegacy = (task: TaskRow, projectName: string, clientName: string): Task => ({
   id: task.id,
@@ -1385,7 +1404,7 @@ const mapSupabaseTaskToLegacy = (task: TaskRow, projectName: string, clientName:
   dueDate: task.due_date || "",
   impact: "",
   status: normalizeTaskStatus(task.status),
-  checklist: [],
+  checklist: normalizeTaskChecklist(task.checklist),
   evidenceRequired: task.evidence_required || false,
   evidenceFile: task.evidence_url || undefined,
   what: task.what || "",
@@ -1453,6 +1472,7 @@ const buildSupabaseTaskInsert = (task: Omit<Task, "id" | "createdAt">): Supabase
   observations: task.observations || null,
   block_reason: task.blockReason || null,
   block_reason_category: task.blockReasonCategory || null,
+  checklist: toJsonValue(task.checklist || []),
 });
 
 const buildSupabaseTaskUpdate = (task: Partial<Task>): SupabaseTaskUpdate => {
@@ -1496,6 +1516,7 @@ const buildSupabaseTaskUpdate = (task: Partial<Task>): SupabaseTaskUpdate => {
   if (typeof task.observations !== "undefined") payload.observations = task.observations || null;
   if (typeof task.blockReason !== "undefined") payload.block_reason = task.blockReason || null;
   if (typeof task.blockReasonCategory !== "undefined") payload.block_reason_category = task.blockReasonCategory || null;
+  if (typeof task.checklist !== "undefined") payload.checklist = toJsonValue(task.checklist || []);
 
   return payload;
 };
@@ -2090,7 +2111,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [toast, user, isAdmin]);
 
   useEffect(() => {
-    if (!user || !isAdmin) {
+    if (!user) {
       setEmployees([]);
       return;
     }
@@ -2111,7 +2132,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     };
 
     fetchEmployees();
-  }, [toast, user, isAdmin]);
+  }, [toast, user]);
 
   // Fetch indicators from Supabase
   useEffect(() => {
@@ -2772,6 +2793,18 @@ export function DataProvider({ children }: { children: ReactNode }) {
         const { project: newProject, statusOverrideExpired } = computeProjectWithDerivedState(baseProject);
         const auditLogs = deriveAuditLogs(undefined, newProject, { statusOverrideExpired });
 
+        if (options?.templateId) {
+          try {
+            await applyProjectTemplate(options.templateId, created.id, newProject.startDate, newProject.responsibleUserId || user?.id || "");
+            const generated = (await listTasks()).filter((task) => task.project_id === created.id).map((task) => mapSupabaseTaskToLegacy(task, newProject.name, newProject.clientName));
+            tasksRef.current = [...tasksRef.current, ...generated];
+            setTasks((prev) => [...prev, ...generated]);
+          } catch (templateError) {
+            await deleteSupabaseProject(created.id);
+            throw templateError;
+          }
+        }
+
         setProjects((prev) => [...prev, newProject]);
 
         if (options?.seedStructure) {
@@ -2827,6 +2860,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         if (auditLogs.length) {
           setProjectAuditLogs((prev) => [...prev, ...auditLogs]);
         }
+        return newProject;
       } catch (error) {
         const message = (error as Error).message || "Erro ao criar projeto";
         toast({

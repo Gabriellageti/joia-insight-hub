@@ -19,6 +19,8 @@ import { hasTaskValidationErrors, validateTask, type TaskValidationErrors } from
 import { TASK_STATUSES } from "@/lib/tasks/constants";
 import type { Task } from "@/types";
 import { toast } from "sonner";
+import { addDays, format } from "date-fns";
+import { listStandaloneTaskTemplates, StandaloneTaskTemplate } from "@/lib/project-templates";
 
 interface TaskDialogProps {
   open: boolean;
@@ -57,6 +59,7 @@ export function TaskDialog({ open, onOpenChange, task, defaultClientId, defaultP
   const [assignees, setAssignees] = useState<TaskAssignee[]>([]);
   const [assigneesLoading, setAssigneesLoading] = useState(false);
   const [assigneesError, setAssigneesError] = useState<string | null>(null);
+  const [taskTemplates, setTaskTemplates] = useState<StandaloneTaskTemplate[]>([]);
   const assigneeRequestRef = useRef(0);
   const isEditing = Boolean(task?.id);
   const availableProjects = formData.clientId
@@ -105,6 +108,11 @@ export function TaskDialog({ open, onOpenChange, task, defaultClientId, defaultP
       clientName: defaultProject?.clientName || clients.find((client) => client.id === defaultClientId)?.nomeFantasia || clients.find((client) => client.id === defaultClientId)?.razaoSocial || "",
     });
   }, [clients, defaultClientId, defaultProjectId, open, projects, task, user?.id]);
+
+  useEffect(() => {
+    if (!open || isEditing) return;
+    listStandaloneTaskTemplates().then(setTaskTemplates).catch((error) => console.error("Erro ao carregar modelos de tarefa:", error));
+  }, [isEditing, open]);
 
   useEffect(() => {
     if (!open) return;
@@ -163,6 +171,14 @@ export function TaskDialog({ open, onOpenChange, task, defaultClientId, defaultP
     setErrors((current) => ({ ...current, assignedTo: undefined }));
   };
 
+  const applyTaskTemplate = (templateId: string) => {
+    const template = taskTemplates.find((item) => item.id === templateId);
+    if (!template) return;
+    const base = new Date();
+    const assignee = assignees.find((item) => item.id === template.defaultAssigneeId);
+    setFormData((current) => ({ ...current, title: template.title, description: template.description, priority: template.priority, status: template.initialStatus, startDate: format(addDays(base, template.startOffsetDays), "yyyy-MM-dd"), dueDate: format(addDays(base, template.dueOffsetDays), "yyyy-MM-dd"), checklist: template.checklist.map((item) => ({ id: item.id, text: item.text, completed: false })), assignedTo: assignee?.id || current.assignedTo, responsible: assignee?.full_name || current.responsible }));
+  };
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     const validationErrors = validateTask(formData, projects);
@@ -205,6 +221,7 @@ export function TaskDialog({ open, onOpenChange, task, defaultClientId, defaultP
             </Button>
           ) : null}
           <div className="grid gap-4 py-4 sm:grid-cols-2">
+            {!isEditing && taskTemplates.length > 0 ? <div className="space-y-2 sm:col-span-2"><Label htmlFor="task-template">Modelo de tarefa</Label><Select onValueChange={applyTaskTemplate}><SelectTrigger id="task-template"><SelectValue placeholder="Preencher a partir de um modelo" /></SelectTrigger><SelectContent>{taskTemplates.map((template) => <SelectItem key={template.id} value={template.id}>{template.title} · dia +{template.dueOffsetDays}</SelectItem>)}</SelectContent></Select></div> : null}
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="task-title">Título *</Label>
               <Input id="task-title" autoFocus value={formData.title} onChange={(event) => setField("title", event.target.value)} aria-invalid={Boolean(errors.title)} aria-describedby={errors.title ? "task-title-error" : undefined} />

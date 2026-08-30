@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, CalendarClock, Check, ChevronDown, ChevronUp, Clipboard, ExternalLink, FileUp, Focus, ListChecks, Loader2, Plus, SquareCheckBig, Trash2, Users } from "lucide-react";
+import { ArrowLeft, CalendarClock, Check, ChevronDown, ChevronUp, Clipboard, ExternalLink, FileUp, Focus, ListChecks, Loader2, Plus, Sparkles, SquareCheckBig, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -32,7 +32,7 @@ export default function ReuniaoDetalhes() {
   const { user } = useAuth();
   const { clients, projects, tasks, diagnostics, meetings } = useData();
   const workspace = useMeetingWorkspace(id);
-  const { documents, addDocument, deleteDocument } = useDocuments();
+  const { documents, addDocument, archiveDocument } = useDocuments({ meetingId: id, pageSize: 100 });
   const [assignees, setAssignees] = useState<TaskAssignee[]>([]);
   const [agendaTitle, setAgendaTitle] = useState("");
   const [decisionText, setDecisionText] = useState("");
@@ -49,7 +49,7 @@ export default function ReuniaoDetalhes() {
   useEffect(() => { void listTaskAssignees().then(setAssignees).catch(() => setAssignees([])); }, []);
 
   const data = workspace.data;
-  const meetingDocuments = useMemo(() => documents.filter((document) => document.vinculos.meetingId === id), [documents, id]);
+  const meetingDocuments = documents;
   const client = data ? clients.find((item) => item.id === data.meeting.client_id) : undefined;
   const project = data ? projects.find((item) => item.id === data.meeting.project_id) : undefined;
   const generatedTasks = useMemo(() => tasks.filter((task) => task.sourceMeetingId === id), [id, tasks]);
@@ -118,7 +118,7 @@ export default function ReuniaoDetalhes() {
       {isMeetingStale(data.meeting) ? <Alert variant="destructive"><AlertTitle>Reunião pendente</AlertTitle><AlertDescription>A data já passou, mas a reunião continua agendada. Inicie, conclua ou cancele o registro.</AlertDescription></Alert> : null}
 
       {data.meeting.status === "Realizada" ? (
-        <Card><CardHeader className="flex-row items-center justify-between"><CardTitle>Resumo da reunião</CardTitle><Button variant="outline" size="sm" onClick={() => void navigator.clipboard.writeText(buildMeetingSummary(data)).then(() => toast.success("Resumo copiado."))}><Clipboard className="mr-2 h-4 w-4" />Copiar texto</Button></CardHeader><CardContent><pre className="whitespace-pre-wrap font-sans text-sm text-muted-foreground">{buildMeetingSummary(data)}</pre></CardContent></Card>
+        <Card><CardHeader className="flex-row items-center justify-between gap-2"><CardTitle>Resumo da reunião</CardTitle><div className="flex flex-wrap gap-2"><Button asChild variant="outline" size="sm"><Link to={`/assistente?meetingId=${data.meeting.id}&auto=1&prompt=${encodeURIComponent("Gere um resumo desta reunião, destaque decisões e próximos passos e sugira tarefas que ainda precisam ser confirmadas.")}`}><Sparkles className="mr-2 h-4 w-4" />Gerar com IA</Link></Button><Button variant="outline" size="sm" onClick={() => void navigator.clipboard.writeText(buildMeetingSummary(data)).then(() => toast.success("Resumo copiado."))}><Clipboard className="mr-2 h-4 w-4" />Copiar texto</Button></div></CardHeader><CardContent><pre className="whitespace-pre-wrap font-sans text-sm text-muted-foreground">{buildMeetingSummary(data)}</pre></CardContent></Card>
       ) : null}
 
       <div className="grid gap-5 xl:grid-cols-2">
@@ -150,7 +150,7 @@ export default function ReuniaoDetalhes() {
       </div>
 
       <div className="grid gap-5 xl:grid-cols-2">
-        <Card><CardHeader className="flex-row items-center justify-between"><CardTitle>Anexos</CardTitle><Button variant="outline" size="sm" onClick={() => setUploadOpen(true)}><FileUp className="mr-2 h-4 w-4" />Anexar</Button></CardHeader><CardContent className="grid gap-3 sm:grid-cols-2">{meetingDocuments.map((document) => <FileCard key={document.id} file={document} onDelete={(documentId) => void deleteDocument(documentId)} />)}{!meetingDocuments.length ? <p className="text-sm text-muted-foreground">Nenhum documento anexado.</p> : null}</CardContent></Card>
+        <Card><CardHeader className="flex-row items-center justify-between"><CardTitle>Anexos</CardTitle><Button variant="outline" size="sm" onClick={() => setUploadOpen(true)}><FileUp className="mr-2 h-4 w-4" />Anexar</Button></CardHeader><CardContent className="grid gap-3 sm:grid-cols-2">{meetingDocuments.map((document) => <FileCard key={document.id} file={document} onArchive={(documentId) => void archiveDocument(documentId)} />)}{!meetingDocuments.length ? <p className="text-sm text-muted-foreground">Nenhum documento anexado.</p> : null}</CardContent></Card>
         <Card><CardHeader><CardTitle>Histórico</CardTitle></CardHeader><CardContent className="space-y-3">{data.activities.map((activity) => <div key={activity.id} className="border-l-2 pl-3"><p className="text-sm font-medium">{activity.description || activity.title}</p><p className="text-xs text-muted-foreground">{new Date(activity.created_at).toLocaleString("pt-BR")}</p></div>)}{!data.activities.length ? <p className="text-sm text-muted-foreground">Nenhuma movimentação registrada.</p> : null}</CardContent></Card>
       </div>
 

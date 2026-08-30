@@ -18,6 +18,9 @@ import {
   Activity,
   FileBarChart,
   Siren,
+  Layers3,
+  Bot,
+  Workflow,
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -42,6 +45,7 @@ import {
 const startNavItems = [
   { title: "Meu Dia", url: "/meu-dia", icon: Sunrise },
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
+  { title: "Assistente JoIA", url: "/assistente", icon: Bot },
 ];
 
 const mainNavItems = [
@@ -51,13 +55,16 @@ const mainNavItems = [
   { title: "Minhas Tarefas", url: "/minhas-tarefas", icon: ClipboardCheck },
   { title: "Pendências", url: "/pendencias", icon: Siren },
   { title: "Reuniões", url: "/reunioes", icon: Calendar },
+  { title: "Comercial", url: "/comercial", icon: Megaphone },
 ];
 
 const supportNavItems = [
   { title: "Diagnóstico", url: "/diagnostico", icon: ClipboardCheck },
   { title: "Templates", url: "/templates", icon: Shapes },
+  { title: "Modelos de Projeto", url: "/modelos-projeto", icon: Layers3 },
   { title: "Indicadores", url: "/indicadores", icon: BarChart3 },
   { title: "Documentos", url: "/documentos", icon: FileText },
+  { title: "Automações", url: "/automacoes", icon: Workflow },
 ];
 
 const managementNavItems = [
@@ -65,8 +72,8 @@ const managementNavItems = [
   { title: "Equipe", url: "/equipe", icon: UserCog },
   { title: "Atividades", url: "/atividades", icon: Activity },
   { title: "Relatório Operacional", url: "/relatorios/operacional", icon: FileBarChart },
+  { title: "Relatórios de Consultoria", url: "/relatorios/consultoria", icon: FileText },
   { title: "Financeiro", url: "/financeiro", icon: DollarSign },
-  { title: "Marketing", url: "/marketing", icon: Megaphone },
 ];
 
 export function AppSidebar() {

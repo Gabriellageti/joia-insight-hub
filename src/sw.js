@@ -23,6 +23,13 @@ registerRoute(
 
 self.addEventListener("message", (event) => {
   if (event.data?.type === "SKIP_WAITING") self.skipWaiting();
+  if (event.data?.type === "PURGE_PRIVATE_DATA") {
+    event.waitUntil(
+      caches.keys().then((names) => Promise.all(
+        names.filter((name) => name.startsWith("joia-private-")).map((name) => caches.delete(name)),
+      )),
+    );
+  }
 });
 
 self.addEventListener("push", (event) => {

@@ -1,211 +1,45 @@
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { toast } from "sonner";
+import type { Database } from "@/integrations/supabase/types";
 
-interface NotificationPreferences {
-  email_notifications: boolean;
-  push_notifications: boolean;
+export interface NotificationPreferences {
+  in_app_notifications: boolean;
+  task_notifications: boolean;
+  project_notifications: boolean;
+  meeting_notifications: boolean;
+  client_notifications: boolean;
+  mention_notifications: boolean;
 }
+const defaults: NotificationPreferences = { in_app_notifications: true, task_notifications: true, project_notifications: true, meeting_notifications: true, client_notifications: true, mention_notifications: true };
 
 export function useNotificationPreferences() {
   const { user } = useAuth();
-  const [preferences, setPreferences] = useState<NotificationPreferences>({
-    email_notifications: true,
-    push_notifications: false,
-  });
+  const [preferences, setPreferences] = useState(defaults);
   const [loading, setLoading] = useState(true);
-  const [pushSupported, setPushSupported] = useState(false);
-  const [pushPermission, setPushPermission] = useState<NotificationPermission>("default");
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    // Check if push notifications are supported
-    const supported = "serviceWorker" in navigator && "PushManager" in window;
-    setPushSupported(supported);
-
-    if (supported && "Notification" in window) {
-      setPushPermission(Notification.permission);
-    }
-  }, []);
-
   const fetchPreferences = useCallback(async () => {
-    if (!user) return;
-
+    if (!user) { setLoading(false); return; }
+    setLoading(true);
     try {
       setError(null);
-      const { data, error } = await supabase
-        .from("notification_preferences")
-        .select("*")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (error) throw error;
-
-      if (data) {
-        setPreferences({
-          email_notifications: data.email_notifications,
-          push_notifications: data.push_notifications,
-        });
-      }
-    } catch (error) {
-      setError("Não foi possível carregar suas preferências.");
-    } finally {
-      setLoading(false);
-    }
+      const { data, error: requestError } = await supabase.from("notification_preferences").select("in_app_notifications,task_notifications,project_notifications,meeting_notifications,client_notifications,mention_notifications").eq("user_id", user.id).maybeSingle();
+      if (requestError) throw requestError;
+      setPreferences(data ?? defaults);
+    } catch { setError("Não foi possível carregar suas preferências."); }
+    finally { setLoading(false); }
   }, [user]);
-
-  useEffect(() => {
-    fetchPreferences();
-  }, [fetchPreferences]);
-
+  useEffect(() => { void fetchPreferences(); }, [fetchPreferences]);
   const updatePreference = async (key: keyof NotificationPreferences, value: boolean) => {
     if (!user) return;
-
-    try {
-      // Upsert the preference
-      const upsertPayload: {
-        user_id: string;
-        updated_at: string;
-        push_notifications?: boolean;
-        email_notifications?: boolean;
-      } = {
-        user_id: user.id,
-        updated_at: new Date().toISOString(),
-        [key]: value,
-      };
-      const { error } = await supabase
-        .from("notification_preferences")
-        .upsert(upsertPayload, {
-          onConflict: "user_id",
-        });
-
-      if (error) throw error;
-
-      setPreferences((prev) => ({ ...prev, [key]: value }));
-      toast.success("Preferência atualizada");
-    } catch (error) {
-      toast.error("Erro ao atualizar preferência");
-    }
+    const previous = preferences;
+    setPreferences((current) => ({ ...current, [key]: value }));
+    const payload: Database["public"]["Tables"]["notification_preferences"]["Insert"] = { user_id: user.id, updated_at: new Date().toISOString() };
+    payload[key] = value;
+    const { error: updateError } = await supabase.from("notification_preferences").upsert(payload, { onConflict: "user_id" });
+    if (updateError) { setPreferences(previous); toast.error("Erro ao atualizar preferência"); return; }
+    toast.success("Preferência atualizada");
   };
-
-  const subscribeToPush = async (): Promise<boolean> => {
-    if (!pushSupported || !user) {
-      toast.error("Push notifications não são suportadas neste navegador");
-      return false;
-    }
-
-    try {
-      // Request permission
-      const permission = await Notification.requestPermission();
-      setPushPermission(permission);
-
-      if (permission !== "granted") {
-        toast.error("Permissão para notificações negada");
-        return false;
-      }
-
-      // Register service worker
-      const registration = await navigator.serviceWorker.register("/sw.js");
-      await navigator.serviceWorker.ready;
-
-      // Get VAPID public key from edge function
-      const { data: configData, error: configError } = await supabase.functions.invoke("get-vapid-public-key");
-      if (configError || typeof configData?.publicKey !== "string" || !configData.publicKey) {
-        throw new Error("Configuração de notificações indisponível");
-      }
-      const vapidPublicKey = configData.publicKey;
-
-      // Subscribe to push
-      const subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
-      });
-
-      const subscriptionJson = subscription.toJSON();
-
-      // Save subscription to database
-      const { error } = await supabase.from("push_subscriptions").upsert({
-        user_id: user.id,
-        endpoint: subscriptionJson.endpoint!,
-        p256dh: subscriptionJson.keys!.p256dh,
-        auth: subscriptionJson.keys!.auth,
-      }, {
-        onConflict: "user_id,endpoint",
-      });
-
-      if (error) throw error;
-
-      toast.success("Notificações push ativadas");
-      return true;
-    } catch (error) {
-      toast.error("Erro ao ativar notificações push");
-      return false;
-    }
-  };
-
-  const unsubscribeFromPush = async (): Promise<boolean> => {
-    if (!user) return false;
-
-    try {
-      const registration = await navigator.serviceWorker.getRegistration();
-      if (registration) {
-        const subscription = await registration.pushManager.getSubscription();
-        if (subscription) {
-          await subscription.unsubscribe();
-        }
-      }
-
-      // Remove from database
-      const { error } = await supabase
-        .from("push_subscriptions")
-        .delete()
-        .eq("user_id", user.id);
-
-      if (error) throw error;
-
-      toast.success("Notificações push desativadas");
-      return true;
-    } catch (error) {
-      toast.error("Erro ao desativar notificações push");
-      return false;
-    }
-  };
-
-  const togglePushNotifications = async (enabled: boolean) => {
-    if (enabled) {
-      const success = await subscribeToPush();
-      if (success) {
-        await updatePreference("push_notifications", true);
-      }
-    } else {
-      const success = await unsubscribeFromPush();
-      if (success) {
-        await updatePreference("push_notifications", false);
-      }
-    }
-  };
-
-  return {
-    preferences,
-    loading,
-    pushSupported,
-    pushPermission,
-    error,
-    retry: fetchPreferences,
-    updateEmailPreference: (value: boolean) => updatePreference("email_notifications", value),
-    togglePushNotifications,
-  };
-}
-
-// Helper function to convert VAPID key
-function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
-  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
-  const rawData = window.atob(base64);
-  const outputArray = new Uint8Array(rawData.length);
-  for (let i = 0; i < rawData.length; ++i) {
-    outputArray[i] = rawData.charCodeAt(i);
-  }
-  return outputArray.buffer as ArrayBuffer;
+  return { preferences, loading, error, retry: fetchPreferences, updatePreference };
 }

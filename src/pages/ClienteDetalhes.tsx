@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { AlertTriangle, ArrowLeft, BriefcaseBusiness, CalendarClock, CheckCircle2, Clock3, Edit, FolderKanban, ListTodo, Route, Trash2, Users } from "lucide-react";
+import { AlertTriangle, ArrowLeft, BriefcaseBusiness, CalendarClock, CheckCircle2, Clock3, Edit, FileText, FolderKanban, ListTodo, Route, Sparkles, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +14,7 @@ import { parseTaskDate } from "@/lib/tasks/dates";
 import { TASK_PRIORITY_ORDER, TASK_STATUS_LABELS } from "@/lib/tasks/constants";
 import { ActivityFeed } from "@/components/meetings";
 import { FavoriteButton } from "@/components/operations/FavoriteButton";
+import { DocumentsWorkspace } from "@/components/documents";
 
 const metricCards = [
   { key: "open", label: "Tarefas abertas", icon: ListTodo },
@@ -62,11 +63,11 @@ export default function ClienteDetalhes() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-3"><Button asChild variant="ghost" className="px-2"><Link to="/clientes"><ArrowLeft className="mr-2 h-4 w-4" />Voltar</Link></Button><div><p className="text-sm text-muted-foreground">Central do cliente</p><h1 className="text-2xl font-semibold">{displayName}</h1></div><Badge variant={client.status === "ativo" ? "default" : "secondary"}>{client.status === "ativo" ? "Ativo" : "Inativo"}</Badge></div>
-        <div className="flex flex-wrap gap-2"><FavoriteButton entityType="client" entityId={client.id} /><Button variant="outline" onClick={() => navigate(`/clientes/${id}/jornada`)}><Route className="mr-2 h-4 w-4" />Jornada</Button><Button variant="outline" onClick={() => setDialogOpen(true)}><Edit className="mr-2 h-4 w-4" />Editar</Button><Button variant="ghost" className="text-destructive" onClick={() => void handleDelete()}><Trash2 className="mr-2 h-4 w-4" />Excluir</Button></div>
+        <div className="flex flex-wrap gap-2"><FavoriteButton entityType="client" entityId={client.id} /><Button variant="outline" onClick={() => navigate(`/assistente?clientId=${client.id}&auto=1&prompt=${encodeURIComponent(`Resuma o cliente ${displayName}: situação atual, projetos, atividades, últimas reuniões, pendências, riscos e próximos passos.`)}`)}><Sparkles className="mr-2 h-4 w-4" />Resumir com IA</Button><Button variant="outline" onClick={() => navigate(`/relatorios/consultoria?clientId=${client.id}`)}><FileText className="mr-2 h-4 w-4" />Gerar relatório</Button><Button variant="outline" onClick={() => navigate(`/clientes/${id}/jornada`)}><Route className="mr-2 h-4 w-4" />Jornada</Button><Button variant="outline" onClick={() => setDialogOpen(true)}><Edit className="mr-2 h-4 w-4" />Editar</Button><Button variant="ghost" className="text-destructive" onClick={() => void handleDelete()}><Trash2 className="mr-2 h-4 w-4" />Excluir</Button></div>
       </div>
 
       <Tabs defaultValue="overview" className="space-y-5">
-        <TabsList className="h-auto w-full justify-start overflow-x-auto"><TabsTrigger value="overview">Visão Geral</TabsTrigger><TabsTrigger value="projects">Projetos</TabsTrigger><TabsTrigger value="tasks">Tarefas</TabsTrigger><TabsTrigger value="kanban">Kanban</TabsTrigger><TabsTrigger value="meetings">Reuniões</TabsTrigger><TabsTrigger value="history">Histórico</TabsTrigger></TabsList>
+        <TabsList className="h-auto w-full justify-start overflow-x-auto"><TabsTrigger value="overview">Visão Geral</TabsTrigger><TabsTrigger value="projects">Projetos</TabsTrigger><TabsTrigger value="tasks">Tarefas</TabsTrigger><TabsTrigger value="kanban">Kanban</TabsTrigger><TabsTrigger value="meetings">Reuniões</TabsTrigger><TabsTrigger value="documents">Documentos</TabsTrigger><TabsTrigger value="history">Histórico</TabsTrigger></TabsList>
 
         <TabsContent value="overview" className="space-y-5">
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
@@ -84,6 +85,7 @@ export default function ClienteDetalhes() {
         <TabsContent value="tasks"><ScopedTasksPanel tasks={clientTasks} mode="list" defaultClientId={client.id} /></TabsContent>
         <TabsContent value="kanban"><ScopedTasksPanel tasks={clientTasks} mode="kanban" defaultClientId={client.id} /></TabsContent>
         <TabsContent value="meetings"><div className="grid gap-3 md:grid-cols-2">{clientMeetings.length ? clientMeetings.map((meeting) => <Link key={meeting.id} to={`/reunioes/${meeting.id}`}><Card className="h-full transition-colors hover:bg-muted/40"><CardContent className="p-4"><p className="font-medium">{meeting.title}</p><p className="mt-1 text-sm text-muted-foreground">{meeting.date} {meeting.time} · {meeting.projectName || displayName}</p><Badge className="mt-3" variant="outline">{meeting.status === "completed" ? "Concluída" : meeting.status === "cancelled" ? "Cancelada" : meeting.status === "in_progress" ? "Em andamento" : "Agendada"}</Badge></CardContent></Card></Link>) : <Card><CardContent className="py-10 text-sm text-muted-foreground">Nenhuma reunião relacionada.</CardContent></Card>}</div></TabsContent>
+        <TabsContent value="documents"><DocumentsWorkspace clientId={client.id} compact /></TabsContent>
         <TabsContent value="history"><ActivityFeed clientId={client.id} /></TabsContent>
       </Tabs>
 

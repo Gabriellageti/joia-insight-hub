@@ -48,6 +48,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Check, ChevronsUpDown, Link2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getDeliveryStepsForProject, PROJECT_TYPE_OPTIONS, ProjectType } from "@/lib/project-delivery";
+import { listProjectTemplates, ProjectTemplateSummary } from "@/lib/project-templates";
 
 const statusColors: Record<Project["status"], string> = {
   green: "bg-green-500",
@@ -102,6 +103,8 @@ export function ProjectDialog({
   const [clientDialogOpen, setClientDialogOpen] = useState(false);
   const [advancedDetailsOpen, setAdvancedDetailsOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [projectTemplates, setProjectTemplates] = useState<ProjectTemplateSummary[]>([]);
+  const [templateId, setTemplateId] = useState("none");
   const responsibleTriggerRef = useRef<HTMLButtonElement>(null);
 
   const [formData, setFormData] = useState({
@@ -130,6 +133,14 @@ export function ProjectDialog({
 
   const isEditing = Boolean(project?.id);
 
+  useEffect(() => {
+    if (!open || isEditing) return;
+    listProjectTemplates(true).then(setProjectTemplates).catch((error) => {
+      console.error("Erro ao carregar modelos de projeto:", error);
+      toast.error("Não foi possível carregar os modelos de projeto.");
+    });
+  }, [open, isEditing]);
+
   const initKey = open
     ? isEditing
       ? `edit:${project!.id}`
@@ -152,6 +163,7 @@ export function ProjectDialog({
     initializedKeyRef.current = initKey;
 
     const authorName = user?.user_metadata?.full_name || user?.email || "";
+    setTemplateId("none");
 
     if (project?.id) {
       // Editing existing project
@@ -394,10 +406,9 @@ export function ProjectDialog({
         toast.success("Projeto atualizado com sucesso!");
         onSuccess?.({ id: project.id, name: payload.name, clientId: payload.clientId });
       } else {
-        await addProject(payload);
+        const createdProject = await addProject(payload, templateId !== "none" ? { templateId } : undefined);
         toast.success("Projeto criado com sucesso!");
-        // For new projects, we don't have the ID immediately, so we pass the form data
-        onSuccess?.({ id: "", name: payload.name, clientId: payload.clientId });
+        onSuccess?.({ id: createdProject.id, name: payload.name, clientId: payload.clientId });
       }
       onOpenChange(false);
     } catch (error) {
@@ -499,6 +510,21 @@ export function ProjectDialog({
                   Define a esteira de entrega sugerida para sites, sistemas, IA, automações ou consultoria.
                 </p>
               </div>
+
+              {!isEditing && (
+                <div className="space-y-2">
+                  <Label htmlFor="project-template">Modelo de estrutura</Label>
+                  <Select value={templateId} onValueChange={(value) => {
+                    setTemplateId(value);
+                    const selected = projectTemplates.find((template) => template.id === value);
+                    if (selected) setFormData((prev) => ({ ...prev, projectType: selected.projectType as ProjectType, phase: selected.defaultPhase }));
+                  }}>
+                    <SelectTrigger id="project-template"><SelectValue placeholder="Começar sem modelo" /></SelectTrigger>
+                    <SelectContent><SelectItem value="none">Começar sem modelo</SelectItem>{projectTemplates.map((template) => <SelectItem key={template.id} value={template.id}>{template.name} · {template.taskCount} tarefas</SelectItem>)}</SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">Ao criar, etapas, tarefas, checklists e prazos relativos serão gerados automaticamente.</p>
+                </div>
+              )}
 
             </div>
 

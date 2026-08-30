@@ -1,12 +1,12 @@
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { lazy, Suspense } from "react";
+import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
+import { lazy, Suspense, useEffect, useRef } from "react";
 import { BrowserRouter, Navigate, Routes, Route, useLocation } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { DataProvider } from "@/contexts/DataContext";
-import { AuthProvider } from "@/contexts/AuthContext";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AdminRoute } from "@/components/AdminRoute";
 import { MainLayout } from "@/components/layout/MainLayout";
@@ -33,6 +33,7 @@ const Atividades = lazy(() => import("./pages/Atividades"));
 const RelatorioOperacional = lazy(() => import("./pages/RelatorioOperacional"));
 const Financeiro = lazy(() => import("./pages/Financeiro"));
 const Marketing = lazy(() => import("./pages/Marketing"));
+const Commercial = lazy(() => import("./pages/Commercial"));
 const Configuracoes = lazy(() => import("./pages/Configuracoes"));
 const Auth = lazy(() => import("./pages/Auth"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -44,8 +45,31 @@ const TemplateCreate = lazy(() => import("./pages/templates/TemplateCreate"));
 const TemplateEdit = lazy(() => import("./pages/templates/TemplateEdit"));
 const TemplatePreview = lazy(() => import("./pages/templates/TemplatePreview"));
 const TemplateDiagnosticPreview = lazy(() => import("./pages/templates/TemplateDiagnosticPreview"));
+const ProjectTemplates = lazy(() => import("./pages/ProjectTemplates"));
+const ConsultingReports = lazy(() => import("./pages/ConsultingReports"));
+const ConsultingReportDetail = lazy(() => import("./pages/ConsultingReportDetail"));
+const Assistant = lazy(() => import("./pages/Assistant"));
+const Automations = lazy(() => import("./pages/Automations"));
 
 const queryClient = new QueryClient();
+
+function SessionCacheBoundary({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  const client = useQueryClient();
+  const previousUserId = useRef<string | null | undefined>(undefined);
+
+  useEffect(() => {
+    const currentUserId = user?.id ?? null;
+
+    if (previousUserId.current !== undefined && previousUserId.current !== currentUserId) {
+      client.clear();
+    }
+
+    previousUserId.current = currentUserId;
+  }, [client, user?.id]);
+
+  return children;
+}
 
 function RouteBoundary({ children }: { children: React.ReactNode }) {
   const location = useLocation();
@@ -67,8 +91,9 @@ const App = () => (
       <TooltipProvider>
         <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <AuthProvider>
-            <PwaInstallProvider>
-              <DataProvider>
+            <SessionCacheBoundary>
+              <PwaInstallProvider>
+                <DataProvider>
               <Toaster />
               <Sonner />
                 <RouteBoundary>
@@ -92,6 +117,11 @@ const App = () => (
                           <Route path="/diagnostico" element={<Diagnostico />} />
                           <Route path="/diagnosticos/:id" element={<DiagnosticoDetalhe />} />
                           <Route path="/templates" element={<TemplatesList />} />
+                          <Route path="/modelos-projeto" element={<ProjectTemplates />} />
+                          <Route path="/relatorios/consultoria" element={<ConsultingReports />} />
+                          <Route path="/relatorios/consultoria/:id" element={<ConsultingReportDetail />} />
+                          <Route path="/assistente" element={<Assistant />} />
+                          <Route path="/automacoes" element={<Automations />} />
                           <Route path="/templates/novo" element={<TemplateCreate />} />
                           <Route path="/templates/:id/editar" element={<TemplateEdit />} />
                           <Route path="/templates/:id/preview" element={<TemplatePreview />} />
@@ -111,6 +141,7 @@ const App = () => (
                           <Route path="/atividades" element={<AdminRoute><Atividades /></AdminRoute>} />
                           <Route path="/relatorios/operacional" element={<AdminRoute><RelatorioOperacional /></AdminRoute>} />
                           <Route path="/financeiro" element={<AdminRoute><Financeiro /></AdminRoute>} />
+                          <Route path="/comercial" element={<Commercial />} />
                           <Route path="/marketing" element={<AdminRoute><Marketing /></AdminRoute>} />
                           <Route path="/configuracoes" element={<AdminRoute><Configuracoes /></AdminRoute>} />
                           <Route path="*" element={<NotFound />} />
@@ -122,8 +153,9 @@ const App = () => (
                 </Routes>
                   </Suspense>
                 </RouteBoundary>
-              </DataProvider>
-            </PwaInstallProvider>
+                </DataProvider>
+              </PwaInstallProvider>
+            </SessionCacheBoundary>
           </AuthProvider>
         </BrowserRouter>
       </TooltipProvider>

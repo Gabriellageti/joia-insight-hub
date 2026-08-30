@@ -54,3 +54,33 @@ test.describe("instalação no iPhone", () => {
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   });
 });
+
+test("não persiste APIs autenticadas no Cache Storage", async ({ page, context }) => {
+  await page.route("**/api/private-probe", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({ confidential: true }),
+  }));
+  await page.goto("/auth");
+  await page.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));
+  await page.reload();
+  await expect.poll(() => page.evaluate(() => Boolean(navigator.serviceWorker.controller))).toBe(true);
+  await page.evaluate(() => fetch("/api/private-probe", { headers: { Authorization: "Bearer fake" } }).then((response) => response.json()));
+
+  const sensitiveCachedUrls = await page.evaluate(async () => {
+    const urls: string[] = [];
+    for (const cacheName of await caches.keys()) {
+      for (const request of await (await caches.open(cacheName)).keys()) {
+        if (/\/api\/|\/rest\/v1\/|\/auth\/v1\//.test(request.url)) urls.push(request.url);
+      }
+    }
+    return urls;
+  });
+  expect(sensitiveCachedUrls).toEqual([]);
+
+  await page.unroute("**/api/private-probe");
+  await context.setOffline(true);
+  const offlineResult = await page.evaluate(() => fetch("/api/private-probe").then(() => "cached").catch(() => "network-error"));
+  expect(offlineResult).toBe("network-error");
+  await context.setOffline(false);
+});

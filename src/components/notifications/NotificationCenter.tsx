@@ -1,42 +1,26 @@
-import { Bell, CheckCheck, Loader2 } from "lucide-react";
+import { Bell, CheckCheck, Loader2, RefreshCw } from "lucide-react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useNotifications } from "@/hooks/useNotifications";
 
-const typeLabel: Record<string, string> = {
-  task_assigned: "Atribuição",
-  due_soon: "Prazo próximo",
-  overdue: "Atraso",
-  comment: "Comentário",
-  status_changed: "Atualização",
-  blocked: "Bloqueio",
-};
+const typeLabel: Record<string, string> = { task_assigned: "Atribuição", due_soon: "Prazo próximo", overdue: "Atraso", comment: "Comentário", mention: "Menção", status_changed: "Atualização", blocked: "Bloqueio", meeting_upcoming: "Reunião", meeting_unfinished: "Reunião pendente", project_risk: "Projeto", client_attention: "Cliente", automation_alert: "Automação", automation_suggestion: "Sugestão", automation_pending: "Pendência" };
+const priorityLabel: Record<string, string> = { info: "Informação", attention: "Atenção", important: "Importante", urgent: "Urgente" };
+const priorityClass: Record<string, string> = { info: "border-blue-300 text-blue-700", attention: "border-amber-300 text-amber-700", important: "border-orange-300 text-orange-700", urgent: "border-red-300 text-red-700" };
 
 export function NotificationCenter() {
   const navigate = useNavigate();
-  const { notifications, unreadCount, loading, markRead, markAllRead } = useNotifications();
-  return <Popover>
-    <PopoverTrigger asChild>
-      <Button variant="ghost" size="icon" className="relative" aria-label={`${unreadCount} notificações não lidas`}>
-        <Bell className="h-4 w-4" />
-        {unreadCount ? <span className="absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-medium text-destructive-foreground">{unreadCount > 9 ? "9+" : unreadCount}</span> : null}
-      </Button>
-    </PopoverTrigger>
-    <PopoverContent align="end" className="w-[min(24rem,calc(100vw-1rem))] p-0">
-      <div className="flex items-center justify-between border-b p-3"><div><p className="font-medium">Notificações</p><p className="text-xs text-muted-foreground">Alertas operacionais internos</p></div><Button size="sm" variant="ghost" disabled={!unreadCount} onClick={() => void markAllRead()}><CheckCheck className="mr-1 h-4 w-4" />Ler todas</Button></div>
-      <ScrollArea className="h-80">
-        {loading && notifications.length === 0 ? <div className="flex items-center justify-center p-8"><Loader2 className="h-5 w-5 animate-spin" /><span className="sr-only">Carregando notificações</span></div> : notifications.length === 0 ? <p className="p-8 text-center text-sm text-muted-foreground">Nenhum alerta no momento.</p> : <ul>
-          {notifications.map((notification) => <li key={notification.id} className={`border-b last:border-0 ${notification.read_at ? "opacity-65" : "bg-primary/[0.03]"}`}>
-            <button type="button" className="w-full p-3 text-left hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring" onClick={() => { void markRead(notification.id); if (notification.task_id) navigate(`/plano-acao?taskId=${notification.task_id}`); }}>
-              <div className="flex items-center justify-between gap-2"><Badge variant="outline" className="text-[10px]">{typeLabel[notification.notification_type] || "Alerta"}</Badge><time className="text-[10px] text-muted-foreground">{new Date(notification.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</time></div>
-              <p className="mt-2 text-sm font-medium">{notification.title}</p>{notification.body ? <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{notification.body}</p> : null}
-            </button>
-          </li>)}
-        </ul>}
-      </ScrollArea>
-    </PopoverContent>
-  </Popover>;
+  const { notifications, unreadCount, loading, error, refresh, markRead, markAllRead } = useNotifications();
+  const [filter, setFilter] = useState<"unread" | "read" | "all">("unread");
+  const visible = useMemo(() => notifications.filter((item) => filter === "all" || (filter === "unread" ? !item.read_at : Boolean(item.read_at))), [filter, notifications]);
+  const openNotification = (id: string, actionUrl: string | null) => { void markRead(id); if (actionUrl?.startsWith("/")) navigate(actionUrl); };
+  return <Popover><PopoverTrigger asChild><Button variant="ghost" size="icon" className="relative" aria-label={`${unreadCount} notificações não lidas`}><Bell className="h-4 w-4" />{unreadCount ? <span className="absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-medium text-destructive-foreground">{unreadCount > 9 ? "9+" : unreadCount}</span> : null}</Button></PopoverTrigger>
+    <PopoverContent align="end" className="w-[min(26rem,calc(100vw-1rem))] p-0"><div className="flex items-center justify-between border-b p-3"><div><p className="font-medium">Notificações</p><p className="text-xs text-muted-foreground">Prioridades operacionais internas</p></div><div className="flex"><Button size="icon" variant="ghost" onClick={() => void refresh()} aria-label="Atualizar notificações"><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /></Button><Button size="sm" variant="ghost" disabled={!unreadCount} onClick={() => void markAllRead()}><CheckCheck className="mr-1 h-4 w-4" />Ler todas</Button></div></div>
+      <Tabs value={filter} onValueChange={(value) => setFilter(value as typeof filter)} className="border-b p-2"><TabsList className="grid w-full grid-cols-3"><TabsTrigger value="unread">Novas ({unreadCount})</TabsTrigger><TabsTrigger value="read">Lidas</TabsTrigger><TabsTrigger value="all">Todas</TabsTrigger></TabsList></Tabs>
+      <ScrollArea className="h-96">{loading && notifications.length === 0 ? <div className="flex items-center justify-center p-8"><Loader2 className="h-5 w-5 animate-spin" /><span className="sr-only">Carregando notificações</span></div> : error ? <div role="alert" className="space-y-2 p-6 text-center text-sm"><p>Não foi possível carregar as notificações.</p><Button size="sm" variant="outline" onClick={() => void refresh()}>Tentar novamente</Button></div> : visible.length === 0 ? <p className="p-8 text-center text-sm text-muted-foreground">Nenhuma notificação nesta visão.</p> : <ul>{visible.map((notification) => <li key={notification.id} className={`border-b last:border-0 ${notification.read_at ? "opacity-65" : "bg-primary/[0.03]"}`}><div className="p-3"><button type="button" className="w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => openNotification(notification.id, notification.action_url)}><div className="flex items-center justify-between gap-2"><div className="flex gap-1"><Badge variant="outline" className="text-[10px]">{typeLabel[notification.notification_type] || "Alerta"}</Badge><Badge variant="outline" className={`text-[10px] ${priorityClass[notification.priority] || ""}`}>{priorityLabel[notification.priority] || "Informação"}</Badge></div><time className="text-[10px] text-muted-foreground">{new Date(notification.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</time></div><p className="mt-2 text-sm font-medium">{notification.title}</p>{notification.body ? <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{notification.body}</p> : null}</button>{notification.action_url ? <Button variant="link" size="sm" className="mt-1 h-auto px-0" onClick={() => openNotification(notification.id, notification.action_url)}>Abrir</Button> : null}</div></li>)}</ul>}</ScrollArea>
+    </PopoverContent></Popover>;
 }

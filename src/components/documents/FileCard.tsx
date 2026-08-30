@@ -14,6 +14,10 @@ import {
   Check,
   X,
   Trash2,
+  Archive,
+  ArchiveRestore,
+  History,
+  UploadCloud,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -40,6 +44,10 @@ interface FileCardProps {
   onApprove?: (id: string) => void;
   onReject?: (id: string) => void;
   onDelete?: (id: string) => void;
+  onArchive?: (id: string) => void;
+  onRestore?: (id: string) => void;
+  onNewVersion?: (file: FileItem) => void;
+  onVersionHistory?: (file: FileItem) => void;
 }
 
 function getFileIcon(mimeType: string) {
@@ -92,6 +100,10 @@ export function FileCard({
   onApprove,
   onReject,
   onDelete,
+  onArchive,
+  onRestore,
+  onNewVersion,
+  onVersionHistory,
 }: FileCardProps) {
   const [opening, setOpening] = useState(false);
   const { icon: FileIcon, colorClass } = getFileIcon(file.mimeType);
@@ -100,11 +112,10 @@ export function FileCard({
   const remainingTags = file.tags.length - 2;
 
   const openDocument = async () => {
-    if (!file.url || opening) return;
+    const path = file.storagePath || file.url;
+    if (!path || opening) return;
     setOpening(true);
     try {
-      const marker = "/documents/";
-      const path = file.url.includes(marker) ? decodeURIComponent(file.url.split(marker)[1]) : file.url;
       const { data, error } = await supabase.storage.from("documents").createSignedUrl(path, 60);
       if (error) throw error;
       window.open(data.signedUrl, "_blank", "noopener,noreferrer");
@@ -130,6 +141,7 @@ export function FileCard({
             <h4 className="font-medium text-sm line-clamp-2 text-foreground">
               {file.nomeExibicao}
             </h4>
+            {file.descricao ? <p className="line-clamp-2 text-xs text-muted-foreground">{file.descricao}</p> : null}
 
             {/* Client/Project */}
             {(file.clienteNome || file.projetoNome) && (
@@ -145,6 +157,7 @@ export function FileCard({
               <span>{formatDate(file.uploadedAt)}</span>
               <span>•</span>
               <span>{formatFileSize(file.tamanhoBytes)}</span>
+              {file.uploadedByName ? <><span>•</span><span>{file.uploadedByName}</span></> : null}
             </div>
 
             {/* Badges */}
@@ -153,6 +166,8 @@ export function FileCard({
               <Badge variant="outline" className="text-xs">
                 {file.tipo}
               </Badge>
+              <Badge variant="secondary" className="text-xs">v{file.versao}</Badge>
+              {file.archivedAt ? <Badge variant="outline" className="text-xs">Arquivado</Badge> : null}
 
               {/* Evidence Status */}
               {isEvidence && file.statusEvidencia && (
@@ -189,7 +204,7 @@ export function FileCard({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                className="h-8 w-8 shrink-0 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
                 aria-label={`Abrir ações de ${file.nomeExibicao}`}
               >
                 <MoreVertical className="h-4 w-4" />
@@ -198,7 +213,7 @@ export function FileCard({
             <DropdownMenuContent align="end" className="w-48 bg-popover z-50">
               <DropdownMenuItem 
                 onClick={() => void openDocument()}
-                disabled={!file.url || opening}
+                disabled={!(file.storagePath || file.url) || opening}
               >
                 <Download className="h-4 w-4 mr-2" />
                 {opening ? "Abrindo..." : "Abrir / Baixar"}
@@ -222,6 +237,14 @@ export function FileCard({
               <DropdownMenuItem onClick={() => onLink?.(file.id)}>
                 <Link className="h-4 w-4 mr-2" />
                 Vincular a...
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onNewVersion?.(file)}>
+                <UploadCloud className="h-4 w-4 mr-2" />
+                Adicionar versão
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onVersionHistory?.(file)}>
+                <History className="h-4 w-4 mr-2" />
+                Histórico de versões
               </DropdownMenuItem>
               
               {isEvidence && (
@@ -249,13 +272,23 @@ export function FileCard({
               )}
 
               <DropdownMenuSeparator />
-              <DropdownMenuItem 
-                onClick={() => onDelete?.(file.id)}
-                className="text-destructive"
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Excluir
-              </DropdownMenuItem>
+              {file.archivedAt ? (
+                <DropdownMenuItem onClick={() => onRestore?.(file.id)}>
+                  <ArchiveRestore className="h-4 w-4 mr-2" />
+                  Restaurar
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem onClick={() => onArchive?.(file.id)}>
+                  <Archive className="h-4 w-4 mr-2" />
+                  Arquivar
+                </DropdownMenuItem>
+              )}
+              {onDelete ? (
+                <DropdownMenuItem onClick={() => onDelete(file.id)} className="text-destructive">
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Excluir definitivamente
+                </DropdownMenuItem>
+              ) : null}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

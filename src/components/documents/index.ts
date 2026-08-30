@@ -4,3 +4,6 @@ export { QuickFilterChips } from "./QuickFilterChips";
 export { FileCard } from "./FileCard";
 export { UploadModal } from "./UploadModal";
 export { ClientProjectTree } from "./ClientProjectTree";
+export { DocumentEditDialog } from "./DocumentEditDialog";
+export { DocumentVersionDialog } from "./DocumentVersionDialog";
+export { DocumentsWorkspace } from "./DocumentsWorkspace";

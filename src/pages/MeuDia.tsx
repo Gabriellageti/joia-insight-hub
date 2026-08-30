@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, ArrowRight, CalendarDays, CheckCircle2, Clock3, FolderKanban, Focus, ListChecks, Pause, Plus, ShieldAlert, Users } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -19,6 +19,7 @@ import { useMyDay } from "@/hooks/useMyDay";
 import { filterMyTasks, getClientsNeedingAttention, getMyDayBuckets, getProjectsNeedingAttention, sortDailyPriorities, type MyTaskFilter } from "@/lib/my-day";
 import type { Task } from "@/types";
 import { toast } from "sonner";
+import { listMyCommercialFollowUps, type CommercialFollowUp } from "@/integrations/supabase/commercial";
 
 type SummaryFilter = Exclude<MyTaskFilter, "upcoming" | "completed"> | "completed_today";
 
@@ -39,6 +40,12 @@ export default function MeuDia() {
   const [endOpen, setEndOpen] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState<SummaryFilter | null>(null);
   const [showAllUpcoming, setShowAllUpcoming] = useState(false);
+  const [commercialFollowUps, setCommercialFollowUps] = useState<CommercialFollowUp[]>([]);
+
+  useEffect(() => {
+    if (!user) return;
+    listMyCommercialFollowUps().then(setCommercialFollowUps).catch(() => setCommercialFollowUps([]));
+  }, [user]);
 
   const now = useMemo(() => new Date(), []);
   const buckets = useMemo(() => getMyDayBuckets(tasks, user?.id, now), [now, tasks, user?.id]);
@@ -115,6 +122,7 @@ export default function MeuDia() {
 
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(20rem,0.8fr)]">
       <div className="space-y-6">
+        {commercialFollowUps.length ? <section aria-labelledby="commercial-followups-title" className="space-y-3"><div className="flex items-center justify-between"><h2 id="commercial-followups-title" className="flex items-center gap-2 text-lg font-semibold"><CalendarDays className="h-5 w-5 text-emerald-600" />Follow-ups comerciais <Badge variant="secondary">{commercialFollowUps.length}</Badge></h2><Button size="sm" variant="ghost" onClick={() => navigate("/comercial")}>Abrir Comercial</Button></div><div className="grid gap-3 sm:grid-cols-2">{commercialFollowUps.slice(0, 6).map((item) => <button key={item.id} type="button" className="rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => navigate("/comercial")}><Card className={new Date(item.due_at) < now ? "border-destructive/60" : "hover:border-primary/40"}><CardContent className="p-4"><p className="font-medium">{item.action}</p><p className="mt-1 text-sm text-muted-foreground">{new Date(item.due_at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</p></CardContent></Card></button>)}</div></section> : null}
         <section aria-labelledby="meetings-today-title" className="space-y-3"><div className="flex items-center justify-between"><h2 id="meetings-today-title" className="flex items-center gap-2 text-lg font-semibold"><CalendarDays className="h-5 w-5 text-violet-600" />Reuniões do dia</h2><Button size="sm" variant="ghost" onClick={() => navigate("/reunioes")}>Ver agenda</Button></div>{meetingBuckets.pending.length ? <Alert variant="destructive"><AlertDescription>{meetingBuckets.pending.length} reunião(ões) pendente(s) de tratamento.</AlertDescription></Alert> : null}<div className="grid gap-3 sm:grid-cols-2">{[...meetingBuckets.today, ...meetingBuckets.upcoming.slice(0, 2)].map(({ meeting }) => <button key={meeting.id} type="button" className="rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => navigate(`/reunioes/${meeting.id}`)}><Card className="h-full transition-colors hover:border-primary/40"><CardContent className="p-4"><div className="flex items-start justify-between gap-2"><div><p className="font-medium">{meeting.title}</p><p className="mt-1 text-sm text-muted-foreground">{meeting.date} às {meeting.time}</p><p className="text-xs text-muted-foreground">{meeting.projectName || meeting.clientName || "Reunião interna"}</p></div><Badge variant={meeting.status === "in_progress" ? "default" : "secondary"}>{meeting.status === "in_progress" ? "Em andamento" : "Agendada"}</Badge></div></CardContent></Card></button>)}{meetingBuckets.today.length + meetingBuckets.upcoming.length === 0 ? <Card className="sm:col-span-2"><CardContent className="py-8 text-center text-sm text-muted-foreground">Nenhuma reunião hoje ou nos próximos dias.</CardContent></Card> : null}</div></section>
 
         <section aria-labelledby="focus-title" className="space-y-3"><div className="flex items-center justify-between"><div><h2 id="focus-title" className="flex items-center gap-2 text-lg font-semibold"><Focus className="h-5 w-5 text-primary" />Foco de hoje</h2><p className="text-sm text-muted-foreground">Escolha e ordene de 3 a 5 tarefas importantes.</p></div><Badge variant="secondary">{focusTasks.length}/5</Badge></div>{focusTasks.length ? focusTasks.map((task, index) => taskItem(task, { focus: true, index })) : <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">Marque tarefas como foco nas seções abaixo.</CardContent></Card>}</section>
