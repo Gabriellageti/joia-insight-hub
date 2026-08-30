@@ -1,5 +1,28 @@
 # P11 — Production Readiness Review
 
+## Avaliação vigente — 30/08/2026, após decisões humanas
+
+**NO-GO.** A contenção financeira e o histórico de exclusões foram corrigidos em produção, registrados e testados. A IA continua bloqueada por billing; recuperação e smoke integral não foram comprovados. O candidato local não foi promovido. A main avançou externamente via PR127; nenhuma alteração dessa main foi feita por esta rodada.
+
+Relatório vigente: [P11_FINAL_CLOSURE.md](P11_FINAL_CLOSURE.md). Evidências: [contenção/auditoria](P11_FINANCIAL_AUDIT_CONTAINMENT.md), [candidato Git](P11_MERGE_CANDIDATE.md), [IA](P11_AI_PRODUCTION_VALIDATION.md), [recuperação](P11_BACKUP_RECOVERY_VALIDATION.md), [smoke](P11_PRODUCTION_SMOKE_FINAL.md).
+
+| Gate | Estado |
+|---|---|
+| Policy financeira segura | PASS — server-only restaurado, ataques REST negados |
+| Activity log/delete | PASS — snapshots/FKs corrigidos e testados |
+| Cleanup activity_logs e entidades do ensaio | PASS — 25 eventos retidos, zero usuários/workspaces restantes |
+| Cleanup de todos os módulos | BLOQUEADO — NÃO VALIDADO |
+| Candidato semanticamente seguro | BLOQUEADO — NÃO VALIDADO; replay financeiro não autorizado |
+| IA real | BLOQUEADO — AÇÃO HUMANA NECESSÁRIA |
+| Injection/exfiltração generativa | BLOQUEADO — NÃO VALIDADO |
+| Backup conhecido/restore isolado | BLOQUEADO — NÃO VALIDADO; PITR=false |
+| Smoke final produtivo | BLOQUEADO — NÃO VALIDADO |
+| Suítes candidato | Check/PWA PASS; último E2E 15/15, com falha de timeout anterior preservada como ressalva |
+
+Notas atuais, conforme rubrica explícita de quatro gates por área no Final Closure: Segurança **75**, Confiabilidade **50**, Integridade **50**, Automação **50**, PWA **50**, IA **25**, Recuperação **0**, Observabilidade **50**, Performance **0**, Deploy **50**. Zero indica ausência dos ensaios de prontidão daquele domínio, não prova de mau funcionamento. Não usar média para liberar GO.
+
+## Registro histórico anterior — não representa aprovação atual
+
 Data: 29/08/2026  
 Branch: `codex/p4-p10-platform`  
 Projeto: `joia-ops-live` / `joia-solucoes-projects`  
