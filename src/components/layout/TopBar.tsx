@@ -88,12 +88,12 @@ export function TopBar() {
 
   return (
     <>
-      <header className="min-h-14 border-b border-border bg-card flex items-center justify-between px-2 pt-[env(safe-area-inset-top)] sm:px-4 gap-2">
+      <header className="app-topbar min-h-14 border-b border-border bg-card flex items-center justify-between px-2 pt-[env(safe-area-inset-top)] sm:px-4 gap-2">
         <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-4">
           <SidebarTrigger className="shrink-0" aria-label="Abrir menu lateral" />
           <Popover open={searchOpen} onOpenChange={setSearchOpen}>
             <PopoverAnchor asChild>
-              <div className="relative min-w-0 flex-1 max-w-md">
+              <div className="global-search-anchor relative min-w-0 flex-1 max-w-md">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
                 <Input
                   ref={searchInput}
@@ -122,7 +122,7 @@ export function TopBar() {
                 <ul aria-label="Resultados da busca">
                   {results.map((result) => (
                     <li key={`${result.description}-${result.id}`}>
-                      <button type="button" className="w-full rounded-sm px-3 py-2 text-left hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => selectResult(result)}>
+                      <button type="button" className="w-full min-h-11 break-words rounded-sm px-3 py-2 text-left hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => selectResult(result)}>
                         <span className="block text-sm font-medium">{result.label}</span>
                         <span className="block text-xs text-muted-foreground">{result.description}</span>
                       </button>

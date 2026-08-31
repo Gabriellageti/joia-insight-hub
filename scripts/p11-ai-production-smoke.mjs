@@ -5,6 +5,12 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { createClient } from "@supabase/supabase-js";
 
+// Do not create fixtures or attempt generation for an intentionally disabled feature.
+if (process.env.AI_ASSISTANT_ENABLED !== "true") {
+  console.log(JSON.stringify({ enabled: false, code: "AI_ASSISTANT_DISABLED", checks: [] }));
+  process.exit(0);
+}
+
 const deployment = process.env.P11_DEPLOYMENT;
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const publishableKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY;

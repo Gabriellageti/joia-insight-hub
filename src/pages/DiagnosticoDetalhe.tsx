@@ -8,6 +8,7 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { useData } from "@/contexts/DataContext";
@@ -484,12 +485,12 @@ export default function DiagnosticoDetalhe() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex min-w-0 flex-1 items-start gap-3">
+          <Button variant="ghost" size="icon" className="shrink-0" aria-label="Voltar" onClick={() => navigate(-1)}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <div>
+          <div className="min-w-0 break-words">
             <p className="text-sm text-muted-foreground">Diagnóstico</p>
             <h1 className="text-2xl font-semibold">{diagnostic.name}</h1>
             <p className="text-muted-foreground">
@@ -784,15 +785,15 @@ export default function DiagnosticoDetalhe() {
       />
 
       {completionPreview && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-background/80 p-4 backdrop-blur-sm sm:items-center">
-          <Card className="max-h-[85vh] w-full max-w-2xl overflow-auto">
-            <CardHeader>
-              <CardTitle>Revise o plano antes de concluir</CardTitle>
-              <CardDescription>
+        <Dialog open onOpenChange={(open) => { if (!open) setCompletionPreview(null); }}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Revise o plano antes de concluir</DialogTitle>
+              <DialogDescription>
                 Resultado do diagnóstico: {completionPreview.score}%. Selecione apenas as ações que devem entrar no plano do projeto.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
               {completionPreview.actionPlan.actions.map((action) => {
                 const selected = selectedActionIds.includes(action.id);
                 return (
@@ -807,13 +808,13 @@ export default function DiagnosticoDetalhe() {
                   </button>
                 );
               })}
-              <div className="flex justify-end gap-2 pt-2">
+              <DialogFooter>
                 <Button variant="outline" onClick={() => setCompletionPreview(null)}>Voltar ao diagnóstico</Button>
                 <Button onClick={() => void handleConfirmCompletion()}>Concluir com {selectedActionIds.length} ações</Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+              </DialogFooter>
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );

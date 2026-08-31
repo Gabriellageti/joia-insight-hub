@@ -5,19 +5,25 @@ Este documento fecha o relatório desta rodada, **não declara o P11 concluído*
 
 ## Estado anterior
 
-IA generativa, recuperação e smoke integral bloqueados. A pré-validação encontrou leitura financeira sem isolamento no catálogo de produção e conflito entre exclusão e FK de activity_logs. O usuário autorizou contenção, preservação de auditoria e candidato Git isolado, mantendo gates para o smoke final.
+Na rodada anterior, IA generativa, recuperação e smoke integral estavam bloqueados. A pré-validação encontrou leitura financeira sem isolamento no catálogo de produção e conflito entre exclusão e FK de activity_logs. O usuário autorizou contenção, preservação de auditoria e candidato Git isolado.
+
+## Decisão de negócio vigente — IA opcional
+
+**IA disponível nesta release: NÃO. Dependência do sistema principal da IA: NENHUMA. Estado: FEATURE OPCIONAL DESABILITADA.** A decisão de 30/08/2026 substitui o gate anterior que exigia billing/geração para liberar o restante do produto. Clientes, projetos, tarefas, Kanban, reuniões, documentos, CRM, automações, relatórios, PWA e notificações continuam no escopo habilitado.
+
+Implementados gate server-side fail-closed, consulta pública de disponibilidade, estado honesto da interface e proteção dos scripts de IA. Flag `false` cadastrada no projeto oficial; **código ainda não publicado nesta rodada**. Não confundir configuração para próximo deployment com desativação comprovada do deployment atual. Evidências da alteração: [IA opcional](P11_AI_OPTIONAL_FEATURE.md). Reativação futura: [runbook](../runbooks/ENABLE_AI_ASSISTANT.md).
 
 ## IA Real
 
-**BLOQUEADO — AÇÃO HUMANA NECESSÁRIA.** OIDC e modelo `openai/gpt-5.6-luna` confirmados; saldo 0; tentativa às 16:56:37Z retornou 403 exigindo cartão válido. Nenhum cartão ou secret foi manipulado. Ver [validação IA](P11_AI_PRODUCTION_VALIDATION.md).
+**ADIADO — FEATURE DESABILITADA POR DECISÃO DE NEGÓCIO.** Não é PASS nem requisito do GO desta release desligada. O diagnóstico histórico de saldo zero/403 não será repetido. Nenhum billing foi ativado ou contornado. Ver [validação IA](P11_AI_PRODUCTION_VALIDATION.md).
 
 ## Prompt Injection
 
-**BLOQUEADO — NÃO VALIDADO.** Sem geração real, não há prova nova contra instruções hostis do usuário ou armazenadas em conteúdo. A resposta fallback não foi usada para aprovar resistência do modelo.
+**ADIADO — FEATURE DESABILITADA POR DECISÃO DE NEGÓCIO.** Inclui instruções hostis diretas ou armazenadas. Não há aprovação de resistência do modelo; o caminho desligado impede envio de dados ao provedor.
 
 ## Exfiltração
 
-**PASS no boundary financeiro/auditoria testado; BLOQUEADO — NÃO VALIDADO no modelo real.** Usuários sintéticos não leram o catálogo financeiro diretamente; usuário B não leu eventos A conhecidos. Isso não certifica todos os módulos nem o comportamento generativo.
+**PASS no boundary financeiro/auditoria testado; ADIADO — FEATURE DESABILITADA POR DECISÃO DE NEGÓCIO no modelo real.** Usuários sintéticos não leram o catálogo financeiro diretamente; usuário B não leu eventos A conhecidos. Isso não certifica todos os módulos nem o comportamento generativo. Segurança/RLS do sistema habilitado continua obrigatória.
 
 ## Backup
 
@@ -41,7 +47,7 @@ IA generativa, recuperação e smoke integral bloqueados. A pré-validação enc
 
 ## Smoke Produção
 
-**BLOQUEADO — NÃO VALIDADO integralmente** pelos gates de IA e recuperação. Foram realizados probes de correção REST/SQL com fixtures, não o smoke completo. Matriz de 26 etapas em [smoke final](P11_PRODUCTION_SMOKE_FINAL.md).
+**BLOQUEADO — NÃO VALIDADO integralmente**: recuperação, retenção/cleanup e jornada produtiva das funcionalidades habilitadas ainda exigem evidência. IA generativa não é pré-requisito; sua etapa foi adiada. O gate de desativação no deployment continua a validar. Foram realizados probes de correção REST/SQL com fixtures, não o smoke completo. Matriz em [smoke final](P11_PRODUCTION_SMOKE_FINAL.md).
 
 ## Mobile
 
@@ -83,7 +89,7 @@ Nenhum deploy Vercel nem promoção do candidato foi executado nesta rodada. As 
 2. AFTER DELETE de tarefas/projetos/clientes com FKs inválidas; auditoria CASCADE — **corrigido no escopo activity_logs**.
 3. Cascata de reunião sem pai para registrar eventos filhos — **corrigida e testada**.
 4. Duas falhas preparatórias no harness REST: nome de coluna de membership e assignee ausente — **corrigidas**, sem relaxar RLS.
-5. Billing IA ainda bloqueado; recuperação sem evidência aceitável.
+5. Billing IA indisponível por decisão de negócio, sem bloquear a release desligada; recuperação sem evidência aceitável continua bloqueadora.
 6. Repetição E2E padrão: timeout de 5s para heading do Assistente, 14/15 PASS; primeira bateria havia passado 15/15. Nova execução no mesmo SHA passou 15/15, sem mudar código/timeouts. Falha preservada como intermitência de causa não comprovada.
 7. Semântica financeira e retenção dos outros históricos ainda não certificadas.
 
@@ -97,9 +103,13 @@ Nenhum deploy Vercel nem promoção do candidato foi executado nesta rodada. As 
 - SHA final: check PASS (149 unitários, 9 componentes, build/PWA); PWA browser 3/3; última execução E2E 15/15, com falha intermitente anterior registrada.
 - Runbook e relatórios separados para impedir confusão entre PASS local e produção não validada.
 
+## Atualização de publicação — 30/08/2026
+
+Após autorização expressa do usuário, o gate desligado e as correções responsivas foram publicados no projeto oficial, deployment `dpl_JCu3sJkTfvDLPkU4arm1RzZMnhER`, READY. GET e POST de `/api/assistant` no domínio oficial retornaram `enabled:false` / `AI_ASSISTANT_DISABLED`; health, headers e assets passaram nas verificações pontuais. A desativação na API deixa de estar sem evidência produtiva. A tela autenticada e o smoke integral não foram reexecutados. **NO-GO mantido**, sem reclassificar os demais gates. Detalhes e limites em [RESPONSIVE_DEPLOYMENT.md](RESPONSIVE_DEPLOYMENT.md). Trechos anteriores e a lista histórica abaixo descrevem a rodada anterior à publicação; não invalidam essa atualização.
+
 ## Pendências
 
-1. Ativar manualmente billing/créditos do AI Gateway; repetir matriz completa com modelo configurado.
+1. Publicar de forma coordenada o gate desligado e comprovar seu comportamento no deployment oficial; não ativar billing. Reativação/geração ficam adiadas, fora dos critérios desta release.
 2. Obter visibilidade administrativa do plano/backups, aprovar custo/destino e comprovar restore isolado; só então propor RPO/RTO.
 3. Validar semanticamente as migrations financeiras em ambiente isolado, sem replay automático.
 4. Revisar retenção/cleanup dos históricos documentais, task_history, comerciais e automações antes do smoke integral; activity_logs preservado não certifica todos esses armazenamentos.
@@ -116,19 +126,19 @@ Notas são **cobertura de evidências de prontidão**, não probabilidade de seg
 
 | Área | Nota | Gates comprovados / gates pendentes |
 |---|---:|---|
-| Segurança | 75 | Financeiro REST, auditoria/RLS, headers/boundary; falta hostilidade generativa |
-| Confiabilidade | 50 | Health atual, fallback histórico; faltam restore e smoke estável completo |
+| Segurança | 75 | Financeiro REST, auditoria/RLS, headers/boundary; falta comprovar desativação no deployment e concluir segurança dos módulos habilitados; hostilidade generativa fora do escopo |
+| Confiabilidade | 50 | Health e regressões locais do núcleo; faltam restore e smoke produtivo estável completo |
 | Integridade | 50 | Delete/FKs, snapshots preservados; faltam reconciliação financeira e restore |
 | Automação | 50 | Contratos locais, scheduler saudável; faltam cenário temporal e entrega interna produtiva completos |
 | PWA | 50 | Manifesto/SW, suíte local; faltam mobile produtivo e offline A/B produtivo |
-| IA | 25 | Infraestrutura autenticada/boundary; faltam geração contextual, hostile prompts e confirmação real |
+| IA generativa | N/A | ADIADO — FEATURE DESABILITADA POR DECISÃO DE NEGÓCIO; não é PASS e não entra em média/gate de geração |
 | Recuperação | 0 | Sem comprovação dos gates plano/janela, banco restaurado, Auth restaurado e bytes Storage recuperados |
-| Observabilidade | 50 | Health/request ID, histórico rastreável; faltam alertas/drains e tracing de geração real |
+| Observabilidade | 50 | Health/request ID, histórico rastreável; faltam alertas/drains e rastreabilidade integral da operação habilitada |
 | Performance | 0 | Sem medições produtivas de Web Vitals, carga, latência p95 e endurance |
 | Deploy | 50 | Código/candidato versionado, build aprovado; faltam promoção validada e ensaio de rollback completo |
 
 ## Decisão
 
-**NO-GO.** Não há evidência para responder SIM às três perguntas de fechamento: IA hostil segura, recuperação comprovada e operação produtiva integral aprovada. A contenção financeira e a correção de exclusões reduzem riscos concretos, mas não substituem os gates restantes.
+**NO-GO recalculado sem dependência de IA.** Motivos: recuperação/restore não comprovados, smoke produtivo integral habilitado pendente, integridade financeira e retenção dos demais históricos ainda não certificadas. A falta de billing/geração não participa desta decisão. O bloqueio da feature tem PASS local, não validação do deployment ainda antigo. Nenhum teste generativo adiado foi promovido a PASS.
 
-Não promover o candidato, não reabrir a tabela financeira ao frontend, não contratar recursos automaticamente e não iniciar P12. A próxima rodada depende das ações administrativas de IA/recuperação e das validações restantes. Relatório entregue para revisão humana. Os commits desta rodada e o candidato foram mantidos localmente, sem push que pudesse disparar implantação automática.
+Não promover o candidato sem os gates restantes, não reabrir a tabela financeira ao frontend, não contratar recursos e não iniciar P12. A próxima rodada depende de recuperação e validações do núcleo habilitado, não de billing IA. Sem push/merge/deploy automático nesta alteração. O código anterior ao gate ainda pode chamar o provedor: cadastrar a variável isoladamente não prova desativação em produção.

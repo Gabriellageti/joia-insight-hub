@@ -49,7 +49,7 @@ export function TaskList({ tasks, savingTaskIds, onEdit, onDelete, onToggleCompl
         </Select>
       </div>
       <div className="overflow-x-auto rounded-lg border">
-        <Table className="min-w-[900px]">
+        <Table className="responsive-record-table md:min-w-[900px]">
           <TableHeader><TableRow><TableHead>Tarefa</TableHead><TableHead>Cliente</TableHead><TableHead>Projeto</TableHead><TableHead>Responsável</TableHead><TableHead>Prioridade</TableHead><TableHead>Prazo</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
           <TableBody>
             {sortedTasks.map((task) => {
@@ -59,12 +59,12 @@ export function TaskList({ tasks, savingTaskIds, onEdit, onDelete, onToggleCompl
               const risk = getTaskRiskSignal(task);
               return (
                 <TableRow key={task.id} className={overdue ? "bg-destructive/[0.035]" : undefined}>
-                  <TableCell className="max-w-64 font-medium"><button type="button" className="line-clamp-2 text-left hover:text-primary" onClick={() => onEdit(task)}>{task.title}</button>{risk.atRisk ? <p className="mt-1 text-xs text-orange-700">{risk.reason}{typeof risk.blockedDays === "number" ? ` · ${risk.blockedDays} dia(s)` : ""}</p> : null}</TableCell>
-                  <TableCell>{task.clientName || "—"}</TableCell><TableCell>{task.projectName || "—"}</TableCell><TableCell>{task.responsible || "—"}</TableCell>
-                  <TableCell><Badge variant="outline">{TASK_PRIORITY_LABELS[task.priority]}</Badge></TableCell>
-                  <TableCell><div className="flex items-center gap-2"><span>{due?.toLocaleDateString("pt-BR") || "Sem prazo"}</span>{overdue && <Badge variant="destructive">Atrasada</Badge>}</div></TableCell>
-                  <TableCell><div className="flex flex-wrap gap-1"><Badge variant="secondary">{TASK_STATUS_LABELS[task.status]}</Badge>{risk.atRisk ? <Badge variant="outline" className="border-orange-300 text-orange-800">Em risco</Badge> : null}</div></TableCell>
-                  <TableCell><div className="flex justify-end gap-1"><Button type="button" size="icon" variant="ghost" disabled={saving} aria-label={`Editar ${task.title}`} onClick={() => onEdit(task)}><Pencil className="h-4 w-4" /></Button><Button type="button" size="icon" variant="ghost" disabled={saving} aria-label={task.status === "done" ? `Reabrir ${task.title}` : `Concluir ${task.title}`} onClick={() => onToggleComplete(task)}><CheckCircle2 className="h-4 w-4" /></Button><Button type="button" size="icon" variant="ghost" disabled={saving} className="text-muted-foreground hover:text-destructive" aria-label={`Excluir ${task.title}`} onClick={() => onDelete(task)}><Trash2 className="h-4 w-4" /></Button></div></TableCell>
+                  <TableCell data-label="Tarefa" className="max-w-64 font-medium"><button type="button" className="min-h-11 text-left hover:text-primary" onClick={() => onEdit(task)}>{task.title}</button>{risk.atRisk ? <p className="mt-1 text-xs text-orange-700">{risk.reason}{typeof risk.blockedDays === "number" ? ` · ${risk.blockedDays} dia(s)` : ""}</p> : null}</TableCell>
+                  <TableCell data-label="Cliente">{task.clientName || "—"}</TableCell><TableCell data-label="Projeto">{task.projectName || "—"}</TableCell><TableCell data-label="Responsável">{task.responsible || "—"}</TableCell>
+                  <TableCell data-label="Prioridade"><Badge variant="outline">{TASK_PRIORITY_LABELS[task.priority]}</Badge></TableCell>
+                  <TableCell data-label="Prazo"><div className="flex flex-wrap items-center gap-2"><span>{due?.toLocaleDateString("pt-BR") || "Sem prazo"}</span>{overdue && <Badge variant="destructive">Atrasada</Badge>}</div></TableCell>
+                  <TableCell data-label="Status"><div className="flex flex-wrap gap-1"><Badge variant="secondary">{TASK_STATUS_LABELS[task.status]}</Badge>{risk.atRisk ? <Badge variant="outline" className="border-orange-300 text-orange-800">Em risco</Badge> : null}</div></TableCell>
+                  <TableCell data-label="Ações"><div className="flex flex-wrap justify-end gap-1"><Button type="button" size="icon" variant="ghost" disabled={saving} aria-label={`Editar ${task.title}`} onClick={() => onEdit(task)}><Pencil className="h-4 w-4" /></Button><Button type="button" size="icon" variant="ghost" disabled={saving} aria-label={task.status === "done" ? `Reabrir ${task.title}` : `Concluir ${task.title}`} onClick={() => onToggleComplete(task)}><CheckCircle2 className="h-4 w-4" /></Button><Button type="button" size="icon" variant="ghost" disabled={saving} className="text-muted-foreground hover:text-destructive" aria-label={`Excluir ${task.title}`} onClick={() => onDelete(task)}><Trash2 className="h-4 w-4" /></Button></div></TableCell>
                 </TableRow>
               );
             })}

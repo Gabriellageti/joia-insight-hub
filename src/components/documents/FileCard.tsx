@@ -204,7 +204,7 @@ export function FileCard({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 shrink-0 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
+                className="h-8 w-8 shrink-0"
                 aria-label={`Abrir ações de ${file.nomeExibicao}`}
               >
                 <MoreVertical className="h-4 w-4" />

@@ -62,7 +62,7 @@ export function generateICSContent(event: CalendarEvent): string {
 
   return `BEGIN:VCALENDAR
 VERSION:2.0
-PRODID:-//JoIA Ops//Meeting//PT
+PRODID:-//Joia Labs//Meeting//PT
 BEGIN:VEVENT
 UID:${Date.now()}@joia-ops
 DTSTART:${formatDate(event.startDate)}

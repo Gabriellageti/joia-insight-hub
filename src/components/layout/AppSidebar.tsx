@@ -23,6 +23,7 @@ import {
   Workflow,
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
+import { useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   Sidebar,
@@ -35,6 +36,7 @@ import {
   SidebarMenuItem,
   SidebarHeader,
   SidebarFooter,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import {
   Collapsible,
@@ -79,6 +81,8 @@ const managementNavItems = [
 export function AppSidebar() {
   const location = useLocation();
   const { isAdmin } = useAuth();
+  const { setOpenMobile } = useSidebar();
+  useEffect(() => { setOpenMobile(false); }, [location.pathname, setOpenMobile]);
   
   const isActive = (path: string) => {
     if (path === "/") return location.pathname === "/";
@@ -93,7 +97,7 @@ export function AppSidebar() {
             <span className="text-accent-foreground font-bold text-sm">J</span>
           </div>
           <div>
-            <h1 className="font-semibold text-sidebar-foreground">JoIA Ops</h1>
+            <h1 className="font-semibold text-sidebar-foreground">Joia Labs</h1>
             <p className="text-xs text-sidebar-foreground/70">Gestão Empresarial</p>
           </div>
         </div>

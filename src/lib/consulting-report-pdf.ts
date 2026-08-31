@@ -17,6 +17,6 @@ export async function exportConsultingReportPdf(report: ConsultingReportRow, cli
     y += 4;
   }
   const total = pdf.getNumberOfPages();
-  for (let page = 1; page <= total; page++) { pdf.setPage(page); pdf.setDrawColor(220); pdf.line(margin, 284, 210 - margin, 284); pdf.setFontSize(8); pdf.setTextColor(110); pdf.text("JoIA Ops · Relatório de Consultoria", margin, 290); pdf.text(`Página ${page} de ${total}`, 210 - margin, 290, { align: "right" }); }
+  for (let page = 1; page <= total; page++) { pdf.setPage(page); pdf.setDrawColor(220); pdf.line(margin, 284, 210 - margin, 284); pdf.setFontSize(8); pdf.setTextColor(110); pdf.text("Joia Labs · Relatório de Consultoria", margin, 290); pdf.text(`Página ${page} de ${total}`, 210 - margin, 290, { align: "right" }); }
   pdf.save(`relatorio-consultoria-${clientName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.pdf`);
 }

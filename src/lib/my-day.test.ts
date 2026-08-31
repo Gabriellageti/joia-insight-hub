@@ -33,7 +33,7 @@ describe("Meu Dia", () => {
     const tasks = [task("late", "2026-08-25", "not_started", "urgent"), task("blocked", "2026-08-30", "blocked", "medium")];
     const clients = [{ id: "client-1", razaoSocial: "Grupo H2O", segmentoTags: [], status: "ativo", contatoPrincipal: { nome: "" }, endereco: {}, preferenciasRelacionamento: {}, projects: 1, nps: 0, risk: "low", lastContact: "", createdAt: "" }] as Client[];
     const projects = [{ id: "project-1", name: "Ciclo 3", clientId: "client-1", clientName: "Grupo H2O", phase: "Execução", progress: 30, progressOverrideEnabled: false, manualProgress: null, status: "yellow", responsible: "Gabriel", startDate: "2026-08-01", endDate: "2026-08-30", createdAt: "2026-08-01" }] as Project[];
-    expect(getClientsNeedingAttention(tasks, clients)[0].reasons).toContain("1 tarefa atrasada");
+    expect(getClientsNeedingAttention(tasks, clients, now)[0].reasons).toContain("1 tarefa atrasada");
     expect(getProjectsNeedingAttention(tasks, projects, now)[0].reasons).toContain("prazo do projeto próximo");
   });
 });

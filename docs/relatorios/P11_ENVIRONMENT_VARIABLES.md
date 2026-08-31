@@ -1,6 +1,6 @@
 # P11 — Auditoria de variáveis de ambiente
 
-Data: 29/08/2026
+Data original: 29/08/2026. Atualização da feature opcional: 30/08/2026.
 
 Projeto Vercel: `joia-solucoes-projects/joia-ops-live`
 
@@ -8,6 +8,7 @@ Projeto Vercel: `joia-solucoes-projects/joia-ops-live`
 
 | Variável | Consumidor | Frontend/Backend | Development | Preview | Production | Sensível |
 |---|---|---|---|---|---|---|
+| `AI_ASSISTANT_ENABLED` | `api/assistant.ts`, scripts de diagnóstico/smoke IA | Backend; frontend recebe somente disponibilidade derivada | `false` no `.env.example`; ausência desabilita | `false` cadastrado | `false` cadastrado | Não é secret; controle de segurança exclusivamente server-side |
 | `VITE_SUPABASE_URL` | `src/integrations/supabase/client.ts` | Frontend | `.env` | Necessária | Necessária | Não |
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | `src/integrations/supabase/client.ts` | Frontend | `.env` | Necessária | Necessária | Não; chave publicável protegida por RLS |
 | `SUPABASE_URL` | `api/assistant.ts`, `api/health.ts` | Backend Vercel | Opcional; fallback local para `VITE_*` | Necessária | Necessária | Não |
@@ -26,7 +27,7 @@ Projeto Vercel: `joia-solucoes-projects/joia-ops-live`
 
 ## Decisões
 
-- Somente cinco variáveis próprias serão cadastradas na Vercel: duas `VITE_*` públicas e três server-side.
+- Cinco variáveis originais preservadas; acrescentada somente `AI_ASSISTANT_ENABLED=false` em Preview e Production, após verificar ausência da chave. Nenhum secret sobrescrito. A flag não depende de OIDC/billing e só terá efeito em código que implemente o gate, após deployment. Development usa padrão desabilitado e `.env.example`.
 - A variável denominada `SUPABASE_SERVICE_ROLE_KEY` receberá uma chave secreta moderna `sb_secret_*`, recomendada para backends, e nunca um valor `VITE_*`.
 - O Assistente usa `generateText({ model: "openai/gpt-5.6-luna" })` com AI SDK 7. No ambiente Vercel, a autenticação efetiva é OIDC; o projeto possui `oidcTokenClaims` e a plataforma injeta `VERCEL_OIDC_TOKEN`. Não será inventada nem cadastrada `AI_GATEWAY_API_KEY`.
 - Variáveis de Edge Functions pertencem ao cofre do Supabase e não serão copiadas para a Vercel.
@@ -37,4 +38,4 @@ Projeto Vercel: `joia-solucoes-projects/joia-ops-live`
 1. Listar somente nomes/escopos na Vercel.
 2. Procurar padrões de secret em `dist/` e nos chunks publicados.
 3. Confirmar `/api/health` sem detalhes internos.
-4. Confirmar que `/api/assistant` inicia e conclui audit trail após a migration.
+4. Nesta release, confirmar que GET/POST `/api/assistant` retornam feature desabilitada sem gerar audit trail. A conclusão server-side deve ser revalidada somente na futura reativação, conforme `ENABLE_AI_ASSISTANT.md`.

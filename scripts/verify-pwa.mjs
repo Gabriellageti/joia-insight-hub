@@ -22,7 +22,7 @@ function pngDimensions(buffer) {
 }
 
 const manifest = JSON.parse(await readFile(path.join(dist, "manifest.webmanifest"), "utf8"));
-assert(manifest.name === "JoIA Ops", "Nome do PWA ausente ou incorreto");
+assert(manifest.name === "Joia Labs", "Nome do PWA ausente ou incorreto");
 assert(manifest.display === "standalone", "PWA não está configurado para abrir como aplicativo");
 assert(manifest.start_url.startsWith("/meu-dia"), "Rota inicial do PWA incorreta");
 assert(manifest.icons?.some((icon) => icon.sizes === "192x192"), "Ícone 192x192 ausente no manifesto");

@@ -97,7 +97,7 @@ export function LeadDialog({ open, onOpenChange, lead }: LeadDialogProps) {
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
-          <div className="grid grid-cols-2 gap-4 py-4">
+          <div className="mobile-form-grid grid grid-cols-2 gap-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="company">Empresa *</Label>
               <Input

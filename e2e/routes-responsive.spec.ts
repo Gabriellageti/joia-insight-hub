@@ -84,7 +84,7 @@ const widths = [320, 375, 768, 1024, 1440];
 test("formulário de autenticação é acessível e não gera overflow", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 800 });
   await page.goto("/auth");
-  await expect(page.getByRole("heading", { name: "JoIA Ops" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Joia Labs" })).toBeVisible();
   await expect(page.getByLabel("Email")).toHaveAttribute("required", "");
   await expect(page.getByLabel("Senha")).toHaveAttribute("autocomplete", "current-password");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);

@@ -13,6 +13,7 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { ErrorBoundary } from "@/components/system/ErrorBoundary";
 import { Loader2 } from "lucide-react";
 import { PwaInstallProvider } from "@/components/pwa/PwaInstallProvider";
+import { ViewportMetrics } from "@/components/layout/ViewportMetrics";
 
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const MeuDia = lazy(() => import("./pages/MeuDia"));
@@ -87,6 +88,7 @@ function RouteLoading() {
 
 const App = () => (
   <ThemeProvider attribute="class" defaultTheme="light">
+    <ViewportMetrics />
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>

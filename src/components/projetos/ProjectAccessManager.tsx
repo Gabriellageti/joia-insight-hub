@@ -66,10 +66,10 @@ export function ProjectAccessManager({ projectId }: { projectId: string }) {
   return <div className="space-y-2">
     {people.map((employee) => {
       const access = accessByUser[employee.id] || "none";
-      return <div key={employee.id} className="flex items-center justify-between gap-3 rounded-md border p-3">
-        <div><p className="text-sm font-medium">{employee.name}</p><p className="text-xs text-muted-foreground">{access === "manager" ? "Vê também o financeiro deste projeto." : ""}</p></div>
+      return <div key={employee.id} className="flex flex-col items-stretch justify-between gap-3 rounded-md border p-3 sm:flex-row sm:items-center">
+        <div className="min-w-0 break-words"><p className="text-sm font-medium">{employee.name}</p><p className="text-xs text-muted-foreground">{access === "manager" ? "Vê também o financeiro deste projeto." : ""}</p></div>
         <Select value={access} disabled={saving === employee.id} onValueChange={(value) => void changeAccess(employee.id, value as Access)}>
-          <SelectTrigger className="w-44"><ShieldCheck className="mr-2 h-4 w-4" /><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-full shrink-0 sm:w-44" aria-label={`Acesso de ${employee.name}`}><ShieldCheck className="mr-2 h-4 w-4" /><SelectValue /></SelectTrigger>
           <SelectContent><SelectItem value="none">{labels.none}</SelectItem><SelectItem value="editor">{labels.editor}</SelectItem><SelectItem value="manager">{labels.manager}</SelectItem></SelectContent>
         </Select>
       </div>;

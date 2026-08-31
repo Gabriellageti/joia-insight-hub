@@ -1,5 +1,10 @@
 import { gateway, generateText } from "ai";
 
+if (process.env.AI_ASSISTANT_ENABLED !== "true") {
+  console.log(JSON.stringify({ enabled: false, code: "AI_ASSISTANT_DISABLED", checks: [] }));
+  process.exit(0);
+}
+
 // Read-only metadata plus one minimal generation. Never print credentials,
 // response headers, nested provider errors, or account/payment identifiers.
 const model = "openai/gpt-5.6-luna";

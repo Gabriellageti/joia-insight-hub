@@ -51,7 +51,7 @@ export function PwaInstallProvider({ children }: { children: ReactNode }) {
   } = useRegisterSW({
     immediate: true,
     onRegisterError(error) {
-      console.error("Falha ao registrar recursos offline do JoIA Ops", { name: error.name });
+      console.error("Falha ao registrar recursos offline do Joia Labs", { name: error.name });
     },
   });
 
@@ -63,7 +63,7 @@ export function PwaInstallProvider({ children }: { children: ReactNode }) {
     const handleInstalled = () => {
       setInstalled(true);
       setDeferredPrompt(null);
-      toast.success("JoIA Ops instalado com sucesso");
+      toast.success("Joia Labs instalado com sucesso");
     };
     const handleOnline = () => setOnline(true);
     const handleOffline = () => setOnline(false);
@@ -87,7 +87,7 @@ export function PwaInstallProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!offlineReady) return;
-    toast.success("JoIA Ops pronto para abrir mesmo sem conexão");
+    toast.success("Joia Labs pronto para abrir mesmo sem conexão");
     setOfflineReady(false);
   }, [offlineReady, setOfflineReady]);
 
@@ -155,7 +155,7 @@ export function PwaInstallProvider({ children }: { children: ReactNode }) {
               <Smartphone className="h-5 w-5" aria-hidden="true" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold">Instale o JoIA Ops</p>
+              <p className="text-sm font-semibold">Instale o Joia Labs</p>
               <p className="text-xs text-muted-foreground">Abra em tela cheia e acesse pelo ícone do celular.</p>
             </div>
             <Button size="sm" onClick={() => void install()}>Instalar</Button>
@@ -169,7 +169,7 @@ export function PwaInstallProvider({ children }: { children: ReactNode }) {
       <Dialog open={instructionsOpen} onOpenChange={setInstructionsOpen}>
         <DialogContent className="w-[calc(100%-2rem)] rounded-lg sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Instalar o JoIA Ops no iPhone</DialogTitle>
+            <DialogTitle>Instalar o Joia Labs no iPhone</DialogTitle>
             <DialogDescription>Use o Safari para adicionar o app à Tela de Início.</DialogDescription>
           </DialogHeader>
           <ol className="space-y-4 text-sm">

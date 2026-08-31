@@ -1,7 +1,7 @@
 # P11 — Smoke final de produção
 
 Data: 30/08/2026. **Smoke final completo NÃO EXECUTADO — BLOQUEADO — NÃO VALIDADO.**
-Motivo: decisão humana exige IA real habilitada e recuperação conhecida/testável antes do smoke final. Esses gates continuam pendentes. Não rotular os testes locais ou os probes de correção como smoke integral.
+Motivo vigente: recuperação conhecida/testável, retenção dos históricos e smoke das funcionalidades HABILITADAS ainda não comprovados. A decisão humana posterior retirou IA generativa dos pré-requisitos desta release. Não rotular testes locais/probes como smoke integral, nem reprovar o núcleo pela IA intencionalmente desligada.
 
 Domínio oficial: `https://joia-ops-live.vercel.app`.
 
@@ -29,7 +29,8 @@ Domínio oficial: `https://joia-ops-live.vercel.app`.
 | 10. Decisão → tarefa/origem/visibilidade | BLOQUEADO — NÃO VALIDADO | E2E local PASS | Falta produção completa |
 | 11. Documentos/upload/versões/archive/restore | BLOQUEADO — NÃO VALIDADO | Evidência anterior Storage limitada | Não foram enviados arquivos nesta etapa |
 | 12. Relatório/versão/imutabilidade/PDF | BLOQUEADO — NÃO VALIDADO | PDF local PASS | Falta produção completa |
-| 13. IA real/fontes | BLOQUEADO — NÃO VALIDADO | Billing 403 | Aguarda ação humana |
+| 13. IA real/fontes/sugestões/modelo hostil | ADIADO — FEATURE DESABILITADA POR DECISÃO DE NEGÓCIO | Não é PASS nem FAIL do núcleo | Não ativar billing nesta release |
+| 13b. Estado desabilitado UI/API | PASS local; BLOQUEADO — NÃO VALIDADO no domínio oficial | Código novo não implantado nesta rodada | Conferir zero provedor/auditoria/gerações após implantação |
 | 14. CRM/oportunidade/kanban | BLOQUEADO — NÃO VALIDADO | E2E local PASS | Não reexecutado real |
 | 15. Follow-up/Meu Dia | BLOQUEADO — NÃO VALIDADO | Contrato local | Falta produção completa |
 | 16. Conversão CRM | BLOQUEADO — NÃO VALIDADO nesta etapa | Concorrência real histórica | Não converter dados reais |

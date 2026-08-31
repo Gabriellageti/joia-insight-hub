@@ -1,0 +1,14 @@
+# Runtime configuration comes from the linked Vercel project, never local files.
+.env
+.env.*
+!.env.example
+.git
+.vercel
+node_modules
+dist
+dist-ssr
+tmp
+output
+test-results
+playwright-report
+*.log
