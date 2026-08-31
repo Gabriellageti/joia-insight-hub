@@ -103,7 +103,7 @@ export function ContentItemDialog({ open, onOpenChange, contentItem }: ContentIt
                 placeholder="Título do conteúdo"
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="mobile-form-grid grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="type">Tipo</Label>
                 <Select 

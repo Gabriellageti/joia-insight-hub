@@ -53,7 +53,7 @@ export function SectionNavigator({
       <div className="p-3 border-b bg-muted/50">
         <h3 className="font-medium text-sm">Navegação</h3>
       </div>
-      <ScrollArea className="h-[300px] lg:h-[calc(100vh-400px)]">
+      <ScrollArea className="h-[300px] max-h-[60dvh] lg:h-[calc(100dvh-400px)]">
         <div className="p-2">
           {sections.map((group) => {
             const progress = getSectionProgress(group);

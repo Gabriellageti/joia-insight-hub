@@ -136,8 +136,8 @@ export default function ProjetoDetalhes() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-center gap-3">
+      <div className="flex min-w-0 flex-col gap-4 2xl:flex-row 2xl:items-start 2xl:justify-between">
+        <div className="flex min-w-0 items-start gap-3">
           <Button
             asChild
             variant="ghost"
@@ -148,8 +148,8 @@ export default function ProjetoDetalhes() {
               Voltar
             </Link>
           </Button>
-          <div>
-            <div className="flex items-center gap-2">
+          <div className="min-w-0 flex-1 break-words">
+            <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-2xl font-semibold text-foreground">{project.name}</h1>
               <Badge variant="secondary">{getProjectTypeLabel(project.projectType)}</Badge>
               <Badge className={phaseColors[project.phase] || "bg-muted"} variant="outline">
@@ -168,7 +168,7 @@ export default function ProjetoDetalhes() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <FavoriteButton entityType="project" entityId={project.id} />
           <Button
             variant="outline"

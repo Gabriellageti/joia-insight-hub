@@ -341,7 +341,7 @@ export default function Indicadores() {
           </SheetHeader>
 
           {selectedIndicator && (
-            <ScrollArea className="h-[calc(100vh-120px)] mt-4">
+            <ScrollArea className="h-[calc(100dvh-120px)] mt-4">
               <div className="space-y-6 pr-4">
                 {/* Current Value */}
                 <div className="grid grid-cols-2 gap-4">

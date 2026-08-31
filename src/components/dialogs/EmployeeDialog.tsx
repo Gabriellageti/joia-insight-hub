@@ -93,7 +93,7 @@ export function EmployeeDialog({ open, onOpenChange, employee }: EmployeeDialogP
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
-          <div className="grid grid-cols-2 gap-4 py-4">
+          <div className="mobile-form-grid grid grid-cols-2 gap-4 py-4">
             <div className="col-span-2 space-y-2">
               <Label htmlFor="name">Nome *</Label>
               <Input

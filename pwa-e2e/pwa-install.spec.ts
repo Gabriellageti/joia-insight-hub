@@ -6,14 +6,14 @@ test("manifesto, instalação nativa e navegação offline funcionam no build de
   page.on("pageerror", (error) => consoleErrors.push(error.message));
 
   await page.goto("/auth");
-  await expect(page.getByRole("heading", { name: "JoIA Ops" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Joia Labs" })).toBeVisible();
 
   const manifest = await page.evaluate(async () => {
     const link = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
     if (!link) throw new Error("Manifesto não associado ao documento");
     return fetch(link.href).then((response) => response.json());
   });
-  expect(manifest).toMatchObject({ name: "JoIA Ops", display: "standalone", theme_color: "#171717" });
+  expect(manifest).toMatchObject({ name: "Joia Labs", display: "standalone", theme_color: "#171717" });
 
   await page.evaluate(() => {
     const installEvent = new Event("beforeinstallprompt", { cancelable: true });
@@ -33,7 +33,7 @@ test("manifesto, instalação nativa e navegação offline funcionam no build de
 
   await context.setOffline(true);
   await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(page.getByRole("heading", { name: "JoIA Ops" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Joia Labs" })).toBeVisible();
   await expect(page.getByText("Sem conexão.", { exact: false })).toBeVisible();
   await context.setOffline(false);
 });

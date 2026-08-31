@@ -265,7 +265,7 @@ export function TemplateForm({ initialTemplate, onSubmit, submitLabel }: Templat
               {formState.sections.map((section, index) => (
                 <div key={section.id} className="rounded-lg border p-4 space-y-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="space-y-2 flex-1 min-w-[240px]">
+                    <div className="space-y-2 flex-1 min-w-0 sm:min-w-[240px]">
                       <Label>Título da seção</Label>
                       <Input
                         value={section.title}

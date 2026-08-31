@@ -1,7 +1,7 @@
 
 import type { ProjectType } from "@/lib/project-delivery";
 
-// Types for JoIA Ops
+// Types for Joia Labs
 
 export interface ClientContactInfo {
   nome: string;

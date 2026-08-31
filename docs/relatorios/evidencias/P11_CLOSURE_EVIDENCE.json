@@ -1,0 +1,73 @@
+{
+  "date": "2026-08-30",
+  "decision": "NO-GO",
+  "project": "uopxixfgaaxsgqgrfpvx",
+  "migrationsAppliedAndRecorded": ["20260830164626", "20260830164910"],
+  "financial": {
+    "run": "p11-e2e-financial-65e96a86-37d2-4a22-a46c-5a1b8cf47f4e",
+    "authenticatedTableSelect": false,
+    "authenticatedColumnSelect": false,
+    "anonymousTableSelect": false,
+    "serviceRoleSelect": true,
+    "authenticatedRolesTested": ["admin", "manager", "member", "viewer"],
+    "authenticatedHttpStatus": 403,
+    "sqlState": "42501",
+    "serverReadHttpStatus": 200,
+    "serverReadScope": "nonexistent UUID only; no company record content",
+    "financialDataMutations": 0
+  },
+  "audit": {
+    "transactionPreflight": "PASS",
+    "transactionPostflight": "PASS",
+    "committedRestRun": "p11-e2e-cleanup-563a57e1-53d4-4c17-99b8-515a5665d350",
+    "committedRestResult": "PASS",
+    "initialEventsRetained": 13,
+    "finalEventsRetained": 15,
+    "allPersistentRunsRetainedEvents": 25,
+    "remainingTestUsers": 0,
+    "remainingTestWorkspaces": 0,
+    "retentionScope": "activity_logs; full-product audit cleanup not certified"
+  },
+  "gateway": {
+    "at": "2026-08-30T16:56:37.464Z",
+    "model": "openai/gpt-5.6-luna",
+    "oidcPresent": true,
+    "modelListed": true,
+    "balance": "0",
+    "totalUsed": "0",
+    "generationStatus": 403,
+    "reason": "valid payment card required"
+  },
+  "backups": {
+    "backups": null,
+    "physical_backup_data": {},
+    "pitr_enabled": false,
+    "region": "sa-east-1",
+    "walg_enabled": true,
+    "plan": "NOT VALIDATED",
+    "restore": "NOT EXECUTED",
+    "rpo": "NOT MEASURED",
+    "rto": "NOT MEASURED"
+  },
+  "git": {
+    "externalMain": "346db16c9d7e8b40c6c76882ebc5fa05f1f04a9a",
+    "candidate": "28a86f3ee52839874d0e0abddd15bc887ff593f6",
+    "newMainMergesByThisRun": 0,
+    "vercelDeploymentsByThisRun": 0
+  },
+  "candidateTests": {
+    "checkExit": 0,
+    "unitPass": 149,
+    "componentPass": 9,
+    "pwaPass": 3,
+    "e2eFinalShaRuns": [{"pass":14,"fail":1,"failure":"assistant heading timeout 5000ms"},{"pass":15,"fail":0}],
+    "productionBackend": false,
+    "flakinessResolved": false
+  },
+  "productionHealth": {
+    "at": "2026-08-30T17:02:38.355Z",
+    "status": 200,
+    "result": "healthy",
+    "requestId": "2de2d9cd-4f71-439c-9315-11dcbf6a5f5b"
+  }
+}

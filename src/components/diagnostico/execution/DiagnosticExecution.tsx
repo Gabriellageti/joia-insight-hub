@@ -181,7 +181,7 @@ export function DiagnosticExecution({
   }
 
   return (
-    <div className="flex flex-col h-full min-h-[calc(100vh-120px)]">
+    <div className="flex flex-col h-full min-w-0 min-h-[calc(100dvh-120px)]">
       {/* Header */}
       <div className="border-b bg-card">
         <div className="flex items-center justify-between gap-4 p-4">

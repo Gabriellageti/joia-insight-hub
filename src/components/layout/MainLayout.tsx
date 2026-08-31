@@ -34,11 +34,11 @@ export function MainLayout({ children }: MainLayoutProps) {
 
   return (
     <SidebarProvider open={sidebarOpen} onOpenChange={handleSidebarChange}>
-      <div className="min-h-dvh flex w-full min-w-0 overflow-x-clip">
+      <div className="min-h-dvh flex w-full min-w-0">
         <AppSidebar />
         <div className="min-w-0 flex-1 flex flex-col">
           <TopBar />
-          <main className="min-w-0 flex-1 overflow-y-auto overflow-x-clip p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:p-4 lg:p-6 bg-background">
+          <main className="app-content min-w-0 flex-1 p-3 sm:p-4 lg:p-6 bg-background">
             {children}
           </main>
         </div>

@@ -136,7 +136,7 @@ export default function Clientes() {
               {hasActiveFilters && <Button variant="outline" size="sm" onClick={clearFilters}>Limpar filtros</Button>}
             </div>
           ) : (
-            <div className="overflow-x-auto"><Table>
+            <div className="overflow-x-auto"><Table className="responsive-record-table">
               <TableHeader>
                 <TableRow>
                   <TableHead>Cliente</TableHead>
@@ -149,7 +149,7 @@ export default function Clientes() {
               <TableBody>
                 {filteredClients.map((client) => (
                   <TableRow key={client.id} className="hover:bg-muted/50">
-                    <TableCell className="font-medium">
+                    <TableCell data-label="Cliente" className="font-medium">
                       <div className="flex flex-col gap-0.5">
                         <Link to={`/clientes/${client.id}`} className="hover:underline">
                           {client.nomeFantasia || client.razaoSocial}
@@ -159,18 +159,18 @@ export default function Clientes() {
                       </div>
                     </TableCell>
 
-                    <TableCell>
+                    <TableCell data-label="Contato principal">
                       <div className="flex flex-col gap-0.5">
                         <span>{client.contatoPrincipal?.nome || "-"}</span>
                         <span className="text-xs text-muted-foreground">{client.contatoPrincipal?.whatsapp || client.contatoPrincipal?.email || "Sem contato informado"}</span>
                       </div>
                     </TableCell>
 
-                    <TableCell>
+                    <TableCell data-label="Projetos">
                       <div className="flex items-center gap-2 text-sm"><FolderKanban className="h-4 w-4 text-muted-foreground" />{projectCountByClient.get(client.id) || 0}</div>
                     </TableCell>
 
-                    <TableCell>
+                    <TableCell data-label="Situação">
                       <div className="flex flex-col items-start gap-1">
                         <Badge variant={client.status === "ativo" ? "default" : "secondary"}>
                           {client.status === "ativo" ? "Ativo" : "Inativo"}
@@ -181,7 +181,7 @@ export default function Clientes() {
                       </div>
                     </TableCell>
 
-                    <TableCell className="text-right space-x-2">
+                    <TableCell data-label="Ações" className="text-right space-x-2">
                       <Button variant="ghost" size="icon" asChild aria-label="Ver jornada do cliente">
                         <Link to={`/clientes/${client.id}/jornada`}>
                           <Route className="h-4 w-4" />

@@ -102,11 +102,11 @@ export interface AttentionItem {
   reasons: string[];
 }
 
-export function getClientsNeedingAttention(tasks: Task[], clients: Client[], limit = 5): AttentionItem[] {
+export function getClientsNeedingAttention(tasks: Task[], clients: Client[], now = new Date(), limit = 5): AttentionItem[] {
   const open = tasks.filter((task) => task.status !== "done" && task.clientId);
   return clients.flatMap((client) => {
     const related = open.filter((task) => task.clientId === client.id);
-    const overdue = related.filter((task) => daysOverdue(task) > 0).length;
+    const overdue = related.filter((task) => daysOverdue(task, now) > 0).length;
     const urgent = related.filter((task) => task.priority === "urgent").length;
     const blocked = related.filter((task) => task.status === "blocked").length;
     const reasons = [

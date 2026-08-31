@@ -10,7 +10,7 @@ const respond = (route: Route, body: unknown) => route.fulfill({ status: 200, co
 async function authorize(page: Page) {
   await page.addInitScript(({ key, value }) => localStorage.setItem(key, JSON.stringify(value)), { key: authStorageKey, value: session });
   await page.route("**/auth/v1/**", (route) => respond(route, route.request().url().includes("/user") ? session.user : session));
-  await page.route("**/api/assistant", (route) => respond(route, {
+  await page.route("**/api/assistant", (route) => respond(route, route.request().method() === "GET" ? { enabled: true } : {
     interactionId, mode: "ai", model: "openai/gpt-5.6-luna",
     answer: "## Situação atual\nO projeto exige atenção por uma tarefa atrasada.",
     citations: [{ id: `client:${clientId}`, label: "Cliente: Grupo H2O", url: `/clientes/${clientId}` }],
@@ -40,4 +40,59 @@ test("P8 responde com fontes e exige revisão da tarefa sugerida no mobile", asy
   await expect(page.getByLabel("Título")).toHaveValue("Validar conciliação");
   await expect(page.getByText("Sugestão do Assistente JoIA", { exact: false })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+});
+
+test("P11 IA desligada não envia auto-prompt, não busca histórico e mantém Meu Dia disponível", async ({ page }) => {
+  await authorize(page);
+  let posts = 0; let historyRequests = 0; let providerRequests = 0; let taskWrites = 0;
+  page.on("request", (request) => {
+    if (request.url().includes("/ai_interactions")) historyRequests++;
+    if (request.url().includes("ai-gateway") || request.url().includes("api.openai.com")) providerRequests++;
+    if (request.url().includes("/rest/v1/tasks") && request.method() !== "GET") taskWrites++;
+  });
+  await page.route("**/api/assistant", (route) => {
+    if (route.request().method() === "POST") posts++;
+    return respond(route, { enabled: false, code: "AI_ASSISTANT_DISABLED" });
+  });
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto(`/assistente?auto=1&prompt=Crie%20uma%20tarefa&interactionId=${interactionId}`);
+  await expect(page.getByRole("heading", { name: "Assistente de IA temporariamente indisponível" })).toBeVisible();
+  await expect(page.getByText("Os recursos de IA estão desabilitados neste ambiente. As demais funcionalidades do Joia Labs continuam disponíveis normalmente.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Enviar pergunta" })).toHaveCount(0);
+  await expect(page.getByLabel("Pergunta para o Assistente JoIA")).toHaveCount(0);
+  await expect(page.getByText("Consultas recentes", { exact: true })).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await page.screenshot({ path: "tmp/p11-assistant-disabled-mobile.png", fullPage: true });
+  await page.getByRole("link", { name: "Ir para Meu Dia" }).click();
+  await expect(page).toHaveURL(/\/meu-dia/);
+  await expect(page.getByRole("region", { name: "Resumo do dia", exact: true })).toBeVisible();
+  expect({ posts, historyRequests, providerRequests, taskWrites }).toEqual({ posts: 0, historyRequests: 0, providerRequests: 0, taskWrites: 0 });
+});
+
+test("P11 consulta de disponibilidade pendente termina sem liberar geração", async ({ page }) => {
+  await authorize(page);
+  await page.route("**/api/assistant", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 6500));
+    await respond(route, { enabled: true }).catch(() => {});
+  });
+  await page.goto("/assistente?auto=1&prompt=Pergunta%20automatica");
+  await expect(page.getByText("Não foi possível verificar a disponibilidade da IA. As demais funcionalidades do Joia Labs continuam disponíveis normalmente.")).toBeVisible({ timeout: 10000 });
+  await expect(page.getByRole("button", { name: "Enviar pergunta" })).toHaveCount(0);
+});
+
+test("P11 flag desligada entre consulta e envio desmonta geração sem fallback", async ({ page }) => {
+  await authorize(page);
+  let posts = 0;
+  await page.route("**/api/assistant", (route) => {
+    if (route.request().method() === "GET") return respond(route, { enabled: true });
+    posts++;
+    return respond(route, { enabled: false, code: "AI_ASSISTANT_DISABLED" });
+  });
+  await page.goto("/assistente");
+  await page.getByLabel("Pergunta para o Assistente JoIA").fill("Qual a situação atual?");
+  await page.getByRole("button", { name: "Enviar pergunta" }).click();
+  await expect(page.getByRole("heading", { name: "Assistente de IA temporariamente indisponível" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Enviar pergunta" })).toHaveCount(0);
+  await expect(page.getByText("Resumo operacional", { exact: true })).toHaveCount(0);
+  expect(posts).toBe(1);
 });

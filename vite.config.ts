@@ -25,8 +25,8 @@ export default defineConfig(() => ({
       },
       manifest: {
         id: "/",
-        name: "JoIA Ops",
-        short_name: "JoIA Ops",
+        name: "Joia Labs",
+        short_name: "Joia Labs",
         description: "Operações, projetos e indicadores da JoIA.",
         lang: "pt-BR",
         start_url: "/meu-dia?source=pwa",

@@ -62,7 +62,7 @@ export const MeetingCard = memo(function MeetingCard({
           </div>
         </div>
 
-        <div className="flex items-center gap-4 text-sm text-muted-foreground mt-3">
+        <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground mt-3">
           <div className="flex items-center gap-1">
             <CalendarIcon className="h-3 w-3" />
             {meeting.date}
@@ -77,7 +77,7 @@ export const MeetingCard = memo(function MeetingCard({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 mt-3 pt-3 border-t opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button

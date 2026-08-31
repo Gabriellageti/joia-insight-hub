@@ -34,7 +34,7 @@ self.addEventListener("message", (event) => {
 
 self.addEventListener("push", (event) => {
   let data = {
-    title: "JoIA Ops",
+    title: "Joia Labs",
     body: "Você tem uma nova notificação",
     icon: "/icons/icon-192.png",
     badge: "/icons/badge-96.png",

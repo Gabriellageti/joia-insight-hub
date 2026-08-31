@@ -12,13 +12,43 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import { useData } from "@/contexts/DataContext";
-import { askAssistant, getAssistantInteraction, listAssistantInteractions, type AssistantHistoryMessage, type AssistantResponse, type SuggestedTask } from "@/lib/ai/assistant";
+import { askAssistant, AssistantDisabledError, getAssistantAvailability, getAssistantInteraction, listAssistantInteractions, type AssistantHistoryMessage, type AssistantResponse, type SuggestedTask } from "@/lib/ai/assistant";
 import type { Task } from "@/types";
 
 type ChatMessage = { id: string; role: "user" | "assistant"; content: string; response?: AssistantResponse };
 const QUICK_QUESTIONS = ["O que preciso resolver hoje?", "Quais tarefas estão atrasadas?", "Quais projetos estão em risco?", "Resuma o trabalho realizado neste mês."];
 
 export default function Assistant() {
+  const [availability, setAvailability] = useState<"checking" | "enabled" | "disabled" | "unavailable">("checking");
+  const disable = useCallback(() => setAvailability("disabled"), []);
+  useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+    // Bounded even if a network implementation fails to reject on abort.
+    const timeout = setTimeout(() => {
+      if (active) { active = false; setAvailability("unavailable"); controller.abort(); }
+    }, 5000);
+    getAssistantAvailability(controller.signal)
+      .then((enabled) => { if (active) setAvailability(enabled ? "enabled" : "disabled"); })
+      .catch(() => { if (active) setAvailability("unavailable"); })
+      .finally(() => clearTimeout(timeout));
+    return () => { active = false; clearTimeout(timeout); controller.abort(); };
+  }, []);
+
+  // Do not mount history, auto-prompts or task suggestions until the server opts in.
+  if (availability === "enabled") return <EnabledAssistant onDisabled={disable} />;
+  return <section className="space-y-4" aria-live="polite">
+    <Bot className="h-7 w-7 text-primary" aria-hidden="true" />
+    <h1 className="text-2xl font-semibold">{availability === "checking" ? "Verificando disponibilidade do assistente" : "Assistente de IA temporariamente indisponível"}</h1>
+    <p className="text-muted-foreground">{availability === "disabled"
+      ? "Os recursos de IA estão desabilitados neste ambiente. As demais funcionalidades do Joia Labs continuam disponíveis normalmente."
+      : availability === "checking" ? "Aguarde enquanto verificamos a disponibilidade deste recurso opcional."
+      : "Não foi possível verificar a disponibilidade da IA. As demais funcionalidades do Joia Labs continuam disponíveis normalmente."}</p>
+    <Button asChild variant="outline"><Link to="/meu-dia">Ir para Meu Dia</Link></Button>
+  </section>;
+}
+
+function EnabledAssistant({ onDisabled }: { onDisabled: () => void }) {
   const [params, setParams] = useSearchParams();
   const { user } = useAuth();
   const { clients, projects } = useData();
@@ -52,9 +82,12 @@ export default function Assistant() {
       setMessages((current) => [...current, { id: response.interactionId, role: "assistant", content: response.answer, response }]);
       setRecent((current) => [{ id: response.interactionId, question: text, mode: response.mode, status: "success", created_at: new Date().toISOString() }, ...current.filter((item) => item.id !== response.interactionId)].slice(0, 20));
       const next = new URLSearchParams(params); next.set("interactionId", response.interactionId); next.delete("prompt"); next.delete("auto"); setParams(next, { replace: true });
-    } catch (error) { toast.error((error as Error).message); setMessages((current) => current.filter((item) => item.id !== userMessage.id)); setQuestion(text); }
+    } catch (error) {
+      if (error instanceof AssistantDisabledError) { onDisabled(); return; }
+      toast.error((error as Error).message); setMessages((current) => current.filter((item) => item.id !== userMessage.id)); setQuestion(text);
+    }
     finally { setLoading(false); }
-  }, [loading, messages, params, question, scope, setParams]);
+  }, [loading, messages, params, question, scope, setParams, onDisabled]);
 
   useEffect(() => {
     const prompt = params.get("prompt");

@@ -2,6 +2,9 @@ import { Filter, Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { useState } from "react";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import type { TaskFilterValues } from "@/lib/tasks/filters";
 export type { TaskFilterValues } from "@/lib/tasks/filters";
 
@@ -15,14 +18,16 @@ interface TaskFiltersProps {
 }
 
 export function TaskFilters({ clients, projects, assignees, values, onChange, onClear }: TaskFiltersProps) {
+  const isMobile = useIsMobile();
+  const [open, setOpen] = useState(false);
   const setValue = (field: keyof TaskFilterValues, value: string | boolean) => onChange({ ...values, [field]: value });
   const visibleProjects = values.clientId === "all" ? projects : projects.filter((project) => project.clientId === values.clientId);
   const hasFilters = values.search || values.clientId !== "all" || values.projectId !== "all" || values.status !== "all" || values.priority !== "all" || values.assignedTo !== "all" || values.taskType !== "all" || values.due !== "all" || values.mine;
 
-  return (
+  const content = (
     <div className="space-y-3 rounded-lg border bg-card p-3">
       <div className="flex items-center gap-2 text-sm font-medium"><Filter className="h-4 w-4" />Filtros</div>
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-5">
         <div className="relative sm:col-span-2">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input aria-label="Buscar por título" className="pl-9" placeholder="Buscar por título" value={values.search} onChange={(event) => setValue("search", event.target.value)} />
@@ -41,4 +46,6 @@ export function TaskFilters({ clients, projects, assignees, values, onChange, on
       </div>
     </div>
   );
+  if (!isMobile) return content;
+  return <div className="flex flex-wrap items-center gap-2"><Button variant="outline" onClick={() => setOpen(true)}><Filter className="h-4 w-4" />Filtros{hasFilters ? " ativos" : ""}</Button>{hasFilters ? <Button variant="ghost" onClick={onClear}>Limpar filtros</Button> : null}<Dialog open={open} onOpenChange={setOpen}><DialogContent><DialogHeader><DialogTitle>Filtros de tarefas</DialogTitle><DialogDescription>Refine a mesma lista e o mesmo Kanban.</DialogDescription></DialogHeader>{content}<Button onClick={() => setOpen(false)}>Ver resultados</Button></DialogContent></Dialog></div>;
 }

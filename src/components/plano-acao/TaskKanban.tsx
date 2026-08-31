@@ -77,6 +77,7 @@ export function TaskKanban({ tasks, savingTaskIds, onEdit, onDelete, onToggleCom
                 onClick={() => onEdit(task)}
                 onDelete={() => onDelete(task)}
                 onToggleComplete={() => onToggleComplete(task)}
+                onStatusChange={(status) => onStatusChange(task, status)}
               />
             ))}
           </KanbanColumn>
