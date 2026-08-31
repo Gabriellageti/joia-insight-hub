@@ -22,6 +22,12 @@ import { useData } from "@/contexts/DataContext";
 import { useFinancial } from "@/hooks/useFinancial";
 import { useToast } from "@/components/ui/use-toast";
 import type { Contract } from "@/types";
+import {
+  addBillingPeriod,
+  buildContractInstallments,
+  getLocalTodayIso,
+  type ContractBillingType,
+} from "@/lib/contract-billing";
 
 interface ContractDialogProps {
   open: boolean;
@@ -29,21 +35,10 @@ interface ContractDialogProps {
   contract?: Contract | null;
 }
 
-type BillingType = "mensal" | "parcela" | "projeto";
-
 const generateId = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-
-const addMonths = (isoDate: string, months: number) => {
-  const d = new Date(isoDate);
-  if (Number.isNaN(d.getTime())) return isoDate;
-  const target = new Date(d.getFullYear(), d.getMonth() + months, d.getDate());
-  return target.toISOString().split("T")[0];
-};
-
-const todayIso = () => new Date().toISOString().split("T")[0];
 
 export function ContractDialog({ open, onOpenChange, contract }: ContractDialogProps) {
   const { clients, projects, addContract, updateContract } = useData();
@@ -53,10 +48,10 @@ export function ContractDialog({ open, onOpenChange, contract }: ContractDialogP
   const [title, setTitle] = useState("");
   const [clientId, setClientId] = useState("");
   const [projectId, setProjectId] = useState("");
-  const [billingType, setBillingType] = useState<BillingType>("mensal");
+  const [billingType, setBillingType] = useState<ContractBillingType>("mensal");
   const [totalValue, setTotalValue] = useState("");
   const [installmentCount, setInstallmentCount] = useState("12");
-  const [firstDueDate, setFirstDueDate] = useState(todayIso());
+  const [firstDueDate, setFirstDueDate] = useState(getLocalTodayIso());
   const [endDate, setEndDate] = useState("");
   const [generateReceivables, setGenerateReceivables] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -66,13 +61,13 @@ export function ContractDialog({ open, onOpenChange, contract }: ContractDialogP
   useEffect(() => {
     if (open) {
       if (contract) {
-        setTitle(contract.projectName || "");
+        setTitle(contract.title || "");
         setClientId(contract.clientId || "");
         setProjectId(contract.projectId || "");
         setBillingType(contract.billingType || "mensal");
         setTotalValue(String(contract.value || ""));
         setInstallmentCount(String(contract.installments?.length || 12));
-        setFirstDueDate(contract.startDate || todayIso());
+        setFirstDueDate(contract.startDate || getLocalTodayIso());
         setEndDate(contract.endDate || "");
         setGenerateReceivables(false);
       } else {
@@ -82,7 +77,7 @@ export function ContractDialog({ open, onOpenChange, contract }: ContractDialogP
         setBillingType("mensal");
         setTotalValue("");
         setInstallmentCount("12");
-        setFirstDueDate(todayIso());
+        setFirstDueDate(getLocalTodayIso());
         setEndDate("");
         setGenerateReceivables(true);
       }
@@ -101,7 +96,7 @@ export function ContractDialog({ open, onOpenChange, contract }: ContractDialogP
 
   const computedEndDate = useMemo(() => {
     if (billingType === "projeto") return endDate || firstDueDate;
-    return addMonths(firstDueDate, installmentCountNum - 1);
+    return addBillingPeriod(firstDueDate, installmentCountNum - 1, billingType);
   }, [billingType, firstDueDate, installmentCountNum, endDate]);
 
   const isValid = Boolean(title && clientId && totalValueNum > 0 && firstDueDate);
@@ -115,24 +110,17 @@ export function ContractDialog({ open, onOpenChange, contract }: ContractDialogP
     const project = projects.find((p) => p.id === projectId);
     const clientName = client?.nomeFantasia || client?.razaoSocial || "";
 
-    const installments =
-      billingType === "projeto"
-        ? [
-            {
-              id: generateId(),
-              value: totalValueNum,
-              dueDate: firstDueDate,
-              status: "pending" as const,
-            },
-          ]
-        : Array.from({ length: installmentCountNum }).map((_, idx) => ({
-            id: generateId(),
-            value: installmentValue,
-            dueDate: addMonths(firstDueDate, idx),
-            status: "pending" as const,
-          }));
+    const installments = buildContractInstallments({
+      billingType,
+      totalValue: totalValueNum,
+      installmentCount: installmentCountNum,
+      firstDueDate,
+      existingInstallments: contract?.installments,
+      createId: generateId,
+    });
 
     const payload = {
+      title,
       clientId,
       clientName,
       projectId: projectId || undefined,
@@ -155,6 +143,8 @@ export function ContractDialog({ open, onOpenChange, contract }: ContractDialogP
           const labelBase =
             billingType === "mensal"
               ? "Mensalidade"
+              : billingType === "semanal"
+                ? "Cobrança semanal"
               : billingType === "parcela"
                 ? "Parcela"
                 : "Pagamento único";
@@ -166,7 +156,7 @@ export function ContractDialog({ open, onOpenChange, contract }: ContractDialogP
                 : `${labelBase} ${i + 1}/${installments.length} - ${title}`;
             await addRecord({
               type: "receita",
-              category: billingType === "mensal" ? "Recorrente" : "Projeto",
+              category: billingType === "mensal" || billingType === "semanal" ? "Recorrente" : "Projeto",
               description,
               clientId,
               clientName,
@@ -262,12 +252,13 @@ export function ContractDialog({ open, onOpenChange, contract }: ContractDialogP
           <div className="grid gap-4 md:grid-cols-3">
             <div className="space-y-2">
               <Label htmlFor="contract-billing">Tipo de cobrança</Label>
-              <Select value={billingType} onValueChange={(v) => setBillingType(v as BillingType)}>
+              <Select value={billingType} onValueChange={(v) => setBillingType(v as ContractBillingType)}>
                 <SelectTrigger id="contract-billing">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="mensal">Mensal (recorrente)</SelectItem>
+                  <SelectItem value="semanal">Semanal (recorrente)</SelectItem>
                   <SelectItem value="parcela">Parcelado</SelectItem>
                   <SelectItem value="projeto">Pagamento único</SelectItem>
                 </SelectContent>
@@ -288,7 +279,11 @@ export function ContractDialog({ open, onOpenChange, contract }: ContractDialogP
             {billingType !== "projeto" ? (
               <div className="space-y-2">
                 <Label htmlFor="contract-installments">
-                  {billingType === "mensal" ? "Nº de meses" : "Nº de parcelas"}
+                  {billingType === "mensal"
+                    ? "Nº de meses"
+                    : billingType === "semanal"
+                      ? "Nº de semanas"
+                      : "Nº de parcelas"}
                 </Label>
                 <Input
                   id="contract-installments"

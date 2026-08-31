@@ -509,6 +509,7 @@ export interface Lead {
 
 export interface Contract {
   id: string;
+  title: string;
   clientId: string;
   clientName: string;
   projectId?: string;
@@ -516,7 +517,7 @@ export interface Contract {
   value: number;
   startDate: string;
   endDate: string;
-  billingType: "mensal" | "parcela" | "projeto";
+  billingType: "mensal" | "semanal" | "parcela" | "projeto";
   installments: { id: string; value: number; dueDate: string; status: "pending" | "overdue" | "paid" }[];
   createdAt: string;
 }

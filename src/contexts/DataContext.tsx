@@ -141,6 +141,7 @@ import {
   updateContract as updateSupabaseContract,
   type ContractRow,
 } from "@/integrations/supabase/contracts";
+import { buildContractUpdatePayload } from "@/lib/contract-persistence";
 import {
   createClientContact as createSupabaseClientContact,
   deleteClientContact as deleteSupabaseClientContact,
@@ -554,6 +555,7 @@ const mapSupabaseContentItemToLegacy = (item: ContentItemRow): ContentItem => {
 
 const mapSupabaseContractToLegacy = (contract: ContractRow): Contract => ({
   id: contract.id,
+  title: contract.title,
   clientId: contract.client_id || "",
   clientName: "",
   projectId: contract.project_id || undefined,
@@ -3517,7 +3519,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     addContract: async (contract) => {
       try {
         const created = mapSupabaseContractToLegacy(await createSupabaseContract({
-          title: contract.projectName || "Contrato",
+          title: contract.title || "Contrato",
           client_id: contract.clientId || null,
           project_id: contract.projectId || null,
           value: contract.value || null,
@@ -3536,12 +3538,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     },
     updateContract: async (id, contract) => {
       try {
-        const payload: Record<string, unknown> = {};
-        if (contract.value !== undefined) payload.value = contract.value;
-        if (contract.startDate !== undefined) payload.start_date = toSupabaseDate(contract.startDate);
-        if (contract.endDate !== undefined) payload.end_date = toSupabaseDate(contract.endDate);
-        if (contract.billingType !== undefined) payload.billing_type = contract.billingType;
-        if (contract.installments !== undefined) payload.installments = contract.installments;
+        const payload = buildContractUpdatePayload(contract);
         const updated = mapSupabaseContractToLegacy(await updateSupabaseContract(id, payload));
         setContracts((prev) => prev.map((item) => item.id === id ? updated : item));
         return updated;
